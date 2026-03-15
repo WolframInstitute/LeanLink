@@ -140,6 +140,7 @@ resolveProjDir[pd_] := Replace[pd, Automatic -> Directory[]];
 (* LeanTerm                                                                     *)
 (* ============================================================================ *)
 
+(* Colors for LeanTerm summary icon *)
 $kindColor = <|
   "theorem" -> RGBColor[0.25, 0.45, 0.85],
   "def" -> RGBColor[0.2, 0.65, 0.35],
@@ -151,9 +152,40 @@ $kindColor = <|
   "quot" -> GrayLevel[0.45]
 |>;
 
+(* Call graph node colors — match code.lean DOT output *)
+$callNodeColor = <|
+  "theorem" -> RGBColor @@ ({200, 230, 201} / 255.),   (* #c8e6c9 *)
+  "def" -> RGBColor @@ ({187, 222, 251} / 255.),       (* #bbdefb *)
+  "structure" -> RGBColor @@ ({255, 249, 196} / 255.), (* #fff9c4 *)
+  "inductive" -> RGBColor @@ ({255, 249, 196} / 255.),
+  "constructor" -> RGBColor @@ ({225, 190, 231} / 255.), (* #e1bee7 *)
+  "axiom" -> RGBColor @@ ({255, 205, 210} / 255.),     (* #ffcdd2 *)
+  "recursor" -> RGBColor @@ ({255, 224, 178} / 255.),  (* #ffe0b2 *)
+  "opaque" -> GrayLevel[0.88],
+  "quot" -> GrayLevel[0.88]
+|>;
+
+$callEdgeColor = <|
+  "term" -> RGBColor @@ ({51, 51, 51} / 255.),
+  "type" -> RGBColor @@ ({153, 153, 153} / 255.),
+  "term+type" -> RGBColor @@ ({21, 101, 192} / 255.),
+  "ref" -> RGBColor @@ ({102, 102, 102} / 255.)
+|>;
+
 toLeanObject[LeanConstant[name_String, kind_String, type_, value_]] :=
   LeanTerm[<|"Name" -> name, "Kind" -> kind, "Type" -> type, "Term" -> value|>];
 toLeanObject[other_] := other;
+
+(* Attach environment kind lookup to all LeanTerms in an env *)
+attachEnvKinds[env_Association] := Module[{kindMap},
+  kindMap = Association @ KeyValueMap[
+    Function[{k, v},
+      k -> Replace[v, {LeanTerm[d_Association] :> Lookup[d, "Kind", "def"], _ -> "def"}]],
+    env];
+  Association @ KeyValueMap[
+    Function[{k, v},
+      k -> Replace[v, LeanTerm[d_Association] :> LeanTerm[Append[d, "_KindLookup" -> kindMap]]]],
+    env]];
 
 (* Property access *)
 LeanTerm /: LeanTerm[data_Association][prop_String] :=
@@ -161,7 +193,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String] :=
     "Properties", {"Name", "Kind", "Type", "Term", "ExprGraph", "CallGraph"},
     "ExprGraph", exprToGraph[Lookup[data, "Type", LeanNoValue[]]],
     "CallGraph", callGraph[data],
-    _, data[prop]];
+    _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]];
 
 (* ============================================================================ *)
 (* Expression Graph                                                             *)
@@ -246,19 +278,75 @@ exprNodeInfo[other_] := {ToString[Short[other]], GrayLevel[0.6], {}};
 
 collectConsts[e_] := Union[Cases[e, LeanConst[n_String, _] :> n, Infinity]];
 
-callGraph[data_Association] := Module[{name, typeExpr, termExpr, refs, edges, verts, rootShort, rootCol},
+callGraph[data_Association] := Module[
+  {name, typeExpr, termExpr, kindLookup,
+   typeRefs, termRefs, allRefs, edges, verts,
+   rootShort, vertColors, edgeStyles, edgeLabels,
+   getKind, getVertColor, classifyEdge},
+
   name = data["Name"];
   typeExpr = Lookup[data, "Type", LeanNoValue[]];
   termExpr = Lookup[data, "Term", LeanNoValue[]];
-  refs = Union[collectConsts[typeExpr], collectConsts[termExpr]];
-  refs = DeleteCases[refs, name];
+  kindLookup = Lookup[data, "_KindLookup", <||>];
+
+  typeRefs = collectConsts[typeExpr];
+  termRefs = collectConsts[termExpr];
+  allRefs = Union[typeRefs, termRefs];
+  allRefs = DeleteCases[allRefs, name];
+
+  (* Kind lookup: try env, fall back to heuristic *)
+  getKind[n_String] := Module[{k = Lookup[kindLookup, n, None]},
+    If[k =!= None, k,
+      Which[
+        StringEndsQ[n, ".rec"] || StringEndsQ[n, ".recOn"] ||
+          StringEndsQ[n, ".casesOn"], "recursor",
+        StringEndsQ[n, ".mk"] || StringContainsQ[n, ".mk."], "constructor",
+        StringMatchQ[n, LetterCharacter ~~ ___] &&
+          UpperCaseQ[StringTake[n, 1]], "structure",
+        True, "def"]]];
+
+  (* Edge classification: term, type, or term+type *)
+  classifyEdge[ref_String] := Which[
+    MemberQ[termRefs, ref] && MemberQ[typeRefs, ref], "term+type",
+    MemberQ[termRefs, ref], "term",
+    True, "type"];
+
+  (* Colors matching code.lean *)
+  getVertColor[n_String] :=
+    Lookup[$callNodeColor, getKind[n], GrayLevel[0.88]];
+
   rootShort = shortName[name];
-  rootCol = Lookup[$kindColor, Lookup[data, "Kind", "def"], GrayLevel[0.5]];
-  verts = Union[Prepend[shortName /@ refs, rootShort]];
-  edges = DirectedEdge[rootShort, shortName[#]] & /@ refs;
+  verts = Union[Prepend[shortName /@ allRefs, rootShort]];
+  edges = DirectedEdge[rootShort, shortName[#], classifyEdge[#]] & /@ allRefs;
+
+  (* Per-vertex colors *)
+  vertColors = Association[
+    rootShort -> getVertColor[name],
+    Sequence @@ (shortName[#] -> getVertColor[#] & /@ allRefs)];
+
+  (* Edge styles matching code.lean *)
+  edgeStyles = Table[
+    With[{label = e[[3]],
+          col = Lookup[$callEdgeColor, e[[3]], GrayLevel[0.33]],
+          pw = Switch[e[[3]], "term", 1.5, "type", 0.8, "term+type", 1.5, _, 1.2]},
+      e -> Directive[
+        LightDarkSwitched[col, Lighter[col, 0.4]],
+        AbsoluteThickness[pw],
+        Arrowheads[0.01],
+        If[label === "type", Dashing[{Small, Small}], Sequence @@ {}]]],
+    {e, edges}];
+
+  (* Edge labels *)
+  edgeLabels = Table[
+    With[{label = e[[3]],
+          col = Lookup[$callEdgeColor, e[[3]], GrayLevel[0.4]]},
+      e -> Style[label, FontSize -> 5, FontFamily -> "Menlo",
+        LightDarkSwitched[col, GrayLevel[0.7]]]],
+    {e, edges}];
+
   Graph[verts, edges,
     VertexShapeFunction -> Map[
-      With[{bg = If[# === rootShort, rootCol, GrayLevel[0.55]], lbl = #},
+      With[{bg = Lookup[vertColors, #, GrayLevel[0.88]], lbl = #},
         # -> Function[
           Inset[Framed[
             Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
@@ -271,10 +359,11 @@ callGraph[data_Association] := Module[{name, typeExpr, termExpr, refs, edges, ve
             FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
             FrameMargins -> {{3, 3}, {1, 1}}], #1, #3]]
       ] &, verts],
-    GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Left},
+    GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
+    EdgeStyle -> edgeStyles,
+    EdgeLabels -> edgeLabels,
     VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
-    EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]],
-    ImageSize -> Max[300, Min[900, 40 * Length[verts]]],
+    ImageSize -> Max[300, Min[1200, 40 * Length[verts]]],
     AspectRatio -> 1/2,
     PerformanceGoal -> "Quality"]];
 
@@ -543,7 +632,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
             AssociateTo[raw, name -> r]]],
         {name, names}];
       DeleteDirectory[tmpDir, DeleteContents -> True];
-      toLeanObject /@ raw]];
+      attachEnvKinds[toLeanObject /@ raw]]];
 
 (* LeanImport[opts] -- base form *)
 LeanImport[opts : OptionsPattern[]] := Module[{raw},
@@ -554,7 +643,7 @@ LeanImport[opts : OptionsPattern[]] := Module[{raw},
   If[!AssociationQ[raw], Return[$Failed]];
   (* Filter out internal/generated names *)
   raw = KeySelect[raw, !isInternalName[#] &];
-  toLeanObject /@ raw];
+  attachEnvKinds[toLeanObject /@ raw]];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
 
