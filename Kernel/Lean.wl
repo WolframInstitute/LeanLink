@@ -493,7 +493,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
 LeanImport[file_String, opts : OptionsPattern[]] /;
   FileExistsQ[file] && StringEndsQ[file, ".lean"] :=
   Module[{absFile, projDir, modName, tmpDir, oleanFile, result, searchPath,
-          nativeDir, tcFile, tcName, leanBin, leanLibDir, content, names},
+          pacletNativeDir, tcFile, tcName, leanBin, leanLibDir, content, names},
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
     (* If within a lake project, delegate to module-based import *)
@@ -506,8 +506,8 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
         "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
         opts], Module]];
     (* Resolve the correct lean binary from the LeanLink project toolchain *)
-    nativeDir = FileNameJoin[{$PacletRoot, "Native"}];
-    tcFile = FileNameJoin[{nativeDir, "lean-toolchain"}];
+    pacletNativeDir = FileNameJoin[{$PacletRoot, "Native"}];
+    tcFile = FileNameJoin[{pacletNativeDir, "lean-toolchain"}];
     If[FileExistsQ[tcFile],
       tcName = StringTrim[Import[tcFile, "Text"]];
       tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
@@ -517,8 +517,10 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       leanLibDir = StringTrim[RunProcess[{"lean", "--print-libdir"}, "StandardOutput"]]];
     (* Standalone file: compile via lean CLI subprocess *)
     modName = FileBaseName[absFile];
-    tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory,
-      "leanlink_" <> modName <> "_" <> ToString[$SessionID]}]];
+    tmpDir = FileNameJoin[{$TemporaryDirectory,
+      "leanlink_" <> modName <> "_" <> ToString[$SessionID]}];
+    If[DirectoryQ[tmpDir], DeleteDirectory[tmpDir, DeleteContents -> True]];
+    tmpDir = CreateDirectory[tmpDir];
     oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
     result = RunProcess[{leanBin, "-o", oleanFile, "-R", DirectoryName[absFile], absFile}];
     If[result["ExitCode"] =!= 0,
@@ -528,7 +530,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
     (* Extract definition names from source file *)
     content = Import[absFile, "Text"];
     names = StringCases[content,
-      RegularExpression["(?m)^(?:def|theorem|lemma|inductive|structure|class|instance|abbrev|noncomputable def|noncomputable theorem)\\s+(\\S+)"] :> "$1"];
+      RegularExpression["(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.]*)"] :> "$1"];
     If[names === {}, names = {modName}];
     (* Import the olean via existing loadEnv mechanism *)
     searchPath = tmpDir <> ":" <> leanLibDir;
@@ -541,9 +543,9 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       (* Query each name individually *)
       raw = Association[];
       Do[
-        res = Quiet[decodeWXF[$getConstantFn[handle, name]]];
-        If[!StringQ[res] || !StringStartsQ[res, "ERROR"],
-          AssociateTo[raw, name -> res]],
+        With[{r = Quiet[decodeWXF[$getConstantFn[handle, name]]]},
+          If[MatchQ[r, _LeanConstant],
+            AssociateTo[raw, name -> r]]],
         {name, names}];
       DeleteDirectory[tmpDir, DeleteContents -> True];
       toLeanObject /@ raw]];

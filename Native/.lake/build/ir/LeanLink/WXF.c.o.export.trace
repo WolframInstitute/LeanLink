@@ -1,5 +1,0 @@
-{"log":
- [{"message":
-   ".> /Users/swish/.elan/toolchains/leanprover--lean4---v4.15.0/bin/leanc -c -o ././.lake/build/ir/LeanLink/WXF.c.o.export ././.lake/build/ir/LeanLink/WXF.c -O3 -DNDEBUG -DLEAN_EXPORTING",
-   "level": "trace"}],
- "depHash": "7155070187116496262"}

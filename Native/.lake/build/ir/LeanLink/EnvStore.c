@@ -68,9 +68,10 @@ LEAN_EXPORT lean_object* l_Lean_SMap_fold___at_LeanLink_listTheoremsExport___spe
 lean_object* l_WXF_constantToWXF(lean_object*);
 LEAN_EXPORT lean_object* l_Lean_PersistentHashMap_foldlM___at_LeanLink_listTheoremsExport___spec__7(lean_object*);
 lean_object* l_String_splitOnAux(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
-static lean_object* l_LeanLink_loadEnvExport___closed__5;
+static uint8_t l_LeanLink_loadEnvExport___closed__5;
 uint64_t lean_uint64_shift_right(uint64_t, uint64_t);
 LEAN_EXPORT lean_object* l_LeanLink_listTheoremsExport___boxed(lean_object*, lean_object*, lean_object*);
+lean_object* l_IO_eprintln___at___private_Init_System_IO_0__IO_eprintlnAux___spec__1(lean_object*, lean_object*);
 lean_object* lean_nat_div(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Std_DHashMap_Internal_AssocList_foldlM___at_LeanLink_loadEnvExport___spec__4___at_LeanLink_loadEnvExport___spec__5(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_LeanLink_loadEnv(lean_object*, lean_object*, lean_object*);
@@ -82,7 +83,7 @@ LEAN_EXPORT lean_object* l_Std_DHashMap_Internal_Raw_u2080_expand___at_LeanLink_
 lean_object* lean_st_mk_ref(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Std_DHashMap_Internal_AssocList_replace___at_LeanLink_loadEnvExport___spec__6___boxed(lean_object*, lean_object*, lean_object*);
 uint64_t lean_uint64_add(uint64_t, uint64_t);
-static uint8_t l_LeanLink_loadEnvExport___closed__4;
+static lean_object* l_LeanLink_loadEnvExport___closed__4;
 LEAN_EXPORT lean_object* l_LeanLink_loadEnvExport___boxed__const__1;
 LEAN_EXPORT uint8_t l_Std_DHashMap_Internal_AssocList_contains___at_LeanLink_loadEnvExport___spec__1(uint64_t, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_SMap_fold___at_LeanLink_listTheoremsExport___spec__2___rarg___boxed(lean_object*, lean_object*, lean_object*);
@@ -134,6 +135,7 @@ static lean_object* l_List_filterTR_loop___at_LeanLink_loadEnv___spec__1___close
 LEAN_EXPORT lean_object* l_LeanLink_listTheoremsExport___lambda__2___boxed(lean_object*, lean_object*, lean_object*, lean_object*);
 lean_object* lean_array_uget(lean_object*, size_t);
 size_t lean_array_size(lean_object*);
+lean_object* lean_io_error_to_string(lean_object*);
 lean_object* lean_st_ref_set(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* leanlink_list_theorems(uint64_t, lean_object*, lean_object*);
 lean_object* l_List_mapTR_loop___at_System_SearchPath_parse___spec__3(lean_object*, lean_object*);
@@ -149,6 +151,7 @@ static lean_object* l_LeanLink_initFn____x40_LeanLink_EnvStore___hyg_5____closed
 lean_object* lean_import_modules(lean_object*, lean_object*, uint32_t, uint8_t, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_PersistentHashMap_foldlM___at_LeanLink_listTheoremsExport___spec__7___rarg(lean_object*, lean_object*, lean_object*);
 static lean_object* l_LeanLink_initFn____x40_LeanLink_EnvStore___hyg_5____closed__1;
+static lean_object* l_LeanLink_loadEnvExport___closed__6;
 lean_object* lean_array_uset(lean_object*, size_t, lean_object*);
 LEAN_EXPORT lean_object* l_Array_foldlMUnsafe_fold___at_LeanLink_listTheoremsExport___spec__6___rarg(lean_object*, lean_object*, size_t, size_t, lean_object*);
 size_t lean_usize_land(size_t, size_t);
@@ -1284,21 +1287,29 @@ static lean_object* _init_l_LeanLink_loadEnvExport___closed__3() {
 _start:
 {
 lean_object* x_1; 
+x_1 = lean_mk_string_unchecked("[LeanLink] loadEnv error: ", 26, 26);
+return x_1;
+}
+}
+static lean_object* _init_l_LeanLink_loadEnvExport___closed__4() {
+_start:
+{
+lean_object* x_1; 
 x_1 = lean_mk_string_unchecked(",", 1, 1);
 return x_1;
 }
 }
-static uint8_t _init_l_LeanLink_loadEnvExport___closed__4() {
+static uint8_t _init_l_LeanLink_loadEnvExport___closed__5() {
 _start:
 {
 lean_object* x_1; lean_object* x_2; uint8_t x_3; 
-x_1 = l_LeanLink_loadEnvExport___closed__3;
+x_1 = l_LeanLink_loadEnvExport___closed__4;
 x_2 = l_List_filterTR_loop___at_LeanLink_loadEnv___spec__1___closed__1;
 x_3 = lean_string_dec_eq(x_1, x_2);
 return x_3;
 }
 }
-static lean_object* _init_l_LeanLink_loadEnvExport___closed__5() {
+static lean_object* _init_l_LeanLink_loadEnvExport___closed__6() {
 _start:
 {
 lean_object* x_1; lean_object* x_2; 
@@ -1319,102 +1330,102 @@ return x_2;
 LEAN_EXPORT lean_object* leanlink_load_env(lean_object* x_1, lean_object* x_2, lean_object* x_3) {
 _start:
 {
-lean_object* x_4; lean_object* x_130; uint8_t x_131; 
-x_130 = lean_box(0);
-x_131 = l_LeanLink_loadEnvExport___closed__4;
-if (x_131 == 0)
-{
-lean_object* x_132; lean_object* x_133; lean_object* x_134; lean_object* x_135; lean_object* x_136; uint8_t x_137; 
-x_132 = l_LeanLink_loadEnvExport___closed__3;
-x_133 = lean_unsigned_to_nat(0u);
-x_134 = l_String_splitOnAux(x_1, x_132, x_133, x_133, x_133, x_130);
-lean_dec(x_1);
-x_135 = lean_array_mk(x_134);
-x_136 = lean_array_get_size(x_135);
-x_137 = lean_nat_dec_lt(x_133, x_136);
-if (x_137 == 0)
-{
-lean_object* x_138; 
-lean_dec(x_136);
-lean_dec(x_135);
-x_138 = l_LeanLink_loadEnvExport___closed__5;
-x_4 = x_138;
-goto block_129;
-}
-else
-{
-uint8_t x_139; 
-x_139 = lean_nat_dec_le(x_136, x_136);
-if (x_139 == 0)
-{
-lean_object* x_140; 
-lean_dec(x_136);
-lean_dec(x_135);
-x_140 = l_LeanLink_loadEnvExport___closed__5;
-x_4 = x_140;
-goto block_129;
-}
-else
-{
-size_t x_141; size_t x_142; lean_object* x_143; lean_object* x_144; 
-x_141 = 0;
-x_142 = lean_usize_of_nat(x_136);
-lean_dec(x_136);
+lean_object* x_4; lean_object* x_142; uint8_t x_143; 
+x_142 = lean_box(0);
 x_143 = l_LeanLink_loadEnvExport___closed__5;
-x_144 = l_Array_foldlMUnsafe_fold___at_LeanLink_loadEnvExport___spec__7(x_135, x_141, x_142, x_143);
-lean_dec(x_135);
-x_4 = x_144;
-goto block_129;
-}
-}
-}
-else
+if (x_143 == 0)
 {
-lean_object* x_145; lean_object* x_146; lean_object* x_147; lean_object* x_148; uint8_t x_149; 
-x_145 = lean_alloc_ctor(1, 2, 0);
-lean_ctor_set(x_145, 0, x_1);
-lean_ctor_set(x_145, 1, x_130);
-x_146 = lean_array_mk(x_145);
-x_147 = lean_array_get_size(x_146);
-x_148 = lean_unsigned_to_nat(0u);
-x_149 = lean_nat_dec_lt(x_148, x_147);
+lean_object* x_144; lean_object* x_145; lean_object* x_146; lean_object* x_147; lean_object* x_148; uint8_t x_149; 
+x_144 = l_LeanLink_loadEnvExport___closed__4;
+x_145 = lean_unsigned_to_nat(0u);
+x_146 = l_String_splitOnAux(x_1, x_144, x_145, x_145, x_145, x_142);
+lean_dec(x_1);
+x_147 = lean_array_mk(x_146);
+x_148 = lean_array_get_size(x_147);
+x_149 = lean_nat_dec_lt(x_145, x_148);
 if (x_149 == 0)
 {
 lean_object* x_150; 
+lean_dec(x_148);
 lean_dec(x_147);
-lean_dec(x_146);
-x_150 = l_LeanLink_loadEnvExport___closed__5;
+x_150 = l_LeanLink_loadEnvExport___closed__6;
 x_4 = x_150;
-goto block_129;
+goto block_141;
 }
 else
 {
 uint8_t x_151; 
-x_151 = lean_nat_dec_le(x_147, x_147);
+x_151 = lean_nat_dec_le(x_148, x_148);
 if (x_151 == 0)
 {
 lean_object* x_152; 
+lean_dec(x_148);
 lean_dec(x_147);
-lean_dec(x_146);
-x_152 = l_LeanLink_loadEnvExport___closed__5;
+x_152 = l_LeanLink_loadEnvExport___closed__6;
 x_4 = x_152;
-goto block_129;
+goto block_141;
 }
 else
 {
 size_t x_153; size_t x_154; lean_object* x_155; lean_object* x_156; 
 x_153 = 0;
-x_154 = lean_usize_of_nat(x_147);
+x_154 = lean_usize_of_nat(x_148);
+lean_dec(x_148);
+x_155 = l_LeanLink_loadEnvExport___closed__6;
+x_156 = l_Array_foldlMUnsafe_fold___at_LeanLink_loadEnvExport___spec__7(x_147, x_153, x_154, x_155);
 lean_dec(x_147);
-x_155 = l_LeanLink_loadEnvExport___closed__5;
-x_156 = l_Array_foldlMUnsafe_fold___at_LeanLink_loadEnvExport___spec__7(x_146, x_153, x_154, x_155);
-lean_dec(x_146);
 x_4 = x_156;
-goto block_129;
+goto block_141;
 }
 }
 }
-block_129:
+else
+{
+lean_object* x_157; lean_object* x_158; lean_object* x_159; lean_object* x_160; uint8_t x_161; 
+x_157 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_157, 0, x_1);
+lean_ctor_set(x_157, 1, x_142);
+x_158 = lean_array_mk(x_157);
+x_159 = lean_array_get_size(x_158);
+x_160 = lean_unsigned_to_nat(0u);
+x_161 = lean_nat_dec_lt(x_160, x_159);
+if (x_161 == 0)
+{
+lean_object* x_162; 
+lean_dec(x_159);
+lean_dec(x_158);
+x_162 = l_LeanLink_loadEnvExport___closed__6;
+x_4 = x_162;
+goto block_141;
+}
+else
+{
+uint8_t x_163; 
+x_163 = lean_nat_dec_le(x_159, x_159);
+if (x_163 == 0)
+{
+lean_object* x_164; 
+lean_dec(x_159);
+lean_dec(x_158);
+x_164 = l_LeanLink_loadEnvExport___closed__6;
+x_4 = x_164;
+goto block_141;
+}
+else
+{
+size_t x_165; size_t x_166; lean_object* x_167; lean_object* x_168; 
+x_165 = 0;
+x_166 = lean_usize_of_nat(x_159);
+lean_dec(x_159);
+x_167 = l_LeanLink_loadEnvExport___closed__6;
+x_168 = l_Array_foldlMUnsafe_fold___at_LeanLink_loadEnvExport___spec__7(x_158, x_165, x_166, x_167);
+lean_dec(x_158);
+x_4 = x_168;
+goto block_141;
+}
+}
+}
+block_141:
 {
 lean_object* x_5; 
 x_5 = l_LeanLink_loadEnv(x_4, x_2, x_3);
@@ -1719,29 +1730,66 @@ return x_122;
 }
 else
 {
-uint8_t x_123; 
-x_123 = !lean_is_exclusive(x_5);
-if (x_123 == 0)
+lean_object* x_123; lean_object* x_124; lean_object* x_125; lean_object* x_126; lean_object* x_127; lean_object* x_128; lean_object* x_129; lean_object* x_130; 
+x_123 = lean_ctor_get(x_5, 0);
+lean_inc(x_123);
+x_124 = lean_ctor_get(x_5, 1);
+lean_inc(x_124);
+lean_dec(x_5);
+x_125 = lean_io_error_to_string(x_123);
+x_126 = l_LeanLink_loadEnvExport___closed__3;
+x_127 = lean_string_append(x_126, x_125);
+lean_dec(x_125);
+x_128 = l_List_filterTR_loop___at_LeanLink_loadEnv___spec__1___closed__1;
+x_129 = lean_string_append(x_127, x_128);
+x_130 = l_IO_eprintln___at___private_Init_System_IO_0__IO_eprintlnAux___spec__1(x_129, x_124);
+if (lean_obj_tag(x_130) == 0)
 {
-lean_object* x_124; lean_object* x_125; 
-x_124 = lean_ctor_get(x_5, 0);
-lean_dec(x_124);
-x_125 = l_LeanLink_loadEnvExport___boxed__const__1;
-lean_ctor_set_tag(x_5, 0);
-lean_ctor_set(x_5, 0, x_125);
-return x_5;
+uint8_t x_131; 
+x_131 = !lean_is_exclusive(x_130);
+if (x_131 == 0)
+{
+lean_object* x_132; lean_object* x_133; 
+x_132 = lean_ctor_get(x_130, 0);
+lean_dec(x_132);
+x_133 = l_LeanLink_loadEnvExport___boxed__const__1;
+lean_ctor_set(x_130, 0, x_133);
+return x_130;
 }
 else
 {
-lean_object* x_126; lean_object* x_127; lean_object* x_128; 
-x_126 = lean_ctor_get(x_5, 1);
-lean_inc(x_126);
-lean_dec(x_5);
-x_127 = l_LeanLink_loadEnvExport___boxed__const__1;
-x_128 = lean_alloc_ctor(0, 2, 0);
-lean_ctor_set(x_128, 0, x_127);
-lean_ctor_set(x_128, 1, x_126);
-return x_128;
+lean_object* x_134; lean_object* x_135; lean_object* x_136; 
+x_134 = lean_ctor_get(x_130, 1);
+lean_inc(x_134);
+lean_dec(x_130);
+x_135 = l_LeanLink_loadEnvExport___boxed__const__1;
+x_136 = lean_alloc_ctor(0, 2, 0);
+lean_ctor_set(x_136, 0, x_135);
+lean_ctor_set(x_136, 1, x_134);
+return x_136;
+}
+}
+else
+{
+uint8_t x_137; 
+x_137 = !lean_is_exclusive(x_130);
+if (x_137 == 0)
+{
+return x_130;
+}
+else
+{
+lean_object* x_138; lean_object* x_139; lean_object* x_140; 
+x_138 = lean_ctor_get(x_130, 0);
+x_139 = lean_ctor_get(x_130, 1);
+lean_inc(x_139);
+lean_inc(x_138);
+lean_dec(x_130);
+x_140 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_140, 0, x_138);
+lean_ctor_set(x_140, 1, x_139);
+return x_140;
+}
 }
 }
 }
@@ -2406,7 +2454,7 @@ lean_closure_set(x_30, 0, x_29);
 x_31 = lean_ctor_get(x_24, 1);
 lean_inc(x_31);
 lean_dec(x_24);
-x_32 = l_LeanLink_loadEnvExport___closed__5;
+x_32 = l_LeanLink_loadEnvExport___closed__6;
 x_33 = l_Lean_SMap_fold___at_LeanLink_listTheoremsExport___spec__2___rarg(x_30, x_32, x_31);
 lean_dec(x_31);
 x_34 = l_WXF_wlAssociation(x_33);
@@ -2474,7 +2522,7 @@ lean_closure_set(x_62, 0, x_61);
 x_63 = lean_ctor_get(x_56, 1);
 lean_inc(x_63);
 lean_dec(x_56);
-x_64 = l_LeanLink_loadEnvExport___closed__5;
+x_64 = l_LeanLink_loadEnvExport___closed__6;
 x_65 = l_Lean_SMap_fold___at_LeanLink_listTheoremsExport___spec__2___rarg(x_62, x_64, x_63);
 lean_dec(x_63);
 x_66 = l_WXF_wlAssociation(x_65);
@@ -3234,8 +3282,10 @@ lean_mark_persistent(l_LeanLink_loadEnvExport___closed__2);
 l_LeanLink_loadEnvExport___closed__3 = _init_l_LeanLink_loadEnvExport___closed__3();
 lean_mark_persistent(l_LeanLink_loadEnvExport___closed__3);
 l_LeanLink_loadEnvExport___closed__4 = _init_l_LeanLink_loadEnvExport___closed__4();
+lean_mark_persistent(l_LeanLink_loadEnvExport___closed__4);
 l_LeanLink_loadEnvExport___closed__5 = _init_l_LeanLink_loadEnvExport___closed__5();
-lean_mark_persistent(l_LeanLink_loadEnvExport___closed__5);
+l_LeanLink_loadEnvExport___closed__6 = _init_l_LeanLink_loadEnvExport___closed__6();
+lean_mark_persistent(l_LeanLink_loadEnvExport___closed__6);
 l_LeanLink_loadEnvExport___boxed__const__1 = _init_l_LeanLink_loadEnvExport___boxed__const__1();
 lean_mark_persistent(l_LeanLink_loadEnvExport___boxed__const__1);
 l_LeanLink_listTheoremsExport___lambda__2___closed__1 = _init_l_LeanLink_listTheoremsExport___lambda__2___closed__1();

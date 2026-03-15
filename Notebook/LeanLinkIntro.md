@@ -16,18 +16,14 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVers
 
 LeanLink ships with built-in examples: textbook proofs and dependent types.
 
-```wolfram
-nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
-```
-
-### Import from a .lean file
+### Import a standalone .lean file
 
 ```wolfram
-exFile = FileNameJoin[{nativeDir, "lib", "LeanLink", "Examples.lean"}];
+exFile = PacletFind["LeanLink"][[1]]["AssetLocation", "Examples"]
 ```
 
 ```wolfram
-env = LeanImport[exFile, "ProjectDir" -> nativeDir]
+env = LeanImport[exFile]
 ```
 
 ### Browse Constants
@@ -43,33 +39,33 @@ Keys[env]
 Each value is a `LeanTerm` with its kind shown in a colored summary:
 
 ```wolfram
-env["LeanLink.Examples.identity"]
+env["identity"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.Vec"]
+env["Vec"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.Vec.head"]
+env["Vec.head"]
 ```
 
 ### Property Access
 
 ```wolfram
-env["LeanLink.Examples.identity"]["Kind"]
+env["identity"]["Kind"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.identity"]["Type"]
+env["identity"]["Type"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.identity"]["Term"]
+env["identity"]["Term"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.identity"]["Properties"]
+env["identity"]["Properties"]
 ```
 
 ### Expression Graph
@@ -77,11 +73,11 @@ env["LeanLink.Examples.identity"]["Properties"]
 Visualize the type as a tree — nodes are colored by head: blue for ∀, purple for λ, green for constants.
 
 ```wolfram
-env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
+env["modus_ponens"]["ExprGraph"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.Vec.map"]["ExprGraph"]
+env["Vec.map"]["ExprGraph"]
 ```
 
 ### Call Graph
@@ -89,11 +85,27 @@ env["LeanLink.Examples.Vec.map"]["ExprGraph"]
 See which constants a proof depends on:
 
 ```wolfram
-env["LeanLink.Examples.contrapositive"]["CallGraph"]
+env["contrapositive"]["CallGraph"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.add_zero"]["CallGraph"]
+env["zero_add_proof"]["CallGraph"]
+```
+
+## Module Import
+
+Import from a Lake project with compiled `.olean` files:
+
+```wolfram
+nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
+```
+
+```wolfram
+env2 = LeanImport["LeanLink.Examples", "ProjectDir" -> nativeDir]
+```
+
+```wolfram
+env2["LeanLink.Examples.modus_ponens"]["ExprGraph"]
 ```
 
 ## Low-Level API
