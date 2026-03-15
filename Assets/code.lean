@@ -544,17 +544,27 @@ unsafe def main (args : List String) : IO Unit := do
 
   -- Load environment: either from raw .lean files or from module imports
   let env ← if !fileArgs.isEmpty then do
-    -- Process raw .lean files
-    -- For standalone mode: just import the files as modules after reading
+    -- Process raw .lean files: compile to .olean first, then import
+    let tmpDir := s!"/tmp/leanlink_{(← IO.monoNanosNow)}"
+    IO.FS.createDirAll tmpDir
     let mut env ← Lean.importModules #[] {} 0
     for fp in fileArgs do
-      -- Import the file as a module by adding its directory to search path
       let fname := System.FilePath.fileName fp |>.getD fp
       let modName := (fname.stripSuffix ".lean").toName
+      let oleanPath := s!"{tmpDir}/{fname.stripSuffix ".lean"}.olean"
+      -- Compile .lean to .olean using lean subprocess
+      let leanBin := (← Lean.findSysroot).toString ++ "/bin/lean"
       let dir := System.FilePath.parent fp |>.getD "."
-      Lean.searchPathRef.modify fun sp => dir.toString :: sp
-      let modules : Array Import := #[{ module := modName }]
-      env ← Lean.importModules modules {} 0
+      let result ← IO.Process.output {
+        cmd := leanBin
+        args := #[fp, "-o", oleanPath]
+        cwd := dir
+      }
+      if result.exitCode != 0 then
+        IO.eprintln s!"WARNING: errors compiling {fp}: {result.stderr}"
+      else
+        Lean.searchPathRef.modify fun sp => tmpDir :: sp
+        env ← Lean.importModules #[{ module := modName }] {} 0
     IO.eprintln s!"Processed {fileArgs.length} file(s)"
     pure env
   else do
