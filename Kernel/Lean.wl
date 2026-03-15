@@ -89,6 +89,8 @@ $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_get_used_constants", {Integer, "UTF8String"}, {Integer, 1}];
 $listConstantNamesFn := $listConstantNamesFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_list_constant_names", {Integer, "UTF8String"}, {Integer, 1}];
+$listConstantKindsFn := $listConstantKindsFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_list_constant_kinds", {Integer, "UTF8String"}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -179,91 +181,60 @@ $callEdgeColor = <|
   "ref" -> RGBColor @@ ({102, 102, 102} / 255.)
 |>;
 
-toLeanObject[LeanConstant[name_String, kind_String, type_, value_]] :=
-  LeanTerm[<|"Name" -> name, "Kind" -> kind, "Type" -> type, "Term" -> value|>];
-toLeanObject[other_] := other;
+(* --- Lazy fetch cache: keyed by {handle, name, field} --- *)
+$termCache = <||>;
 
-(* Attach environment kind lookup and call graph adjacency to all LeanTerms *)
-(* When handle is provided, does BFS to collect types/terms of referenced constants *)
-attachEnvKinds[env_Association, handle_ : None] := Module[
-  {result, typeRefs, termRefs, frontier, visited, maxDepth = 10, depth = 0},
+fetchField[handle_Integer, name_String, "Type"] :=
+  Lookup[$termCache, Key[{handle, name, "Type"}],
+    $termCache[{handle, name, "Type"}] =
+      Quiet[decodeWXF[$getTypeFn[handle, name, 100]]]];
 
-  (* Start with imported constants, adding per-constant refs *)
-  result = env;
+fetchField[handle_Integer, name_String, "Term"] :=
+  Lookup[$termCache, Key[{handle, name, "Term"}],
+    $termCache[{handle, name, "Term"}] =
+      With[{r = Quiet[decodeWXF[$getValueFn[handle, name, 100]]]},
+        If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]];
 
-  (* Attach TypeRefs/TermRefs to each imported constant *)
-  If[IntegerQ[handle] && handle > 0,
-    (* Use FFI getUsedConstants (matches DOT getUsedConstantsAsSet) *)
-    Do[
-      Quiet @ With[{uc = decodeWXF[$getUsedConstantsFn[handle, name]]},
-        If[AssociationQ[uc],
-          result = MapAt[
-            Replace[LeanTerm[d_Association] :>
-              LeanTerm[Append[d, {"TypeRefs" -> Lookup[uc, "type", {}],
-                                  "TermRefs" -> Lookup[uc, "value", {}]}]]],
-            result, Key[name]]]],
-      {name, Keys[env]}],
-    (* Fallback: walk decoded expressions *)
-    result = Association @ KeyValueMap[
-      Function[{k, v},
-        k -> Replace[v, LeanTerm[d_Association] :>
-          LeanTerm[Append[d,
-            {"TypeRefs" -> collectConsts[Lookup[d, "Type", LeanNoValue[]]],
-             "TermRefs" -> collectConsts[Lookup[d, "Term", LeanNoValue[]]]}]]]],
-      env]];
+fetchField[handle_Integer, name_String, "TypeRefs"] :=
+  Lookup[$termCache, Key[{handle, name, "TypeRefs"}],
+    Module[{uc},
+      uc = Quiet[decodeWXF[$getUsedConstantsFn[handle, name]]];
+      $termCache[{handle, name, "TypeRefs"}] =
+        If[AssociationQ[uc], Lookup[uc, "type", {}], {}];
+      $termCache[{handle, name, "TermRefs"}] =
+        If[AssociationQ[uc], Lookup[uc, "value", {}], {}];
+      $termCache[{handle, name, "TypeRefs"}]]];
 
-  (* BFS to discover referenced constants not in the original import *)
-  If[IntegerQ[handle] && handle > 0,
-    visited = Keys[result] // Association[# -> True & /@ #] &;
-    frontier = Complement[
-      Union @ Flatten @ Join[
-        Cases[Values[result], LeanTerm[d_] :> Lookup[d, "TypeRefs", {}]],
-        Cases[Values[result], LeanTerm[d_] :> Lookup[d, "TermRefs", {}]]],
-      Keys[visited]];
-    While[frontier =!= {} && depth < maxDepth,
-      depth++;
-      Do[
-        Module[{kind = "def", tRefs = {}, vRefs = {}},
-          (* Get kind *)
-          Quiet @ With[{r = decodeWXF[$getConstantFn[handle, name]]},
-            If[MatchQ[r, LeanConstant[_, _String, __]],
-              kind = r[[2]]]];
-          (* Get used constants *)
-          Quiet @ With[{uc = decodeWXF[$getUsedConstantsFn[handle, name]]},
-            If[AssociationQ[uc],
-              tRefs = Lookup[uc, "type", {}];
-              vRefs = Lookup[uc, "value", {}]]];
-          (* Add as new LeanTerm entry *)
-          AssociateTo[result, name ->
-            LeanTerm[<|"Name" -> name, "Kind" -> kind,
-                       "TypeRefs" -> tRefs, "TermRefs" -> vRefs|>]]];
-        AssociateTo[visited, name -> True],
-        {name, frontier}];
-      frontier = Complement[
-        Union @ Flatten @ KeyValueMap[
-          Function[{k, v},
-            Replace[v, {LeanTerm[d_] :> Join[Lookup[d, "TypeRefs", {}], Lookup[d, "TermRefs", {}]],
-                        _ -> {}}]],
-          KeyTake[result, frontier]],
-        Keys[visited]]]];
+fetchField[handle_Integer, name_String, "TermRefs"] :=
+  Lookup[$termCache, Key[{handle, name, "TermRefs"}],
+    (* Fetching TypeRefs also populates TermRefs *)
+    fetchField[handle, name, "TypeRefs"];
+    Lookup[$termCache, Key[{handle, name, "TermRefs"}], {}]];
 
-  (* Store only the handle integer in each LeanTerm for callGraph BFS *)
-  If[IntegerQ[handle] && handle > 0,
-    Association @ KeyValueMap[
-      Function[{k, v},
-        k -> Replace[v, LeanTerm[d_Association] :>
-          LeanTerm[Append[d, "_Handle" -> handle]]]],
-      result],
-    result]];
-
-(* Property access *)
+(* Property access — lazy fetch from handle *)
 LeanTerm /: LeanTerm[data_Association][prop_String, opts___Rule] :=
-  Switch[prop,
-    "Properties", {"Name", "Kind", "Type", "Term", "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
-    "ExprGraph", exprToGraph[
-      Replace[Lookup[data, "Term", LeanNoValue[]], LeanNoValue[] -> Lookup[data, "Type", LeanNoValue[]]]],
-    "CallGraph", callGraph[data, opts],
-    _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]];
+  Module[{handle = Lookup[data, "_Handle", None], name = Lookup[data, "Name", ""]},
+    Switch[prop,
+      "Properties", {"Name", "Kind", "Type", "Term", "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
+      "Name", data["Name"],
+      "Kind", data["Kind"],
+      "Type",
+        If[KeyExistsQ[data, "Type"], data["Type"],
+          If[IntegerQ[handle], fetchField[handle, name, "Type"], Missing["NoHandle"]]],
+      "Term",
+        If[KeyExistsQ[data, "Term"], data["Term"],
+          If[IntegerQ[handle], fetchField[handle, name, "Term"], Missing["NoHandle"]]],
+      "TypeRefs",
+        If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"],
+          If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]],
+      "TermRefs",
+        If[KeyExistsQ[data, "TermRefs"], data["TermRefs"],
+          If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]],
+      "ExprGraph", exprToGraph[
+        With[{term = LeanTerm[data]["Term"]},
+          Replace[term, LeanNoValue[] -> LeanTerm[data]["Type"]]]],
+      "CallGraph", callGraph[data, opts],
+      _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]]];
 
 (* ============================================================================ *)
 (* Expression Graph                                                             *)
@@ -375,7 +346,11 @@ callGraph[data_Association, opts___Rule] := Module[
 
   (* Cache for kinds and refs discovered during BFS *)
   kindCache = <|name -> Lookup[data, "Kind", "def"]|>;
-  refsCache = <|name -> {Lookup[data, "TypeRefs", {}], Lookup[data, "TermRefs", {}]}|>;
+  refsCache = <|name -> {
+    If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"],
+      If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]],
+    If[KeyExistsQ[data, "TermRefs"], data["TermRefs"],
+      If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]]}|>;
 
   (* Query FFI for a constant's kind and refs, caching results *)
   getRefsFor[n_String] := If[KeyExistsQ[refsCache, n],
@@ -717,42 +692,17 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
         FileNameDrop[#, FileNameDepth[buildLib]] & /@ oleans,
         {".olean" -> "", "/" -> "."}];
       If[subModules =!= {},
-        (* Extract definition names from source .lean files *)
-        srcDir = FileNameJoin[{projDir, Sequence @@ StringSplit[module, "."]}];
-        srcFiles = If[DirectoryQ[srcDir],
-          FileNames["*.lean", srcDir, Infinity], {}];
-        allNames = Flatten[Function[{file},
-          With[{content = Import[file, "Text"],
-                modPrefix = StringReplace[
-                  StringDrop[file, StringLength[projDir] + 1],
-                  {".lean" -> "", "/" -> "."}] <> "."},
-            StringCases[content,
-              RegularExpression[
-                "(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.']*)"
-              ] :> modPrefix <> "$1"]]] /@ srcFiles];
-        (* Apply user filter *)
-        If[filter =!= "",
-          allNames = Select[allNames, StringContainsQ[#, filter] &]];
-        allNames = Select[allNames, !isInternalName[#] &];
-        (* Group names by sub-module *)
-        grouped = GroupBy[allNames,
-          StringJoin[Riffle[Most[StringSplit[#, "."]], "."]] &];
-        (* For each sub-module, load env and query matching constants *)
-        KeyValueMap[
-          Function[{sub, names},
-            If[MemberQ[subModules, sub],
-              Module[{h, raw = <||>},
-                h = Quiet[getOrLoadEnv[projDir, {sub}]];
-                If[IntegerQ[h] && h > 0,
-                  Do[
-                    With[{c = Quiet[decodeWXF[$getConstantFn[h, nm]]]},
-                      If[MatchQ[c, _LeanConstant],
-                        AssociateTo[raw, nm -> c]]],
-                    {nm, names}];
-                  If[Length[raw] > 0,
-                    results = Join[results,
-                      attachEnvKinds[toLeanObject /@ raw, h]]]]]]],
-          grouped];
+        (* For directory-based modules, use first available sub-module's env *)
+        Module[{h, kinds},
+          h = Quiet[getOrLoadEnv[projDir, Take[subModules, 1]]];
+          If[IntegerQ[h] && h > 0,
+            kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
+            If[AssociationQ[kinds],
+              kinds = KeySelect[kinds, !isInternalName[#] &];
+              results = Association @ KeyValueMap[
+                Function[{n, k},
+                  n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]],
+                kinds]]]];
         Return[results, Module]]];
     LeanImport["Imports" -> {module}, opts]];
 
@@ -794,40 +744,44 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       Message[LeanLink::err, "lean compilation failed: " <> result["StandardError"]];
       DeleteDirectory[tmpDir, DeleteContents -> True];
       Return[$Failed, Module]];
-    (* Extract definition names from source file *)
-    content = Import[absFile, "Text"];
-    names = StringCases[content,
-      RegularExpression["(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.]*)"] :> "$1"];
-    If[names === {}, names = {modName}];
-    (* Import the olean via existing loadEnv mechanism *)
+    (* Load via lazy pattern *)
     searchPath = tmpDir <> ":" <> leanLibDir;
-    Block[{handle, raw, res},
+    Block[{handle, kinds, res},
       handle = $loadEnvFn[modName, searchPath];
       If[handle === 0 || !IntegerQ[handle],
         Message[LeanLink::err, "Failed to load compiled file"];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Module]];
-      (* Query each name individually *)
-      raw = Association[];
-      Do[
-        With[{r = Quiet[decodeWXF[$getConstantFn[handle, name]]]},
-          If[MatchQ[r, _LeanConstant],
-            AssociateTo[raw, name -> r]]],
+      (* Extract names from source for filtering *)
+      content = Import[absFile, "Text"];
+      names = StringCases[content,
+        RegularExpression["(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.]*)"] :> "$1"];
+      If[names === {}, names = {modName}];
+      (* Build lazy LeanTerms from known names *)
+      res = Association @ Table[
+        With[{qname = modName <> "." <> name},
+          Module[{kind = "def"},
+            Quiet @ With[{r = decodeWXF[$getConstantFn[handle, qname]]},
+              If[MatchQ[r, LeanConstant[_, k_String, __]], kind = k]];
+            qname -> LeanTerm[<|"Name" -> qname, "Kind" -> kind, "_Handle" -> handle|>]]],
         {name, names}];
-      res = attachEnvKinds[toLeanObject /@ raw, handle];
-      DeleteDirectory[tmpDir, DeleteContents -> True];
+      (* Don't delete tmpDir — olean needed for lazy queries *)
       res]];
 
-(* LeanImport[opts] -- base form *)
-LeanImport[opts : OptionsPattern[]] := Module[{handle, raw, result},
+(* LeanImport[opts] -- base form: instant lazy loading *)
+LeanImport[opts : OptionsPattern[]] := Module[{handle, kinds},
   If[$ShimLib === $Failed, Message[LeanLink::nolib]; Return[$Failed]];
   handle = getOrLoadEnv[resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"]];
   If[handle === $Failed, Return[$Failed]];
-  raw = decodeWXF[$listTheoremsFn[handle, OptionValue["Filter"]]];
-  If[!AssociationQ[raw], Return[$Failed]];
+  kinds = decodeWXF[$listConstantKindsFn[handle, OptionValue["Filter"]]];
+  If[!AssociationQ[kinds], Return[$Failed]];
   (* Filter out internal/generated names *)
-  raw = KeySelect[raw, !isInternalName[#] &];
-  attachEnvKinds[toLeanObject /@ raw, handle]];
+  kinds = KeySelect[kinds, !isInternalName[#] &];
+  (* Build lazy LeanTerms: only Name + Kind + _Handle, no Type/Term yet *)
+  Association @ KeyValueMap[
+    Function[{name, kind},
+      name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
+    kinds]];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
 

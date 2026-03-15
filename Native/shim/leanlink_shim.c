@@ -36,6 +36,7 @@ extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint3
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name, lean_object* w);
 extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name, lean_object* w);
 extern lean_object* leanlink_list_constant_names(uint64_t handle, lean_object* filter, lean_object* w);
+extern lean_object* leanlink_list_constant_kinds(uint64_t handle, lean_object* filter, lean_object* w);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -183,6 +184,24 @@ DLLEXPORT int leanlink_wl_list_constant_names(
     lean_object* filter = lean_mk_string(filter_cstr);
 
     lean_object* io_res = leanlink_list_constant_names(handle, filter, lean_io_mk_world());
+    lean_dec(filter);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * listConstantKinds(handle, filter) -> MTensor (WXF bytes, name->kind assoc)
+ */
+DLLEXPORT int leanlink_wl_list_constant_kinds(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* filter_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* filter = lean_mk_string(filter_cstr);
+
+    lean_object* io_res = leanlink_list_constant_kinds(handle, filter, lean_io_mk_world());
     lean_dec(filter);
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }

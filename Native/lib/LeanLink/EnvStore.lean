@@ -100,6 +100,20 @@ def listConstantNamesExport (handle : UInt64) (filterStr : @& String) : IO ByteA
     else acc
   return WXF.serialize (WXF.wlList names)
 
+/-- List constant names with their kinds, filtered by substring.
+    Returns WXF-encoded Association: <|name -> kind, ...|>. No type/term serialization. -/
+@[export leanlink_list_constant_kinds]
+def listConstantKindsExport (handle : UInt64) (filterStr : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let filter := filterStr.trim
+  let entries := env.constants.fold (init := #[]) fun acc name ci =>
+    let nameStr := name.toString
+    if filter == "" || (nameStr.splitOn filter).length > 1 then
+      acc.push (WXF.string nameStr, WXF.string (WXF.constantKind ci))
+    else acc
+  return WXF.serialize (WXF.wlAssociation entries)
+
 /-- Get the type of a constant as WXF-encoded Lean expression. -/
 @[export leanlink_get_type]
 def getTypeExport (handle : UInt64) (constName : @& String) (depth : UInt32) : IO ByteArray := do
