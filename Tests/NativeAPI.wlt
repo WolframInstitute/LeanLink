@@ -4,36 +4,97 @@
 
 BeginTestSection["NativeAPI"]
 
-(* --- LeanExpr (type) --- *)
+(* === LeanImport === *)
 
 VerificationTest[
-  result = LeanExpr["LeanLink.Examples.identity",
+  $env = LeanImport["LeanLink",
     "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"}];
-  MatchQ[result, _LeanForall],
+    "Filter" -> "LeanLink.Examples"];
+  AssociationQ[$env] && Length[$env] > 5,
   True,
-  TestID -> "LeanExpr-identity-type"
+  TestID -> "LeanImport-Returns-Assoc"
 ]
 
 VerificationTest[
-  result = LeanExpr["LeanLink.Examples.add_zero",
-    "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"}];
-  MatchQ[result, _LeanForall],
-  True,
-  TestID -> "LeanExpr-add_zero-type"
+  Head[$env["LeanLink.Examples.identity"]],
+  LeanTheorem,
+  TestID -> "LeanImport-Theorem-Head"
 ]
 
 VerificationTest[
-  result = LeanExpr["LeanLink.Examples.modus_ponens",
-    "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"}];
-  MatchQ[result, _LeanForall],
-  True,
-  TestID -> "LeanExpr-modus_ponens-type"
+  Head[$env["LeanLink.Examples.Vec.head"]],
+  LeanDefinition,
+  TestID -> "LeanImport-Definition-Head"
 ]
 
-(* --- LeanValue (proof/definition) --- *)
+VerificationTest[
+  Head[$env["LeanLink.Examples.Vec"]],
+  LeanInductive,
+  TestID -> "LeanImport-Inductive-Head"
+]
+
+(* === Property access === *)
+
+VerificationTest[
+  $env["LeanLink.Examples.identity"]["Name"],
+  "LeanLink.Examples.identity",
+  TestID -> "Property-Name"
+]
+
+VerificationTest[
+  $env["LeanLink.Examples.identity"]["Kind"],
+  "theorem",
+  TestID -> "Property-Kind"
+]
+
+VerificationTest[
+  MatchQ[$env["LeanLink.Examples.identity"]["Type"], _LeanForall],
+  True,
+  TestID -> "Property-Type"
+]
+
+VerificationTest[
+  !MatchQ[$env["LeanLink.Examples.identity"]["Value"], _LeanNoValue],
+  True,
+  TestID -> "Property-Value-Exists"
+]
+
+VerificationTest[
+  MemberQ[$env["LeanLink.Examples.identity"]["Properties"], "Name"],
+  True,
+  TestID -> "Property-Properties-List"
+]
+
+(* === LeanImport shorthand === *)
+
+VerificationTest[
+  $env2 = LeanImport["LeanLink",
+    "ProjectDir" -> $LeanLinkTestProjectDir,
+    "Filter" -> "LeanLink.Examples.add_zero"];
+  KeyExistsQ[$env2, "LeanLink.Examples.add_zero"],
+  True,
+  TestID -> "LeanImport-Shorthand"
+]
+
+(* === LeanExpr === *)
+
+VerificationTest[
+  MatchQ[LeanExpr["LeanLink.Examples.identity",
+    "ProjectDir" -> $LeanLinkTestProjectDir,
+    "Imports" -> {"LeanLink"}], _LeanForall],
+  True,
+  TestID -> "LeanExpr-identity"
+]
+
+VerificationTest[
+  MatchQ[LeanExpr["LeanLink.Examples.add_zero",
+    "ProjectDir" -> $LeanLinkTestProjectDir,
+    "Imports" -> {"LeanLink"}], _LeanForall],
+  True,
+  TestID -> "LeanExpr-add_zero"
+]
+
+(* === LeanValue === *)
 
 VerificationTest[
   result = LeanValue["LeanLink.Examples.identity",
@@ -44,38 +105,7 @@ VerificationTest[
   TestID -> "LeanValue-identity"
 ]
 
-VerificationTest[
-  result = LeanValue["LeanLink.Examples.Vec.head",
-    "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"}, "Depth" -> 10];
-  !StringQ[result] && !FailureQ[result],
-  True,
-  TestID -> "LeanValue-Vec-head"
-]
-
-(* --- LeanListConstants --- *)
-
-VerificationTest[
-  result = LeanListConstants[
-    "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"},
-    "Filter" -> "LeanLink.Examples"];
-  AssociationQ[result] && Length[result] > 5,
-  True,
-  TestID -> "LeanListConstants-FilterWorks"
-]
-
-VerificationTest[
-  result = LeanListConstants[
-    "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"},
-    "Filter" -> "LeanLink.Examples.add_zero"];
-  KeyExistsQ[result, "LeanLink.Examples.add_zero"],
-  True,
-  TestID -> "LeanListConstants-HasKey"
-]
-
-(* --- LeanConstantInfo --- *)
+(* === LeanConstantInfo === *)
 
 VerificationTest[
   result = LeanConstantInfo["LeanLink.Examples.Vec.head",
@@ -86,7 +116,7 @@ VerificationTest[
   TestID -> "LeanConstantInfo-Vec-head"
 ]
 
-(* --- Environment Caching --- *)
+(* === Environment Caching === *)
 
 VerificationTest[
   t1 = AbsoluteTiming[
@@ -102,7 +132,7 @@ VerificationTest[
   TestID -> "EnvCaching-SecondCallFaster"
 ]
 
-(* --- Error Handling --- *)
+(* === Error Handling === *)
 
 VerificationTest[
   result = LeanExpr["NonExistent.Constant",
