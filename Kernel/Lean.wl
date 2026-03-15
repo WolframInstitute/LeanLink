@@ -517,12 +517,12 @@ callGraph[data_Association, opts___Rule] := Module[
 (* ============================================================================ *)
 
 LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
-  {name, kind, typeExpr, termExpr, col, icon, sn, nTypeRefs, nTermRefs},
+  {name, kind, typePP, termPP, col, icon, sn, nTypeRefs, nTermRefs},
   name = Lookup[data, "Name", "?"];
   kind = Lookup[data, "Kind", "?"];
-  (* Use lazy property access — triggers FFI fetch when box is opened *)
-  typeExpr = obj["Type"];
-  termExpr = obj["Term"];
+  (* Use Lean's native pretty-printer for display *)
+  typePP = Quiet[obj["TypeForm"]];
+  termPP = Quiet[obj["TermForm"]];
   nTypeRefs = Length[obj["TypeRefs"]];
   nTermRefs = Length[obj["TermRefs"]];
   col = Lookup[$kindColor, kind, GrayLevel[0.5]];
@@ -537,9 +537,9 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
     {
       If[name =!= sn, BoxForm`SummaryItem[{"Full name: ", name}], Nothing],
       BoxForm`SummaryItem[{"Type: ",
-        If[typeExpr =!= $Failed, Short[typeExpr, 1], "—"]}],
-      If[termExpr =!= $Failed && termExpr =!= LeanNoValue[],
-        BoxForm`SummaryItem[{"Term: ", Short[termExpr, 1]}],
+        If[StringQ[typePP], Style[typePP, "Input"], "—"]}],
+      If[StringQ[termPP] && termPP =!= "<pp error>",
+        BoxForm`SummaryItem[{"Term: ", Style[Short[termPP, 1], "Input"]}],
         Nothing],
       If[nTypeRefs + nTermRefs > 0,
         BoxForm`SummaryItem[{"Refs: ",
