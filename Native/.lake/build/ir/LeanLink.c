@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: LeanLink
-// Imports: Init LeanLink.WXF LeanLink.EnvStore
+// Imports: Init LeanLink.WXF LeanLink.EnvStore LeanLink.Examples
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -16,6 +16,7 @@ extern "C" {
 lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_LeanLink_WXF(uint8_t builtin, lean_object*);
 lean_object* initialize_LeanLink_EnvStore(uint8_t builtin, lean_object*);
+lean_object* initialize_LeanLink_Examples(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_LeanLink(uint8_t builtin, lean_object* w) {
 lean_object * res;
@@ -28,6 +29,9 @@ res = initialize_LeanLink_WXF(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_LeanLink_EnvStore(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_LeanLink_Examples(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return lean_io_result_mk_ok(lean_box(0));
