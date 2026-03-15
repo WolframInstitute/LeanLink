@@ -280,3 +280,6 @@ LeanListTheorems::err = "Lean error: `1`";
 
 End[];
 EndPackage[];
+
+(* Load native WXF-based Lean integration *)
+Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "Lean.wl"}]];

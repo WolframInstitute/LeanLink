@@ -11,3 +11,7 @@
 # AG
 .gemini/
 .agent/
+
+# Native shim
+Native/shim/build/
+Native/shim/compile_commands.json

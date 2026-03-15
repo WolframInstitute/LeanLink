@@ -2,21 +2,128 @@
   code.lean — Unified Lean 4 graph extractor for proof analysis.
 
   Modes (first positional arg):
-    expr   — Walk Expr trees, emit DOT with app/lam/forall/const/bvar nodes
-    call   — Walk call dependencies via kernel env, emit DOT call graphs
-    list   — Print available theorems/defs that can be graphed
+    expr      — Walk Expr trees, emit DOT with app/lam/forall/const/bvar nodes
+    call      — Walk call dependencies via kernel env, emit DOT call graphs
+    list      — Print available theorems/defs that can be graphed
+    wxf-type  — Get type of a constant as WXF binary (WL BinaryDeserialize)
+    wxf-value — Get value/proof of a constant as WXF binary
+    wxf-const — Get full ConstantInfo as WXF binary
+    wxf-list  — List constants as WXF Association
 
   Usage:
     lake env lean --run call_graphs/code.lean expr modus_ponens
-    lake env lean --run call_graphs/code.lean call MyModule.my_theorem
-    lake env lean --run call_graphs/code.lean list
-    lake env lean --run call_graphs/code.lean list +filter=succ
+    lake env lean --run call_graphs/code.lean wxf-type OneSidedTM.rule445_computesSucc
+    lake env lean --run call_graphs/code.lean wxf-list +filter=rule445
 -/
 
 import Lean
 import Lean.Elab.Frontend
 set_option linter.deprecated false
 open Lean
+
+-- ============================================================================
+-- WXF serializer (Wolfram Exchange Format binary)
+-- ============================================================================
+
+namespace WXF
+
+def header : ByteArray := ⟨#[56, 58]⟩  -- "8:"
+
+def encodeVarint (n : Nat) : ByteArray :=
+  if n < 128 then ⟨#[n.toUInt8]⟩
+  else ⟨#[(n % 128).toUInt8 ||| 128]⟩ ++ encodeVarint (n / 128)
+
+def symbol (name : String) : ByteArray :=
+  let bytes := name.toUTF8
+  ⟨#[115]⟩ ++ encodeVarint bytes.size ++ bytes
+
+def wxfString (s : String) : ByteArray :=
+  let bytes := s.toUTF8
+  ⟨#[83]⟩ ++ encodeVarint bytes.size ++ bytes
+
+def int8 (n : Int) : ByteArray := ⟨#[67, (n % 256).toNat.toUInt8]⟩
+
+def int32 (n : Int) : ByteArray :=
+  let v := n.toNat
+  ⟨#[69, (v % 256).toUInt8, ((v/256) % 256).toUInt8,
+       ((v/65536) % 256).toUInt8, ((v/16777216) % 256).toUInt8]⟩
+
+def integer (n : Int) : ByteArray :=
+  if -128 ≤ n && n ≤ 127 then int8 n else int32 n
+
+def function (argCount : Nat) : ByteArray :=
+  ⟨#[102]⟩ ++ encodeVarint argCount
+
+def association (count : Nat) : ByteArray :=
+  ⟨#[65]⟩ ++ encodeVarint count
+
+def rule : ByteArray := ⟨#[45]⟩
+
+def serialize (body : ByteArray) : ByteArray := header ++ body
+
+def wlSymbol (name : String) : ByteArray := symbol ("LeanLink`" ++ name)
+
+def wlFunction (head : ByteArray) (args : Array ByteArray) : ByteArray :=
+  function args.size ++ head ++ args.foldl (· ++ ·) ByteArray.empty
+
+def wlList (elems : Array ByteArray) : ByteArray :=
+  wlFunction (symbol "List") elems
+
+def wlAssociation (entries : Array (ByteArray × ByteArray)) : ByteArray :=
+  association entries.size ++ entries.foldl (fun acc (k, v) => acc ++ rule ++ k ++ v) ByteArray.empty
+
+def nameToWXF (n : Name) : ByteArray := wxfString n.toString
+
+def binderInfoStr (bi : BinderInfo) : String := match bi with
+  | .default => "default" | .implicit => "implicit"
+  | .strictImplicit => "strictImplicit" | .instImplicit => "instImplicit"
+
+partial def levelToWXF (l : Level) : ByteArray := match l with
+  | .zero => wlFunction (wlSymbol "LeanLevelZero") #[]
+  | .succ i => wlFunction (wlSymbol "LeanLevelSucc") #[levelToWXF i]
+  | .max a b => wlFunction (wlSymbol "LeanLevelMax") #[levelToWXF a, levelToWXF b]
+  | .imax a b => wlFunction (wlSymbol "LeanLevelIMax") #[levelToWXF a, levelToWXF b]
+  | .param n => wlFunction (wlSymbol "LeanLevelParam") #[nameToWXF n]
+  | .mvar n => wlFunction (wlSymbol "LeanLevelMVar") #[nameToWXF n.name]
+
+partial def exprToWXF (e : Expr) (depth : Nat := 100) : ByteArray :=
+  if depth == 0 then wlFunction (wlSymbol "LeanTruncated") #[wxfString (toString e)]
+  else match e with
+  | .bvar idx => wlFunction (wlSymbol "LeanBVar") #[integer idx]
+  | .fvar id => wlFunction (wlSymbol "LeanFVar") #[nameToWXF id.name]
+  | .mvar id => wlFunction (wlSymbol "LeanMVar") #[nameToWXF id.name]
+  | .sort level => wlFunction (wlSymbol "LeanSort") #[levelToWXF level]
+  | .const name levels =>
+    wlFunction (wlSymbol "LeanConst") #[nameToWXF name, wlList (levels.map levelToWXF).toArray]
+  | .app fn arg =>
+    wlFunction (wlSymbol "LeanApp") #[exprToWXF fn (depth-1), exprToWXF arg (depth-1)]
+  | .lam name ty body bi =>
+    wlFunction (wlSymbol "LeanLam") #[nameToWXF name, exprToWXF ty (depth-1),
+      exprToWXF body (depth-1), wxfString (binderInfoStr bi)]
+  | .forallE name ty body bi =>
+    wlFunction (wlSymbol "LeanForall") #[nameToWXF name, exprToWXF ty (depth-1),
+      exprToWXF body (depth-1), wxfString (binderInfoStr bi)]
+  | .letE name ty val body _ =>
+    wlFunction (wlSymbol "LeanLet") #[nameToWXF name, exprToWXF ty (depth-1),
+      exprToWXF val (depth-1), exprToWXF body (depth-1)]
+  | .lit (.natVal n) => wlFunction (wlSymbol "LeanLitNat") #[integer n]
+  | .lit (.strVal s) => wlFunction (wlSymbol "LeanLitStr") #[wxfString s]
+  | .proj typeName idx struct =>
+    wlFunction (wlSymbol "LeanProj") #[nameToWXF typeName, integer idx, exprToWXF struct (depth-1)]
+  | .mdata _ e => exprToWXF e (depth - 1)
+
+def constantKind (ci : ConstantInfo) : String := match ci with
+  | .axiomInfo _ => "axiom" | .defnInfo _ => "def" | .thmInfo _ => "theorem"
+  | .opaqueInfo _ => "opaque" | .quotInfo _ => "quot" | .inductInfo _ => "inductive"
+  | .ctorInfo _ => "constructor" | .recInfo _ => "recursor"
+
+def constantToWXF (ci : ConstantInfo) : ByteArray :=
+  let value := match ci.value? with
+    | some v => exprToWXF v | none => wlFunction (wlSymbol "LeanNoValue") #[]
+  wlFunction (wlSymbol "LeanConstant") #[
+    nameToWXF ci.name, wxfString (constantKind ci), exprToWXF ci.type, value]
+
+end WXF
 
 -- ============================================================================
 -- Shared utilities
@@ -655,4 +762,48 @@ unsafe def main (args : List String) : IO Unit := do
         let dot := callGraphToDot graphName gd
         IO.println dot
 
-  | other => IO.eprintln s!"Unknown mode: {other}. Use 'expr', 'call', or 'list'."
+  | "wxf-type" =>
+    let stdout ← IO.getStdout
+    for root in rootArgs do
+      let name := root.toName
+      match env.find? name with
+      | some ci =>
+        let wxf := WXF.serialize (WXF.exprToWXF ci.type walkDepth)
+        stdout.write wxf
+      | none => IO.eprintln s!"ERROR: not found: {root}"
+
+  | "wxf-value" =>
+    let stdout ← IO.getStdout
+    for root in rootArgs do
+      let name := root.toName
+      match env.find? name with
+      | some ci =>
+        match ci.value? with
+        | some v =>
+          let wxf := WXF.serialize (WXF.exprToWXF v walkDepth)
+          stdout.write wxf
+        | none => IO.eprintln s!"No value for: {root}"
+      | none => IO.eprintln s!"ERROR: not found: {root}"
+
+  | "wxf-const" =>
+    let stdout ← IO.getStdout
+    for root in rootArgs do
+      let name := root.toName
+      match env.find? name with
+      | some ci =>
+        let wxf := WXF.serialize (WXF.constantToWXF ci)
+        stdout.write wxf
+      | none => IO.eprintln s!"ERROR: not found: {root}"
+
+  | "wxf-list" =>
+    let stdout ← IO.getStdout
+    let entries := env.constants.fold (init := #[]) fun acc name ci =>
+      let nameStr := name.toString
+      if filterStr == "" || (nameStr.splitOn filterStr).length > 1 then
+        acc.push (WXF.wxfString nameStr, WXF.constantToWXF ci)
+      else acc
+    let wxf := WXF.serialize (WXF.wlAssociation entries)
+    stdout.write wxf
+    IO.eprintln s!"{entries.size} entries serialized"
+
+  | other => IO.eprintln s!"Unknown mode: {other}. Use 'expr', 'call', 'list', 'wxf-type', 'wxf-value', 'wxf-const', or 'wxf-list'."
