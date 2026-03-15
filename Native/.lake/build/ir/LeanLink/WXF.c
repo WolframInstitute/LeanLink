@@ -168,10 +168,8 @@ static lean_object* l_WXF_integer___closed__4;
 lean_object* lean_array_get_size(lean_object*);
 static lean_object* l_WXF_rule___closed__2;
 lean_object* lean_int_neg(lean_object*);
-static lean_object* l_WXF_exprToWXF___closed__26;
 uint8_t lean_nat_dec_le(lean_object*, lean_object*);
 static lean_object* l_WXF_levelToWXF___closed__14;
-lean_object* lean_expr_dbg_to_string(lean_object*);
 static lean_object* l_WXF_binderInfoStr___closed__3;
 static lean_object* l_WXF_rule___closed__3;
 LEAN_EXPORT lean_object* l_WXF_wlList(lean_object*);
@@ -1826,18 +1824,10 @@ return x_3;
 static lean_object* _init_l_WXF_exprToWXF___closed__25() {
 _start:
 {
-lean_object* x_1; 
-x_1 = lean_mk_string_unchecked("LeanTruncated", 13, 13);
-return x_1;
-}
-}
-static lean_object* _init_l_WXF_exprToWXF___closed__26() {
-_start:
-{
 lean_object* x_1; lean_object* x_2; lean_object* x_3; 
-x_1 = l_WXF_ctx;
-x_2 = l_WXF_exprToWXF___closed__25;
-x_3 = l_WXF_wlSymbol(x_1, x_2);
+x_1 = l_WXF_exprToWXF___closed__12;
+x_2 = l_WXF_levelToWXF___closed__3;
+x_3 = l_WXF_wlFunction(x_1, x_2);
 return x_3;
 }
 }
@@ -2194,21 +2184,256 @@ return x_149;
 }
 else
 {
-lean_object* x_150; lean_object* x_151; lean_object* x_152; lean_object* x_153; lean_object* x_154; lean_object* x_155; lean_object* x_156; 
 lean_dec(x_2);
-x_150 = lean_expr_dbg_to_string(x_1);
+switch (lean_obj_tag(x_1)) {
+case 0:
+{
+lean_object* x_150; lean_object* x_151; lean_object* x_152; lean_object* x_153; lean_object* x_154; lean_object* x_155; lean_object* x_156; lean_object* x_157; 
+x_150 = lean_ctor_get(x_1, 0);
+lean_inc(x_150);
 lean_dec(x_1);
-x_151 = l_WXF_string(x_150);
-lean_dec(x_150);
-x_152 = lean_box(0);
-x_153 = lean_alloc_ctor(1, 2, 0);
-lean_ctor_set(x_153, 0, x_151);
-lean_ctor_set(x_153, 1, x_152);
-x_154 = lean_array_mk(x_153);
-x_155 = l_WXF_exprToWXF___closed__26;
-x_156 = l_WXF_wlFunction(x_155, x_154);
-lean_dec(x_154);
-return x_156;
+x_151 = lean_nat_to_int(x_150);
+x_152 = l_WXF_integer(x_151);
+lean_dec(x_151);
+x_153 = lean_box(0);
+x_154 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_154, 0, x_152);
+lean_ctor_set(x_154, 1, x_153);
+x_155 = lean_array_mk(x_154);
+x_156 = l_WXF_exprToWXF___closed__2;
+x_157 = l_WXF_wlFunction(x_156, x_155);
+lean_dec(x_155);
+return x_157;
+}
+case 1:
+{
+lean_object* x_158; lean_object* x_159; lean_object* x_160; lean_object* x_161; lean_object* x_162; lean_object* x_163; lean_object* x_164; 
+x_158 = lean_ctor_get(x_1, 0);
+lean_inc(x_158);
+lean_dec(x_1);
+x_159 = l_WXF_nameToWXF(x_158);
+x_160 = lean_box(0);
+x_161 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_161, 0, x_159);
+lean_ctor_set(x_161, 1, x_160);
+x_162 = lean_array_mk(x_161);
+x_163 = l_WXF_exprToWXF___closed__4;
+x_164 = l_WXF_wlFunction(x_163, x_162);
+lean_dec(x_162);
+return x_164;
+}
+case 2:
+{
+lean_object* x_165; lean_object* x_166; lean_object* x_167; lean_object* x_168; lean_object* x_169; lean_object* x_170; lean_object* x_171; 
+x_165 = lean_ctor_get(x_1, 0);
+lean_inc(x_165);
+lean_dec(x_1);
+x_166 = l_WXF_nameToWXF(x_165);
+x_167 = lean_box(0);
+x_168 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_168, 0, x_166);
+lean_ctor_set(x_168, 1, x_167);
+x_169 = lean_array_mk(x_168);
+x_170 = l_WXF_exprToWXF___closed__6;
+x_171 = l_WXF_wlFunction(x_170, x_169);
+lean_dec(x_169);
+return x_171;
+}
+case 3:
+{
+lean_object* x_172; lean_object* x_173; lean_object* x_174; lean_object* x_175; lean_object* x_176; lean_object* x_177; lean_object* x_178; 
+x_172 = lean_ctor_get(x_1, 0);
+lean_inc(x_172);
+lean_dec(x_1);
+x_173 = l_WXF_levelToWXF(x_172);
+x_174 = lean_box(0);
+x_175 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_175, 0, x_173);
+lean_ctor_set(x_175, 1, x_174);
+x_176 = lean_array_mk(x_175);
+x_177 = l_WXF_exprToWXF___closed__8;
+x_178 = l_WXF_wlFunction(x_177, x_176);
+lean_dec(x_176);
+return x_178;
+}
+case 4:
+{
+lean_object* x_179; lean_object* x_180; lean_object* x_181; lean_object* x_182; lean_object* x_183; lean_object* x_184; lean_object* x_185; lean_object* x_186; lean_object* x_187; lean_object* x_188; lean_object* x_189; lean_object* x_190; 
+x_179 = lean_ctor_get(x_1, 0);
+lean_inc(x_179);
+x_180 = lean_ctor_get(x_1, 1);
+lean_inc(x_180);
+lean_dec(x_1);
+x_181 = l_WXF_nameToWXF(x_179);
+x_182 = lean_box(0);
+x_183 = l_List_mapTR_loop___at_WXF_exprToWXF___spec__1(x_180, x_182);
+x_184 = lean_array_mk(x_183);
+x_185 = l_WXF_wlList(x_184);
+lean_dec(x_184);
+x_186 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_186, 0, x_185);
+lean_ctor_set(x_186, 1, x_182);
+x_187 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_187, 0, x_181);
+lean_ctor_set(x_187, 1, x_186);
+x_188 = lean_array_mk(x_187);
+x_189 = l_WXF_exprToWXF___closed__10;
+x_190 = l_WXF_wlFunction(x_189, x_188);
+lean_dec(x_188);
+return x_190;
+}
+case 5:
+{
+lean_object* x_191; 
+lean_dec(x_1);
+x_191 = l_WXF_exprToWXF___closed__25;
+return x_191;
+}
+case 6:
+{
+lean_object* x_192; uint8_t x_193; lean_object* x_194; lean_object* x_195; lean_object* x_196; lean_object* x_197; lean_object* x_198; lean_object* x_199; lean_object* x_200; lean_object* x_201; lean_object* x_202; 
+x_192 = lean_ctor_get(x_1, 0);
+lean_inc(x_192);
+x_193 = lean_ctor_get_uint8(x_1, sizeof(void*)*3 + 8);
+lean_dec(x_1);
+x_194 = l_WXF_nameToWXF(x_192);
+x_195 = l_WXF_binderInfoStr(x_193);
+x_196 = l_WXF_string(x_195);
+lean_dec(x_195);
+x_197 = lean_box(0);
+x_198 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_198, 0, x_196);
+lean_ctor_set(x_198, 1, x_197);
+x_199 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_199, 0, x_194);
+lean_ctor_set(x_199, 1, x_198);
+x_200 = lean_array_mk(x_199);
+x_201 = l_WXF_exprToWXF___closed__14;
+x_202 = l_WXF_wlFunction(x_201, x_200);
+lean_dec(x_200);
+return x_202;
+}
+case 7:
+{
+lean_object* x_203; uint8_t x_204; lean_object* x_205; lean_object* x_206; lean_object* x_207; lean_object* x_208; lean_object* x_209; lean_object* x_210; lean_object* x_211; lean_object* x_212; lean_object* x_213; 
+x_203 = lean_ctor_get(x_1, 0);
+lean_inc(x_203);
+x_204 = lean_ctor_get_uint8(x_1, sizeof(void*)*3 + 8);
+lean_dec(x_1);
+x_205 = l_WXF_nameToWXF(x_203);
+x_206 = l_WXF_binderInfoStr(x_204);
+x_207 = l_WXF_string(x_206);
+lean_dec(x_206);
+x_208 = lean_box(0);
+x_209 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_209, 0, x_207);
+lean_ctor_set(x_209, 1, x_208);
+x_210 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_210, 0, x_205);
+lean_ctor_set(x_210, 1, x_209);
+x_211 = lean_array_mk(x_210);
+x_212 = l_WXF_exprToWXF___closed__16;
+x_213 = l_WXF_wlFunction(x_212, x_211);
+lean_dec(x_211);
+return x_213;
+}
+case 8:
+{
+lean_object* x_214; lean_object* x_215; lean_object* x_216; lean_object* x_217; lean_object* x_218; lean_object* x_219; lean_object* x_220; 
+x_214 = lean_ctor_get(x_1, 0);
+lean_inc(x_214);
+lean_dec(x_1);
+x_215 = l_WXF_nameToWXF(x_214);
+x_216 = lean_box(0);
+x_217 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_217, 0, x_215);
+lean_ctor_set(x_217, 1, x_216);
+x_218 = lean_array_mk(x_217);
+x_219 = l_WXF_exprToWXF___closed__18;
+x_220 = l_WXF_wlFunction(x_219, x_218);
+lean_dec(x_218);
+return x_220;
+}
+case 9:
+{
+lean_object* x_221; 
+x_221 = lean_ctor_get(x_1, 0);
+lean_inc(x_221);
+lean_dec(x_1);
+if (lean_obj_tag(x_221) == 0)
+{
+lean_object* x_222; lean_object* x_223; lean_object* x_224; lean_object* x_225; lean_object* x_226; lean_object* x_227; lean_object* x_228; lean_object* x_229; 
+x_222 = lean_ctor_get(x_221, 0);
+lean_inc(x_222);
+lean_dec(x_221);
+x_223 = lean_nat_to_int(x_222);
+x_224 = l_WXF_integer(x_223);
+lean_dec(x_223);
+x_225 = lean_box(0);
+x_226 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_226, 0, x_224);
+lean_ctor_set(x_226, 1, x_225);
+x_227 = lean_array_mk(x_226);
+x_228 = l_WXF_exprToWXF___closed__20;
+x_229 = l_WXF_wlFunction(x_228, x_227);
+lean_dec(x_227);
+return x_229;
+}
+else
+{
+lean_object* x_230; lean_object* x_231; lean_object* x_232; lean_object* x_233; lean_object* x_234; lean_object* x_235; lean_object* x_236; 
+x_230 = lean_ctor_get(x_221, 0);
+lean_inc(x_230);
+lean_dec(x_221);
+x_231 = l_WXF_string(x_230);
+lean_dec(x_230);
+x_232 = lean_box(0);
+x_233 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_233, 0, x_231);
+lean_ctor_set(x_233, 1, x_232);
+x_234 = lean_array_mk(x_233);
+x_235 = l_WXF_exprToWXF___closed__22;
+x_236 = l_WXF_wlFunction(x_235, x_234);
+lean_dec(x_234);
+return x_236;
+}
+}
+case 10:
+{
+lean_object* x_237; 
+x_237 = lean_ctor_get(x_1, 1);
+lean_inc(x_237);
+lean_dec(x_1);
+x_1 = x_237;
+x_2 = x_3;
+goto _start;
+}
+default: 
+{
+lean_object* x_239; lean_object* x_240; lean_object* x_241; lean_object* x_242; lean_object* x_243; lean_object* x_244; lean_object* x_245; lean_object* x_246; lean_object* x_247; lean_object* x_248; lean_object* x_249; 
+x_239 = lean_ctor_get(x_1, 0);
+lean_inc(x_239);
+x_240 = lean_ctor_get(x_1, 1);
+lean_inc(x_240);
+lean_dec(x_1);
+x_241 = l_WXF_nameToWXF(x_239);
+x_242 = lean_nat_to_int(x_240);
+x_243 = l_WXF_integer(x_242);
+lean_dec(x_242);
+x_244 = lean_box(0);
+x_245 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_245, 0, x_243);
+lean_ctor_set(x_245, 1, x_244);
+x_246 = lean_alloc_ctor(1, 2, 0);
+lean_ctor_set(x_246, 0, x_241);
+lean_ctor_set(x_246, 1, x_245);
+x_247 = lean_array_mk(x_246);
+x_248 = l_WXF_exprToWXF___closed__24;
+x_249 = l_WXF_wlFunction(x_248, x_247);
+lean_dec(x_247);
+return x_249;
+}
+}
 }
 }
 }
@@ -2629,8 +2854,6 @@ l_WXF_exprToWXF___closed__24 = _init_l_WXF_exprToWXF___closed__24();
 lean_mark_persistent(l_WXF_exprToWXF___closed__24);
 l_WXF_exprToWXF___closed__25 = _init_l_WXF_exprToWXF___closed__25();
 lean_mark_persistent(l_WXF_exprToWXF___closed__25);
-l_WXF_exprToWXF___closed__26 = _init_l_WXF_exprToWXF___closed__26();
-lean_mark_persistent(l_WXF_exprToWXF___closed__26);
 l_WXF_constantKind___closed__1 = _init_l_WXF_constantKind___closed__1();
 lean_mark_persistent(l_WXF_constantKind___closed__1);
 l_WXF_constantKind___closed__2 = _init_l_WXF_constantKind___closed__2();

@@ -137,6 +137,78 @@ def getValueExport (handle : UInt64) (constName : @& String) (depth : UInt32) : 
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+-- ============================================================================
+-- Definition unfolding
+-- ============================================================================
+
+/-- Try to unfold the head of an application chain.
+    Given `f a1 a2 ... an` where `f` is a const with a definition,
+    replace `f` with its definition body and beta-reduce. -/
+private def unfoldHead (env : Environment) (e : Expr) : Expr :=
+  let fn := e.getAppFn
+  let args := e.getAppArgs
+  match fn with
+  | .const name _ =>
+    match env.find? name with
+    | some ci =>
+      match ci.value? with
+      | some v => (Lean.mkAppN v args).headBeta
+      | none => e
+    | none => e
+  | _ => e
+
+/-- Unfold constants in an expression by the given number of levels.
+    Level 0 = no unfolding. Level 1 = unfold each definition once, etc. -/
+partial def unfoldExpr (env : Environment) (e : Expr) (level : Nat) : Expr :=
+  if level == 0 then e
+  else
+    let e' := unfoldHead env e
+    if Expr.equal e' e then
+      -- Head didn't unfold — recurse into subexpressions
+      match e with
+      | .forallE n t b bi =>
+        .forallE n (unfoldExpr env t level) (unfoldExpr env b level) bi
+      | .lam n t b bi =>
+        .lam n (unfoldExpr env t level) (unfoldExpr env b level) bi
+      | .app fn arg =>
+        .app (unfoldExpr env fn level) (unfoldExpr env arg level)
+      | .letE n t v b nd =>
+        .letE n (unfoldExpr env t level) (unfoldExpr env v level) (unfoldExpr env b level) nd
+      | .mdata md inner => .mdata md (unfoldExpr env inner level)
+      | _ => e
+    else
+      -- Head was unfolded — recurse on the result with level-1
+      unfoldExpr env e' (level - 1)
+
+/-- Get type with definition unfolding. unfoldLevel controls how many rounds. -/
+@[export leanlink_get_type_unfolded]
+def getTypeUnfoldedExport (handle : UInt64) (constName : @& String)
+    (unfoldLevel : UInt32) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  match env.find? name with
+  | some ci =>
+    let ty := unfoldExpr env ci.type unfoldLevel.toNat
+    return WXF.serialize (WXF.exprToWXF ty)
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
+/-- Get value with definition unfolding. -/
+@[export leanlink_get_value_unfolded]
+def getValueUnfoldedExport (handle : UInt64) (constName : @& String)
+    (unfoldLevel : UInt32) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  match env.find? name with
+  | some ci =>
+    match ci.value? with
+    | some v =>
+      let v' := unfoldExpr env v unfoldLevel.toNat
+      return WXF.serialize (WXF.exprToWXF v')
+    | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
 /-- Get full constant info as WXF. -/
 @[export leanlink_get_constant]
 def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray := do

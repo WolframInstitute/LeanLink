@@ -37,6 +37,8 @@ extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name, le
 extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name, lean_object* w);
 extern lean_object* leanlink_list_constant_names(uint64_t handle, lean_object* filter, lean_object* w);
 extern lean_object* leanlink_list_constant_kinds(uint64_t handle, lean_object* filter, lean_object* w);
+extern lean_object* leanlink_get_type_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
+extern lean_object* leanlink_get_value_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -240,6 +242,44 @@ DLLEXPORT int leanlink_wl_get_value(
     lean_object* name = lean_mk_string(name_cstr);
 
     lean_object* io_res = leanlink_get_value(handle, name, depth, lean_io_mk_world());
+    lean_dec(name);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * getTypeUnfolded(handle, name, unfoldLevel) -> MTensor (WXF bytes)
+ */
+DLLEXPORT int leanlink_wl_get_type_unfolded(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    uint32_t unfold_level = (uint32_t)MArgument_getInteger(Args[2]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_get_type_unfolded(handle, name, unfold_level, lean_io_mk_world());
+    lean_dec(name);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * getValueUnfolded(handle, name, unfoldLevel) -> MTensor (WXF bytes)
+ */
+DLLEXPORT int leanlink_wl_get_value_unfolded(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    uint32_t unfold_level = (uint32_t)MArgument_getInteger(Args[2]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_get_value_unfolded(handle, name, unfold_level, lean_io_mk_world());
     lean_dec(name);
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
