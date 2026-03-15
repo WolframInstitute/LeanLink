@@ -52,14 +52,10 @@ LeanListConstants::usage = "LeanListConstants[opts] lists all constants as \[Lef
 LeanLoadEnvironment::usage = "LeanLoadEnvironment[{\"Module1\", ...}, searchPath] loads a Lean environment handle for repeated queries.";
 LeanFreeEnvironment::usage = "LeanFreeEnvironment[handle] frees a loaded Lean environment and releases memory.";
 
-(* Phase 2: Type-checking *)
-LeanTypeCheck::usage = "LeanTypeCheck[expr, handle|env] type-checks a WL expression tree against a Lean environment.";
-
-(* Phase 3: Interactive tactics *)
-LeanOpenGoal::usage = "LeanOpenGoal[term] opens an interactive proof goal for a LeanTerm. Returns <|\"stateId\" \[Rule] ..., \"goals\" \[Rule] ...|>.";
-LeanApplyTactic::usage = "LeanApplyTactic[stateId, tactic] applies a tactic string to a proof state. Returns new state.";
-FormatLeanGoal::usage = "FormatLeanGoal[goal] formats a single goal for display.";
-FormatLeanState::usage = "FormatLeanState[state] formats a full proof state for display.";
+(* Interactive proof objects *)
+LeanState::usage = "LeanState[term] opens a proof goal. LeanState[<|...|>] holds proof state. Properties: \"Goals\", \"Complete\", \"GoalCount\".";
+LeanTactic::usage = "LeanTactic[tacStr] represents a tactic. Apply via LeanTactic[tac][state] \[Rule] new LeanState.";
+LeanGoal::usage = "LeanGoal[<|...|>] represents a single proof goal with target and context.";
 
 Begin["`Private`"];
 
@@ -257,21 +253,12 @@ LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
                 _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj] :=
   LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>];
 
-(* Type-check an expression against an environment *)
-LeanTypeCheck[expr_, handle_Integer] :=
+(* Internal type-check helper *)
+typeCheck[expr_, handle_Integer] :=
   Module[{wxfBytes, result},
     wxfBytes = Normal[BinarySerialize[expr]];
     result = Quiet[decodeWXF[$typeCheckFn[handle, wxfBytes]]];
-    If[AssociationQ[result], result,
-      If[StringQ[result], <|"Error" -> result|>, $Failed]]];
-
-(* Accept an env Association — extract handle from first entry *)
-LeanTypeCheck[expr_, env_Association] :=
-  With[{terms = Values[env]},
-    If[Length[terms] > 0,
-      With[{h = Lookup[terms[[1]][[1]], "_Handle", None]},
-        If[IntegerQ[h], LeanTypeCheck[expr, h], $Failed]],
-      $Failed]];
+    If[AssociationQ[result], result, $Failed]];
 
 (* Property access — lazy fetch from handle *)
 (* Second arg: integer unfold level for Type/Term/TypeForm/TermForm, or Rule opts *)
@@ -283,7 +270,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
           expr = Lookup[data, "_Expr", None]},
     (* For constructed expressions, handle Type/TypeForm specially *)
     If[expr =!= None && IntegerQ[handle] && MatchQ[prop, "Type" | "TypeForm"],
-      With[{tc = LeanTypeCheck[expr, handle]},
+      With[{tc = typeCheck[expr, handle]},
         If[AssociationQ[tc],
           If[prop === "Type", tc["Type"], tc["TypeForm"]],
           $Failed]],
@@ -1008,62 +995,109 @@ LeanListConstants[opts : OptionsPattern[]] :=
     OptionValue["Imports"]];
 
 (* ============================================================================ *)
-(* Phase 3: Interactive Tactics                                                  *)
+(* LeanState — interactive proof state                                          *)
 (* ============================================================================ *)
 
-(* Open a proof goal for a LeanTerm — creates initial tactic state *)
-LeanOpenGoal[term_LeanTerm] :=
+(* Constructor: LeanState[term_LeanTerm] opens a proof goal *)
+LeanState[term_LeanTerm] :=
   Module[{data = term[[1]], handle, name, result},
     handle = Lookup[data, "_Handle", None];
     name = Lookup[data, "Name", ""];
     If[!IntegerQ[handle], Return[$Failed]];
     result = Quiet[decodeWXF[$openGoalFn[handle, name]]];
-    If[!AssociationQ[result], $Failed, result]];
+    If[!AssociationQ[result], $Failed,
+      LeanState[<|
+        "stateId" -> result["stateId"],
+        "goals" -> (LeanGoal /@ result["goals"]),
+        "goalCount" -> result["goalCount"],
+        "_Handle" -> handle|>]]];
 
-(* Apply a tactic string to a proof state *)
-LeanApplyTactic[stateId_Integer, tactic_String] :=
-  Module[{result},
-    result = Quiet[decodeWXF[$applyTacticFn[stateId, tactic]]];
-    If[!AssociationQ[result],
-      If[StringQ[result] && StringStartsQ[result, "ERROR:"],
-        <|"Error" -> StringDrop[result, 7]|>, $Failed],
-      result]];
+(* LeanState property access *)
+LeanState /: LeanState[data_Association][prop_String] :=
+  Switch[prop,
+    "Goals", Lookup[data, "goals", {}],
+    "GoalCount", Lookup[data, "goalCount", 0],
+    "Complete", Lookup[data, "goalCount", 0] === 0,
+    "StateId", Lookup[data, "stateId", None],
+    _, data[prop]];
 
-(* Convenience: pipe multiple tactics *)
-LeanApplyTactic[stateId_Integer, tactics_List] :=
+(* LeanGoal property access *)
+LeanGoal /: LeanGoal[data_Association][prop_String] :=
+  Switch[prop,
+    "Target", Lookup[data, "target", "?"],
+    "TargetExpr", Lookup[data, "targetExpr", None],
+    "Context", Lookup[data, "context", {}],
+    _, data[prop]];
+
+(* MakeBoxes for LeanState *)
+LeanState /: MakeBoxes[LeanState[data_Association], StandardForm] :=
+  Module[{n = Lookup[data, "goalCount", 0], goals = Lookup[data, "goals", {}]},
+    With[{display =
+      If[n === 0,
+        Style["\[Checkmark] No goals", Darker[Green], Bold],
+        Column[
+          Join[
+            {Style[ToString[n] <> If[n === 1, " goal", " goals"], Gray, Italic]},
+            MapIndexed[
+              Module[{g = #1[[1]], idx = #2[[1]], ctx, target},
+                ctx = Lookup[g, "context", {}];
+                target = Lookup[g, "target", "?"];
+                Column[{
+                  If[Length[ctx] > 0,
+                    Column[
+                      (Style[#["name"] <> " : " <> #["type"], "Input"] & /@ ctx),
+                      Spacings -> 0.3],
+                    Nothing],
+                  Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
+                  Style["\[RightTriangle] " <> target, Bold, "Input"]
+                }, Spacings -> 0.2]] &, goals]],
+          Spacings -> 0.8]]},
+      ToBoxes[Interpretation[display, LeanState[data]]]]];
+
+(* MakeBoxes for LeanGoal *)
+LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] :=
+  Module[{ctx = Lookup[data, "context", {}], target = Lookup[data, "target", "?"]},
+    With[{display =
+      Column[{
+        If[Length[ctx] > 0,
+          Column[
+            (Style[#["name"] <> " : " <> #["type"], "Input"] & /@ ctx),
+            Spacings -> 0.3],
+          Nothing],
+        Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
+        Style["\[RightTriangle] " <> target, Bold, "Input"]
+      }, Spacings -> 0.2]},
+      ToBoxes[Interpretation[display, LeanGoal[data]]]]];
+
+(* ============================================================================ *)
+(* LeanTactic — tactic objects                                                   *)
+(* ============================================================================ *)
+
+(* Apply tactic to a state: LeanTactic[tac][state] -> LeanState *)
+LeanTactic /: LeanTactic[tac_String][state_LeanState] :=
+  Module[{data = state[[1]], stateId, handle, result},
+    stateId = Lookup[data, "stateId", None];
+    handle = Lookup[data, "_Handle", None];
+    If[!IntegerQ[stateId], Return[$Failed]];
+    result = Quiet[decodeWXF[$applyTacticFn[stateId, tac]]];
+    If[!AssociationQ[result], $Failed,
+      LeanState[<|
+        "stateId" -> result["stateId"],
+        "goals" -> (LeanGoal /@ result["goals"]),
+        "goalCount" -> result["goalCount"],
+        "_Handle" -> handle|>]]];
+
+(* Pipe multiple tactics: LeanTactic[{t1, t2, ...}][state] *)
+LeanTactic /: LeanTactic[tactics_List][state_LeanState] :=
   Fold[
-    If[AssociationQ[#1] && KeyExistsQ[#1, "stateId"],
-      LeanApplyTactic[#1["stateId"], #2], #1] &,
-    <|"stateId" -> stateId|>,
+    If[MatchQ[#1, _LeanState], LeanTactic[#2][#1], #1] &,
+    state,
     tactics];
 
-(* Format a goal for display *)
-FormatLeanGoal[goal_Association] :=
-  Module[{ctx = Lookup[goal, "context", {}], target = Lookup[goal, "target", "?"]},
-    Column[{
-      If[Length[ctx] > 0,
-        Column[
-          (Style[#["name"] <> " : " <> #["type"], "Input"] & /@ ctx),
-          Spacings -> 0.3],
-        Nothing],
-      Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
-      Style["\[RightTriangle] " <> target, Bold, "Input"]
-    }, Spacings -> 0.2]];
-
-(* Format a full proof state *)
-FormatLeanState[state_Association] :=
-  Module[{goals = Lookup[state, "goals", {}], n = Lookup[state, "goalCount", 0]},
-    If[n == 0,
-      Style["\[Checkmark] No goals — proof complete!", Darker[Green], Bold],
-      Column[
-        Join[
-          {Style[ToString[n] <> If[n == 1, " goal", " goals"], Gray, Italic]},
-          MapIndexed[
-            Column[{
-              Style["Goal " <> ToString[#2[[1]]], Bold, Blue],
-              FormatLeanGoal[#1]}, Spacings -> 0.3] &, goals]],
-        Spacings -> 0.8]]];
+(* MakeBoxes for LeanTactic *)
+LeanTactic /: MakeBoxes[LeanTactic[tac_String], StandardForm] :=
+  With[{display = Style["tactic: " <> tac, "Input", Italic]},
+    ToBoxes[Interpretation[display, LeanTactic[tac]]]];
 
 End[];
 EndPackage[];
-

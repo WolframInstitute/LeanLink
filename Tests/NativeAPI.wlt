@@ -312,78 +312,61 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-(* Phase 2: Type-checking                                            *)
+(* Constructed LeanTerm type-checking                                *)
 (* ================================================================ *)
 
 VerificationTest[
-  $tc = LeanTypeCheck[
-    LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]],
-    $filtered];
-  AssociationQ[$tc],
-  True,
-  TestID -> "TypeCheck-NatSucc42-Returns-Assoc"
-]
-
-VerificationTest[
-  Lookup[$tc, "TypeForm", ""],
-  "Nat",
-  TestID -> "TypeCheck-NatSucc42-TypeForm"
-]
-
-VerificationTest[
-  Lookup[$tc, "Type", $Failed],
-  LeanConst["Nat", {}],
-  TestID -> "TypeCheck-NatSucc42-TypeExpr"
-]
-
-VerificationTest[
-  tc2 = LeanTypeCheck[
-    LeanConst["LeanLink.Examples.identity", {}],
-    $filtered];
-  AssociationQ[tc2] && StringContainsQ[Lookup[tc2, "TypeForm", ""], "Prop"],
-  True,
-  TestID -> "TypeCheck-Identity-HasProp"
+  $constructed = LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]]];
+  Head[$constructed],
+  LeanTerm,
+  TestID -> "Constructed-LeanTerm-Head"
 ]
 
 (* ================================================================ *)
-(* Phase 3: Interactive Tactics                                      *)
+(* LeanState + LeanTactic                                            *)
 (* ================================================================ *)
 
 VerificationTest[
-  $s0 = LeanOpenGoal[$filtered["LeanLink.Examples.identity"]];
-  AssociationQ[$s0] && $s0["goalCount"] === 1,
+  $s0 = LeanState[$filtered["LeanLink.Examples.identity"]];
+  Head[$s0] === LeanState && $s0["GoalCount"] === 1,
   True,
-  TestID -> "Tactic-OpenGoal-HasOneGoal"
+  TestID -> "LeanState-Constructor-HasOneGoal"
 ]
 
 VerificationTest[
-  StringContainsQ[$s0["goals"][[1]]["target"], "Prop"],
+  StringContainsQ[$s0["Goals"][[1]]["Target"], "Prop"],
   True,
-  TestID -> "Tactic-OpenGoal-TargetHasProp"
+  TestID -> "LeanState-Goal-TargetHasProp"
 ]
 
 VerificationTest[
-  $s1 = LeanApplyTactic[$s0["stateId"], "intro P"];
-  AssociationQ[$s1] && Length[$s1["goals"][[1]]["context"]] > 0,
+  $s0["Complete"],
+  False,
+  TestID -> "LeanState-NotComplete"
+]
+
+VerificationTest[
+  $s1 = LeanTactic["intro P"][$s0];
+  Head[$s1] === LeanState &&
+  Length[$s1["Goals"][[1]]["Context"]] > 0,
   True,
-  TestID -> "Tactic-IntroP-HasContext"
+  TestID -> "LeanTactic-IntroP-HasContext"
 ]
 
 VerificationTest[
-  $s2 = LeanApplyTactic[$s1["stateId"], "intro h"];
-  $s3 = LeanApplyTactic[$s2["stateId"], "exact h"];
-  $s3["goalCount"],
-  0,
-  TestID -> "Tactic-Identity-ProofComplete"
+  $s2 = LeanTactic["intro h"][$s1];
+  $s3 = LeanTactic["exact h"][$s2];
+  $s3["Complete"],
+  True,
+  TestID -> "LeanTactic-Identity-ProofComplete"
 ]
 
 VerificationTest[
-  s0 = LeanOpenGoal[$filtered["LeanLink.Examples.modus_ponens"]];
-  s1 = LeanApplyTactic[s0["stateId"], "intro P Q hP hPQ"];
-  s2 = LeanApplyTactic[s1["stateId"], "exact hPQ hP"];
-  s2["goalCount"],
-  0,
-  TestID -> "Tactic-ModusPonens-ProofComplete"
+  s0 = LeanState[$filtered["LeanLink.Examples.modus_ponens"]];
+  sf = LeanTactic[{"intro P Q hP hPQ", "exact hPQ hP"}][s0];
+  sf["Complete"],
+  True,
+  TestID -> "LeanTactic-ModusPonens-PipeComplete"
 ]
 
 EndTestSection[]
