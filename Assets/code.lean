@@ -155,11 +155,9 @@ private def isLeafExpr : Expr → Bool
 partial def walkExpr (cfg : WalkCfg) (e : Expr) (gd : ExprGraphData)
     (depth : Nat) (cd : Nat) : ExprGraphData × Nat :=
   let go (child : Expr) (gd : ExprGraphData) : ExprGraphData × Nat :=
-    if gd.nodes.size >= cfg.maxNodes then mkExprLeaf gd child
-    else if isLeafExpr child then
-      if depth == 0 then mkExprLeaf gd child
-      else walkExpr cfg child gd (depth - 1) cd
-    else walkExpr cfg child gd (if depth == 0 then 0 else depth - 1) cd
+    if depth == 0 then mkExprLeaf gd child
+    else if gd.nodes.size >= cfg.maxNodes then mkExprLeaf gd child
+    else walkExpr cfg child gd (depth - 1) cd
   match e with
   | .const name levels =>
     let sn := shortConstName name
