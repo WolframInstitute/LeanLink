@@ -561,10 +561,8 @@ iBox[expr_, displayBoxes_] :=
 
 (* ============================================================================ *)
 (* Lean-style pretty-printer (string form)                                      *)
-(* ============================================================================ *)
-
-(* leanPP[expr] — convert expression tree to Lean-like source string *)
-(* leanPP[expr, depth] — with depth limit *)
+(* leanPP — fallback pretty-printer for expressions without a handle.          *)
+(* Lean's native PrettyPrinter.ppExpr is used when a handle is available.      *)
 
 leanPP[expr_] := leanPP[expr, 6];
 leanPP[e_, 0] := Switch[Head[e],
@@ -575,21 +573,18 @@ leanPP[e_, 0] := Switch[Head[e],
   LeanLitStr, "\"" <> e[[1]] <> "\"",
   LeanSort, leanPP[e, 1],
   LeanForall, "\[ForAll]",
-  LeanLam, "fun",
+  LeanLam, "\[Lambda]",
   LeanLet, "let",
   LeanMData, leanPP[e[[2]], 0],
   _, ToString[Head[e]]];
 
-(* Constants — use short name *)
 leanPP[LeanConst[name_String, _List], _Integer] := shortName[name];
 
-(* Sort levels *)
 leanPP[LeanSort[LeanLevelZero[]], _] := "Prop";
 leanPP[LeanSort[LeanLevelSucc[LeanLevelZero[]]], _] := "Type";
-leanPP[LeanSort[LeanLevelSucc[l_]], d_Integer] := "Type " <> leanPPLevel[l];
+leanPP[LeanSort[LeanLevelSucc[l_]], _] := "Type " <> leanPPLevel[l];
 leanPP[LeanSort[l_], _] := "Sort " <> leanPPLevel[l];
 
-(* Universe levels *)
 leanPPLevel[LeanLevelZero[]] := "0";
 leanPPLevel[LeanLevelSucc[l_]] := ToString[levelToNat[l] + 1];
 leanPPLevel[LeanLevelParam[name_String]] := name;
@@ -601,14 +596,9 @@ levelToNat[LeanLevelZero[]] := 0;
 levelToNat[LeanLevelSucc[l_]] := levelToNat[l] + 1;
 levelToNat[_] := 0;
 
-(* Bound variables *)
 leanPP[LeanBVar[n_Integer], _] := "#" <> ToString[n];
-
-(* Free/meta variables *)
-leanPP[LeanFVar[id_], _] := "_fvar";
-leanPP[LeanMVar[id_], _] := "?_";
-
-(* Literals *)
+leanPP[LeanFVar[_], _] := "_fvar";
+leanPP[LeanMVar[_], _] := "?_";
 leanPP[LeanLitNat[n_Integer], _] := ToString[n];
 leanPP[LeanLitStr[s_String], _] := "\"" <> s <> "\"";
 
@@ -627,12 +617,11 @@ leanPP[e : LeanForall[_, _, _, _], d_Integer] := Module[
           If[nm === "" || StringMatchQ[nm, "_" ~~ ___],
             leanPP[dom, d - 1],
             "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"]]]];
-  (* Check if all binders are unnamed arrows (simple function types) *)
   If[AllTrue[binders, !StringStartsQ[#, "("] && !StringStartsQ[#, "{"] && !StringStartsQ[#, "["] && !StringStartsQ[#, "\[LeftDoubleBracket]"] &],
     StringRiffle[Append[binders, leanPP[body, d - 1]], " \[RightArrow] "],
     "\[ForAll] " <> StringRiffle[binders, " "] <> ", " <> leanPP[body, d - 1]]];
 
-(* Lambda — collect consecutive binders *)
+(* Lambda *)
 leanPP[e : LeanLam[_, _, _, _], d_Integer] := Module[
   {binders = {}, body = e, name, dom, bi, nm},
   While[MatchQ[body, LeanLam[_, _, _, _]] && d - Length[binders] > 0,
@@ -644,68 +633,24 @@ leanPP[e : LeanLam[_, _, _, _], d_Integer] := Module[
         "instImplicit", "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]",
         _,
           "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"]]];
-  "fun " <> StringRiffle[binders, " "] <> " => " <> leanPP[body, d - 1]];
+  "\[Lambda] " <> StringRiffle[binders, " "] <> " \[DoubleLongRightArrow] " <> leanPP[body, d - 1]];
 
-(* Let *)
 leanPP[LeanLet[name_String, type_, val_, body_], d_Integer] :=
   "let " <> cleanName[name] <> " : " <> leanPP[type, d - 1] <>
   " := " <> leanPP[val, d - 1] <> "; " <> leanPP[body, d - 1];
 
-(* Application — detect infix operators, then fall back to generic *)
+(* Application — simple uncurry *)
 leanPP[e_LeanApp, d_Integer] := Module[
-  {fn = e, rawArgs = {}, a, head, headName, nArgs, ppArgs},
-  (* Uncurry application chain *)
+  {fn = e, args = {}, a},
   While[MatchQ[fn, LeanApp[_, _]],
     a = fn[[2]]; fn = fn[[1]];
-    PrependTo[rawArgs, a]];
-  head = fn; nArgs = Length[rawArgs];
-  headName = If[MatchQ[head, LeanConst[_String, _]], head[[1]], ""];
-  (* OfNat.ofNat α n inst → n *)
-  If[StringEndsQ[headName, "OfNat.ofNat"] && nArgs >= 3,
-    Return[leanPP[rawArgs[[2]], d - 1]]];
-  (* Binary infix operators: HAdd.hAdd α β γ inst a b → a + b *)
-  If[nArgs >= 6 && StringMatchQ[headName,
-      __ ~~ ("HAdd.hAdd" | "HSub.hSub" | "HMul.hMul" | "HDiv.hDiv" | "HMod.hMod")],
-    With[{op = Switch[StringSplit[headName, "."][[-1]],
-            "hAdd", " + ", "hSub", " - ", "hMul", " * ",
-            "hDiv", " / ", "hMod", " % ", _, " ? "],
-          lhs = leanPP[rawArgs[[-2]], d - 1],
-          rhs = leanPP[rawArgs[[-1]], d - 1]},
-      Return[lhs <> op <> rhs]]];
-  (* Neg.neg α inst a → -a *)
-  If[nArgs >= 3 && StringEndsQ[headName, "Neg.neg"],
-    Return["-" <> leanPP[rawArgs[[-1]], d - 1]]];
-  (* Eq α a b → a = b *)
-  If[StringEndsQ[headName, ".Eq"] && nArgs >= 3,
-    Return[leanPP[rawArgs[[-2]], d - 1] <> " = " <> leanPP[rawArgs[[-1]], d - 1]]];
-  (* Not a → ¬a *)
-  If[headName === "Not" && nArgs >= 1,
-    Return["\[Not]" <> leanPP[rawArgs[[-1]], d - 1]]];
-  (* And a b, Or a b, Iff a b *)
-  If[nArgs >= 2 && MemberQ[{"And", "Or", "Iff"}, headName],
-    With[{op = Switch[headName, "And", " \[And] ", "Or", " \[Or] ", "Iff", " \[LeftRightArrow] "],
-          lhs = leanPP[rawArgs[[-2]], d - 1], rhs = leanPP[rawArgs[[-1]], d - 1]},
-      Return[lhs <> op <> rhs]]];
-  (* LE.le / LT.lt α inst a b *)
-  If[nArgs >= 4 && StringMatchQ[headName, __ ~~ ("LE.le" | "LT.lt")],
-    With[{op = If[StringEndsQ[headName, "LE.le"], " \[LessEqual] ", " < "],
-          lhs = leanPP[rawArgs[[-2]], d - 1], rhs = leanPP[rawArgs[[-1]], d - 1]},
-      Return[lhs <> op <> rhs]]];
-  (* BEq.beq / Decidable.decide — skip instance args, show last 2 *)
-  If[nArgs >= 4 && StringMatchQ[headName, __ ~~ "BEq.beq"],
-    Return[leanPP[rawArgs[[-2]], d - 1] <> " == " <> leanPP[rawArgs[[-1]], d - 1]]];
-  (* Generic fallback *)
-  ppArgs = leanPP[#, d - 1] & /@ rawArgs;
-  leanPP[head, d - 1] <> " " <> StringRiffle[ppArgs, " "]];
+    PrependTo[args, leanPP[a, d - 1]]];
+  leanPP[fn, d - 1] <> " " <> StringRiffle[args, " "]];
 
-(* Projection *)
 leanPP[LeanProj[struct_String, idx_Integer, expr_], d_Integer] :=
   leanPP[expr, d - 1] <> "." <> ToString[idx];
 
-(* MData — ignore metadata wrapper *)
 leanPP[LeanMData[_, expr_], d_Integer] := leanPP[expr, d];
-
-(* No value *)
 leanPP[LeanNoValue[], _] := "(no value)";
 
 (* Fallback *)
