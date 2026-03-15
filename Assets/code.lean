@@ -15,6 +15,7 @@
 
 import Lean
 import Lean.Elab.Frontend
+set_option linter.deprecated false
 open Lean
 
 -- ============================================================================

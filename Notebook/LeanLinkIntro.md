@@ -62,7 +62,7 @@ LeanCallGraph[exFile, "zero_add_proof"]
 The TuringMachineSearch project proves that the {2,2} Turing machine rule 445 computes the successor function:
 
 ```wolfram
-projectDir = "Proofs";
+projectDir = FileNameJoin[NotebookDirectory[], "Proofs"];
 ```
 
 List theorems from the PlusOne module:
@@ -74,11 +74,15 @@ LeanListTheorems["Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir
 Expression graph of a successor proof:
 
 ```wolfram
-LeanExprGraph["OneSidedTM.rule445_succ_1", "Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir]
+LeanExprGraph["OneSidedTM.rule445_computesSucc", 
+ "Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir, 
+ "Depth" -> 5]
 ```
 
 Call graph showing proof dependencies of the main theorem:
 
 ```wolfram
-LeanCallGraph["OneSidedTM.rule445_computesSucc", "Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir]
+LeanCallGraph["OneSidedTM.rule445_computesSucc", 
+ "Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir, 
+ "Depth" -> 2]
 ```
