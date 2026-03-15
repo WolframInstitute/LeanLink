@@ -138,10 +138,32 @@ def binderInfoStr (bi : Lean.BinderInfo) : String := match bi with
   | .strictImplicit => "strictImplicit"
   | .instImplicit => "instImplicit"
 
-/-- Serialize a Lean Expr to WXF (with depth limit) -/
+/-- Serialize a Lean Expr to WXF (with depth limit).
+    At depth 0, terminal nodes (bvar, const, sort, lit) serialize fully.
+    Compound nodes serialize as 0-arg heads to preserve identity. -/
 partial def exprToWXF (e : Lean.Expr) (depth : Nat := 100) : ByteArray :=
-  if depth == 0 then
-    wlFunction (wlSymbol ctx "LeanTruncated") #[string (toString e)]
+  if depth == 0 then match e with
+    -- Terminals: always serialize fully (no children)
+    | .bvar idx => wlFunction (wlSymbol ctx "LeanBVar") #[integer idx]
+    | .fvar id => wlFunction (wlSymbol ctx "LeanFVar") #[nameToWXF id.name]
+    | .mvar id => wlFunction (wlSymbol ctx "LeanMVar") #[nameToWXF id.name]
+    | .sort level => wlFunction (wlSymbol ctx "LeanSort") #[levelToWXF level]
+    | .const name levels =>
+      wlFunction (wlSymbol ctx "LeanConst") #[
+        nameToWXF name, wlList (levels.map levelToWXF).toArray]
+    | .lit (.natVal n) => wlFunction (wlSymbol ctx "LeanLitNat") #[integer n]
+    | .lit (.strVal s) => wlFunction (wlSymbol ctx "LeanLitStr") #[string s]
+    -- Compound: head only, no children
+    | .app _ _ => wlFunction (wlSymbol ctx "LeanApp") #[]
+    | .lam name _ _ bi =>
+      wlFunction (wlSymbol ctx "LeanLam") #[nameToWXF name, string (binderInfoStr bi)]
+    | .forallE name _ _ bi =>
+      wlFunction (wlSymbol ctx "LeanForall") #[nameToWXF name, string (binderInfoStr bi)]
+    | .letE name _ _ _ _ =>
+      wlFunction (wlSymbol ctx "LeanLet") #[nameToWXF name]
+    | .proj typeName idx _ =>
+      wlFunction (wlSymbol ctx "LeanProj") #[nameToWXF typeName, integer idx]
+    | .mdata _ inner => exprToWXF inner 0
   else match e with
   | .bvar idx =>
     wlFunction (wlSymbol ctx "LeanBVar") #[integer idx]
