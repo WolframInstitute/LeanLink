@@ -545,7 +545,18 @@ iBox[expr_, displayBoxes_] :=
 (* leanPP[expr, depth] — with depth limit *)
 
 leanPP[expr_] := leanPP[expr, 6];
-leanPP[_, 0] := "\[Ellipsis]";
+leanPP[e_, 0] := Switch[Head[e],
+  LeanConst, shortName[e[[1]]],
+  LeanApp, leanPP[e[[1]], 0],
+  LeanBVar, "#" <> ToString[e[[1]]],
+  LeanLitNat, ToString[e[[1]]],
+  LeanLitStr, "\"" <> e[[1]] <> "\"",
+  LeanSort, leanPP[e, 1],
+  LeanForall, "\[ForAll]",
+  LeanLam, "fun",
+  LeanLet, "let",
+  LeanMData, leanPP[e[[2]], 0],
+  _, ToString[Head[e]]];
 
 (* Constants — use short name *)
 leanPP[LeanConst[name_String, _List], _Integer] := shortName[name];
