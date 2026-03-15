@@ -209,6 +209,64 @@ def getValueUnfoldedExport (handle : UInt64) (constName : @& String)
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+-- ============================================================================
+-- Lean-native pretty-printing
+-- ============================================================================
+
+/-- Pretty-print an expression using Lean's built-in pretty-printer.
+    Uses the environment's notations, so infix ops, implicit elision, etc. work. -/
+def ppExprInEnv (env : Environment) (e : Expr) : IO String := do
+  let ctx : Core.Context := {
+    fileName := "<pp>"
+    fileMap := { source := "", positions := #[0] }
+  }
+  let st : Core.State := { env }
+  try
+    let res ←
+      ((Meta.MetaM.run' (do
+        let fmt ← PrettyPrinter.ppExpr e
+        return s!"{fmt}") : CoreM String).run ctx st).toIO'
+    match res with
+    | .ok (s, _) => return s
+    | .error _ => return "<pp error>"
+  catch _ =>
+    return "<pp error>"
+
+/-- Get pretty-printed type string. Optionally unfolds N levels first. -/
+@[export leanlink_pp_type]
+def ppTypeExport (handle : UInt64) (constName : @& String)
+    (unfoldLevel : UInt32) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  match env.find? name with
+  | some ci =>
+    let ty := if unfoldLevel.toNat > 0
+      then unfoldExpr env ci.type unfoldLevel.toNat
+      else ci.type
+    let s ← ppExprInEnv env ty
+    return WXF.serialize (WXF.string s)
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
+/-- Get pretty-printed value/proof string. Optionally unfolds N levels first. -/
+@[export leanlink_pp_value]
+def ppValueExport (handle : UInt64) (constName : @& String)
+    (unfoldLevel : UInt32) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  match env.find? name with
+  | some ci =>
+    match ci.value? with
+    | some v =>
+      let v' := if unfoldLevel.toNat > 0
+        then unfoldExpr env v unfoldLevel.toNat
+        else v
+      let s ← ppExprInEnv env v'
+      return WXF.serialize (WXF.string s)
+    | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
 /-- Get full constant info as WXF. -/
 @[export leanlink_get_constant]
 def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray := do

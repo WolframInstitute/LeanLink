@@ -126,7 +126,7 @@ checkTrue["TermForm contains fun", StringContainsQ[mp["TermForm"], "fun"]];
 checkTrue["Vec.head TypeForm has Nat", StringContainsQ[vh["TypeForm"], "Nat"]];
 check["identity TypeForm",
   filtered["LeanLink.Examples.identity"]["TypeForm"],
-  "\[ForAll] (P : Prop) (a : #0), #1"];
+  FromCharacterCode[{8704}] <> " (P : Prop), P " <> FromCharacterCode[{8594}] <> " P"];
 checkTrue["Properties includes TypeForm",
   MemberQ[mp["Properties"], "TypeForm"]];
 

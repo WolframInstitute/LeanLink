@@ -95,6 +95,10 @@ $getTypeUnfoldedFn := $getTypeUnfoldedFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_get_type_unfolded", {Integer, "UTF8String", Integer}, {Integer, 1}];
 $getValueUnfoldedFn := $getValueUnfoldedFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_get_value_unfolded", {Integer, "UTF8String", Integer}, {Integer, 1}];
+$ppTypeFn := $ppTypeFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_pp_type", {Integer, "UTF8String", Integer}, {Integer, 1}];
+$ppValueFn := $ppValueFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_pp_value", {Integer, "UTF8String", Integer}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -255,8 +259,16 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
               fetchUnfolded[handle, name, "Term", level],
               fetchField[handle, name, "Term"]],
             Missing["NoHandle"]]],
-      "TypeForm", leanPP[LeanTerm[data]["Type", level]],
-      "TermForm", leanPP[LeanTerm[data]["Term", level]],
+      "TypeForm",
+        If[IntegerQ[handle],
+          With[{r = Quiet[decodeWXF[$ppTypeFn[handle, name, level]]]},
+            If[StringQ[r], r, leanPP[LeanTerm[data]["Type", level]]]],
+          leanPP[LeanTerm[data]["Type", level]]],
+      "TermForm",
+        If[IntegerQ[handle],
+          With[{r = Quiet[decodeWXF[$ppValueFn[handle, name, level]]]},
+            If[StringQ[r], r, leanPP[LeanTerm[data]["Term", level]]]],
+          leanPP[LeanTerm[data]["Term", level]]],
       "TypeRefs",
         If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"],
           If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]],
@@ -639,13 +651,52 @@ leanPP[LeanLet[name_String, type_, val_, body_], d_Integer] :=
   "let " <> cleanName[name] <> " : " <> leanPP[type, d - 1] <>
   " := " <> leanPP[val, d - 1] <> "; " <> leanPP[body, d - 1];
 
-(* Application — uncurry into f a b c *)
+(* Application — detect infix operators, then fall back to generic *)
 leanPP[e_LeanApp, d_Integer] := Module[
-  {fn = e, args = {}, a},
+  {fn = e, rawArgs = {}, a, head, headName, nArgs, ppArgs},
+  (* Uncurry application chain *)
   While[MatchQ[fn, LeanApp[_, _]],
     a = fn[[2]]; fn = fn[[1]];
-    PrependTo[args, leanPP[a, d - 1]]];
-  leanPP[fn, d - 1] <> " " <> StringRiffle[args, " "]];
+    PrependTo[rawArgs, a]];
+  head = fn; nArgs = Length[rawArgs];
+  headName = If[MatchQ[head, LeanConst[_String, _]], head[[1]], ""];
+  (* OfNat.ofNat α n inst → n *)
+  If[StringEndsQ[headName, "OfNat.ofNat"] && nArgs >= 3,
+    Return[leanPP[rawArgs[[2]], d - 1]]];
+  (* Binary infix operators: HAdd.hAdd α β γ inst a b → a + b *)
+  If[nArgs >= 6 && StringMatchQ[headName,
+      __ ~~ ("HAdd.hAdd" | "HSub.hSub" | "HMul.hMul" | "HDiv.hDiv" | "HMod.hMod")],
+    With[{op = Switch[StringSplit[headName, "."][[-1]],
+            "hAdd", " + ", "hSub", " - ", "hMul", " * ",
+            "hDiv", " / ", "hMod", " % ", _, " ? "],
+          lhs = leanPP[rawArgs[[-2]], d - 1],
+          rhs = leanPP[rawArgs[[-1]], d - 1]},
+      Return[lhs <> op <> rhs]]];
+  (* Neg.neg α inst a → -a *)
+  If[nArgs >= 3 && StringEndsQ[headName, "Neg.neg"],
+    Return["-" <> leanPP[rawArgs[[-1]], d - 1]]];
+  (* Eq α a b → a = b *)
+  If[StringEndsQ[headName, ".Eq"] && nArgs >= 3,
+    Return[leanPP[rawArgs[[-2]], d - 1] <> " = " <> leanPP[rawArgs[[-1]], d - 1]]];
+  (* Not a → ¬a *)
+  If[headName === "Not" && nArgs >= 1,
+    Return["\[Not]" <> leanPP[rawArgs[[-1]], d - 1]]];
+  (* And a b, Or a b, Iff a b *)
+  If[nArgs >= 2 && MemberQ[{"And", "Or", "Iff"}, headName],
+    With[{op = Switch[headName, "And", " \[And] ", "Or", " \[Or] ", "Iff", " \[LeftRightArrow] "],
+          lhs = leanPP[rawArgs[[-2]], d - 1], rhs = leanPP[rawArgs[[-1]], d - 1]},
+      Return[lhs <> op <> rhs]]];
+  (* LE.le / LT.lt α inst a b *)
+  If[nArgs >= 4 && StringMatchQ[headName, __ ~~ ("LE.le" | "LT.lt")],
+    With[{op = If[StringEndsQ[headName, "LE.le"], " \[LessEqual] ", " < "],
+          lhs = leanPP[rawArgs[[-2]], d - 1], rhs = leanPP[rawArgs[[-1]], d - 1]},
+      Return[lhs <> op <> rhs]]];
+  (* BEq.beq / Decidable.decide — skip instance args, show last 2 *)
+  If[nArgs >= 4 && StringMatchQ[headName, __ ~~ "BEq.beq"],
+    Return[leanPP[rawArgs[[-2]], d - 1] <> " == " <> leanPP[rawArgs[[-1]], d - 1]]];
+  (* Generic fallback *)
+  ppArgs = leanPP[#, d - 1] & /@ rawArgs;
+  leanPP[head, d - 1] <> " " <> StringRiffle[ppArgs, " "]];
 
 (* Projection *)
 leanPP[LeanProj[struct_String, idx_Integer, expr_], d_Integer] :=
