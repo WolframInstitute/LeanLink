@@ -39,7 +39,7 @@ Keys[env]
 Each value is a `LeanTerm` with its kind shown in a colored summary:
 
 ```wolfram
-env["identity"]
+env["id_proof"]
 ```
 
 ```wolfram
@@ -53,19 +53,19 @@ env["Vec.head"]
 ### Property Access
 
 ```wolfram
-env["identity"]["Kind"]
+env["id_proof"]["Kind"]
 ```
 
 ```wolfram
-env["identity"]["Type"]
+env["id_proof"]["Type"]
 ```
 
 ```wolfram
-env["identity"]["Term"]
+env["id_proof"]["Term"]
 ```
 
 ```wolfram
-env["identity"]["Properties"]
+env["id_proof"]["Properties"]
 ```
 
 ### Expression Graph

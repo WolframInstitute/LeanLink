@@ -201,11 +201,14 @@ exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, lbls = <||>, cols 
         # -> Function[
           Inset[Framed[
             Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
-              If[ColorDistance[bg, White] > 0.4, White, Black], Bold],
+              LightDarkSwitched[
+                If[ColorDistance[bg, White] > 0.4, White, Black],
+                If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]],
+              Bold],
             Background -> LightDarkSwitched[bg],
             RoundingRadius -> 3,
             FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
-            FrameMargins -> {{3, 3}, {1, 1}}], #1, Center, #3]]
+            FrameMargins -> {{3, 3}, {1, 1}}], #1, #3]]
       ] &, verts],
     GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
     VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
@@ -259,11 +262,14 @@ callGraph[data_Association] := Module[{name, typeExpr, termExpr, refs, edges, ve
         # -> Function[
           Inset[Framed[
             Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
-              If[ColorDistance[bg, White] > 0.4, White, Black], Bold],
+              LightDarkSwitched[
+                If[ColorDistance[bg, White] > 0.4, White, Black],
+                If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]],
+              Bold],
             Background -> LightDarkSwitched[bg],
             RoundingRadius -> 3,
             FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
-            FrameMargins -> {{3, 3}, {1, 1}}], #1, Center, #3]]
+            FrameMargins -> {{3, 3}, {1, 1}}], #1, #3]]
       ] &, verts],
     GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Left},
     VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
