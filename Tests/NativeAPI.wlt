@@ -1,5 +1,4 @@
 (* NativeAPI.wlt -- Tests for the native LibraryLink-based Lean API *)
-(* Uses LeanLink.Examples for self-contained tests *)
 (* Requires: $LeanLinkTestProjectDir and LeanLink` set by run_tests.wls *)
 
 BeginTestSection["NativeAPI"]
@@ -60,9 +59,23 @@ VerificationTest[
 ]
 
 VerificationTest[
-  MemberQ[$env["LeanLink.Examples.identity"]["Properties"], "Name"],
+  MemberQ[$env["LeanLink.Examples.identity"]["Properties"], "ExprGraph"],
   True,
-  TestID -> "Property-Properties-List"
+  TestID -> "Property-Properties-HasExprGraph"
+]
+
+(* === Graph properties === *)
+
+VerificationTest[
+  MatchQ[$env["LeanLink.Examples.identity"]["ExprGraph"], _Graph],
+  True,
+  TestID -> "Property-ExprGraph-IsGraph"
+]
+
+VerificationTest[
+  MatchQ[$env["LeanLink.Examples.identity"]["CallGraph"], _Graph],
+  True,
+  TestID -> "Property-CallGraph-IsGraph"
 ]
 
 (* === LeanImport shorthand === *)
@@ -97,10 +110,9 @@ VerificationTest[
 (* === LeanValue === *)
 
 VerificationTest[
-  result = LeanValue["LeanLink.Examples.identity",
+  MatchQ[LeanValue["LeanLink.Examples.identity",
     "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"}, "Depth" -> 10];
-  MatchQ[result, _LeanLam],
+    "Imports" -> {"LeanLink"}, "Depth" -> 10], _LeanLam],
   True,
   TestID -> "LeanValue-identity"
 ]
@@ -108,10 +120,9 @@ VerificationTest[
 (* === LeanConstantInfo === *)
 
 VerificationTest[
-  result = LeanConstantInfo["LeanLink.Examples.Vec.head",
+  MatchQ[LeanConstantInfo["LeanLink.Examples.Vec.head",
     "ProjectDir" -> $LeanLinkTestProjectDir,
-    "Imports" -> {"LeanLink"}];
-  MatchQ[result, _LeanConstant],
+    "Imports" -> {"LeanLink"}], _LeanConstant],
   True,
   TestID -> "LeanConstantInfo-Vec-head"
 ]

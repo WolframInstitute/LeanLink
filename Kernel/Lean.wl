@@ -8,7 +8,7 @@ BeginPackage["LeanLink`"];
 (* ============================================================================ *)
 
 LeanApp::usage = "LeanApp[fn, arg] represents function application.";
-LeanLam::usage = "LeanLam[name, type, body, binder] represents a lambda (\[Lambda]). binder is \"default\"|\"implicit\"|\"strictImplicit\"|\"instImplicit\".";
+LeanLam::usage = "LeanLam[name, type, body, binder] represents a lambda. binder: \"default\"|\"implicit\"|\"strictImplicit\"|\"instImplicit\".";
 LeanForall::usage = "LeanForall[name, type, body, binder] represents a dependent function type (\[ForAll]/\[Rule]).";
 LeanLet::usage = "LeanLet[name, type, val, body] represents a let binding.";
 LeanConst::usage = "LeanConst[name, levels] represents a reference to a named constant.";
@@ -22,27 +22,23 @@ LeanProj::usage = "LeanProj[type, index, struct] represents a structure field pr
 LeanTruncated::usage = "LeanTruncated[info] represents an expression truncated at the depth limit.";
 LeanNoValue::usage = "LeanNoValue[] indicates a constant with no definition (axiom, opaque).";
 
-(* Level heads *)
 LeanLevelZero::usage = "LeanLevelZero[] represents universe level 0 (Prop).";
 LeanLevelSucc::usage = "LeanLevelSucc[level] represents the successor of a universe level.";
 LeanLevelMax::usage = "LeanLevelMax[a, b] represents max of two universe levels.";
-LeanLevelIMax::usage = "LeanLevelIMax[a, b] represents impredicative max (collapses to 0 if b is 0).";
+LeanLevelIMax::usage = "LeanLevelIMax[a, b] represents impredicative max.";
 LeanLevelParam::usage = "LeanLevelParam[name] represents a named universe parameter.";
 LeanLevelMVar::usage = "LeanLevelMVar[name] represents a universe metavariable.";
 
-(* Raw constant wrapper *)
-LeanConstant::usage = "LeanConstant[name, kind, type, term] is the raw constant info returned by the native API.";
+LeanConstant::usage = "LeanConstant[name, kind, type, term] is raw constant info from the native API.";
 
-(* Unified typed constant *)
-LeanTerm::usage = "LeanTerm[\[LeftAssociation]\"Name\"\[Rule]..., \"Kind\"\[Rule]..., \"Type\"\[Rule]..., \"Term\"\[Rule]...\[RightAssociation]] represents a Lean constant. Kind is \"theorem\"|\"def\"|\"axiom\"|\"inductive\"|\"constructor\"|\"recursor\"|\"opaque\"|\"quot\".";
+LeanTerm::usage = "LeanTerm[\[LeftAssociation]\"Name\"\[Rule]..., \"Kind\"\[Rule]..., \"Type\"\[Rule]..., \"Term\"\[Rule]...\[RightAssociation]] represents a Lean constant. Properties: \"Name\", \"Kind\", \"Type\", \"Term\", \"ExprGraph\", \"CallGraph\", \"Properties\".";
 
-(* Public API *)
 LeanImport::usage = "LeanImport[opts] imports a Lean module, returning \[LeftAssociation]name \[Rule] LeanTerm[...], ...\[RightAssociation].";
-LeanExpr::usage = "LeanExpr[name, opts] returns the type of a Lean constant as a symbolic expression tree.";
-LeanValue::usage = "LeanValue[name, opts] returns the value/proof term of a Lean constant.";
-LeanConstantInfo::usage = "LeanConstantInfo[name, opts] returns full constant info as LeanConstant[...].";
+LeanExpr::usage = "LeanExpr[name, opts] returns the type of a constant as a symbolic expression tree.";
+LeanValue::usage = "LeanValue[name, opts] returns the value/proof term of a constant.";
+LeanConstantInfo::usage = "LeanConstantInfo[name, opts] returns full constant info as LeanConstant.";
 LeanListConstants::usage = "LeanListConstants[opts] returns \[LeftAssociation]name \[Rule] LeanConstant[...], ...\[RightAssociation].";
-LeanLoadEnvironment::usage = "LeanLoadEnvironment[imports, searchPath] loads a Lean environment, returning a handle.";
+LeanLoadEnvironment::usage = "LeanLoadEnvironment[imports, searchPath] loads a Lean environment handle.";
 LeanFreeEnvironment::usage = "LeanFreeEnvironment[handle] frees a loaded Lean environment.";
 
 Begin["`Private`"];
@@ -81,15 +77,13 @@ decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 (* Utilities                                                                    *)
 (* ============================================================================ *)
 
-(* Strip Lean hygiene: "a._@.Mod._hyg.42" -> "a" *)
 cleanName[s_String] := StringReplace[s, RegularExpression["\\._@\\..*"] -> ""];
 cleanName[other_] := other;
 
-(* Short name: "Foo.Bar.baz" -> "baz" *)
 shortName[s_String] := Last[StringSplit[s, "."], s];
 
 (* ============================================================================ *)
-(* Search path & environment                                                    *)
+(* Environment management                                                       *)
 (* ============================================================================ *)
 
 resolveSearchPath[projDir_String] := Module[{buildLib, leanLib, paths},
@@ -128,7 +122,7 @@ callNative[fn_, args_List, projDir_, imports_] := Module[{handle, result},
 resolveProjDir[pd_] := Replace[pd, Automatic -> Directory[]];
 
 (* ============================================================================ *)
-(* LeanTerm: unified typed constant                                             *)
+(* LeanTerm                                                                     *)
 (* ============================================================================ *)
 
 $kindColor = <|
@@ -142,31 +136,128 @@ $kindColor = <|
   "quot" -> GrayLevel[0.45]
 |>;
 
-(* Convert LeanConstant[name, kind, type, value] -> LeanTerm *)
 toLeanObject[LeanConstant[name_String, kind_String, type_, value_]] :=
   LeanTerm[<|"Name" -> name, "Kind" -> kind, "Type" -> type, "Term" -> value|>];
 toLeanObject[other_] := other;
 
-(* Property access *)
+(* Property access -- including computed graph properties *)
 LeanTerm /: LeanTerm[data_Association][prop_String] :=
-  If[prop === "Properties", Keys[data], data[prop]];
+  Switch[prop,
+    "Properties", {"Name", "Kind", "Type", "Term", "ExprGraph", "CallGraph"},
+    "ExprGraph", exprToGraph[Lookup[data, "Type", LeanNoValue[]]],
+    "CallGraph", callGraph[data],
+    _, data[prop]];
 
 (* ============================================================================ *)
-(* InterpretationBox helper                                                     *)
+(* Expression Graph — build a Graph from the expression tree                    *)
 (* ============================================================================ *)
 
-(* Wrap display boxes in InterpretationBox so Copy gives back the expression *)
-iBox[expr_, displayBoxes_] :=
-  InterpretationBox[displayBoxes, expr];
+(* Color map for expression heads *)
+$headColor = <|
+  LeanForall -> RGBColor[0.25, 0.45, 0.85],
+  LeanLam -> RGBColor[0.6, 0.2, 0.6],
+  LeanApp -> GrayLevel[0.4],
+  LeanConst -> RGBColor[0.15, 0.5, 0.3],
+  LeanBVar -> GrayLevel[0.5],
+  LeanSort -> RGBColor[0.6, 0.2, 0.6],
+  LeanLet -> RGBColor[0.7, 0.5, 0.1],
+  LeanLitNat -> RGBColor[0.1, 0.5, 0.1],
+  LeanLitStr -> RGBColor[0.7, 0.3, 0.1],
+  LeanProj -> GrayLevel[0.45],
+  LeanTruncated -> GrayLevel[0.6],
+  LeanNoValue -> GrayLevel[0.6]
+|>;
 
-(* Wrap display boxes in InterpretationBox + Tooltip showing InputForm *)
-iBoxTip[expr_, displayBoxes_] :=
-  InterpretationBox[
-    TooltipBox[displayBoxes, MakeBoxes[Short[expr, 3], StandardForm]],
-    expr];
+(* Assign unique IDs and collect vertices/edges by traversing the tree *)
+exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, labels = {}, colors = {},
+    walk},
+  walk[e_] := Module[{myId, label, col, children},
+    myId = ++id;
+    {label, col, children} = exprNodeInfo[e];
+    AppendTo[verts, myId];
+    AppendTo[labels, myId -> Placed[label, Center]];
+    AppendTo[colors, myId -> col];
+    Do[
+      Module[{childId},
+        childId = walk[child];
+        AppendTo[edges, DirectedEdge[myId, childId]]],
+      {child, children}];
+    myId];
+  walk[expr];
+  If[Length[verts] == 0, Return[Graph[{}]]];
+  Graph[verts, edges,
+    VertexLabels -> labels,
+    VertexStyle -> colors,
+    VertexSize -> 0.6,
+    VertexShapeFunction -> (
+      Inset[Framed[
+        Style[Lookup[Association @@ labels, #2, ""], "Text", FontSize -> 8,
+          White, Bold],
+        Background -> Lookup[Association @@ colors, #2, GrayLevel[0.5]],
+        RoundingRadius -> 4,
+        FrameStyle -> None,
+        FrameMargins -> {{4, 4}, {2, 2}}], #1, Center, #3] &),
+    GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
+    EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]],
+    ImageSize -> Medium]];
+
+(* Extract label, color, children for each expression node *)
+exprNodeInfo[LeanForall[n_, dom_, body_, bi_]] :=
+  {"\[ForAll]" <> cleanName[n], $headColor[LeanForall], {dom, body}};
+exprNodeInfo[LeanLam[n_, type_, body_, _]] :=
+  {"\[Lambda]" <> cleanName[n], $headColor[LeanLam], {type, body}};
+exprNodeInfo[LeanApp[fn_, arg_]] :=
+  {"App", $headColor[LeanApp], {fn, arg}};
+exprNodeInfo[LeanConst[n_, _]] :=
+  {shortName[n], $headColor[LeanConst], {}};
+exprNodeInfo[LeanBVar[i_]] :=
+  {"#" <> ToString[i], $headColor[LeanBVar], {}};
+exprNodeInfo[LeanSort[LeanLevelZero[]]] :=
+  {"Prop", $headColor[LeanSort], {}};
+exprNodeInfo[LeanSort[LeanLevelSucc[LeanLevelZero[]]]] :=
+  {"Type", $headColor[LeanSort], {}};
+exprNodeInfo[LeanSort[l_]] :=
+  {"Sort", $headColor[LeanSort], {}};
+exprNodeInfo[LeanLet[n_, type_, val_, body_]] :=
+  {"let " <> cleanName[n], $headColor[LeanLet], {type, val, body}};
+exprNodeInfo[LeanLitNat[n_]] :=
+  {ToString[n], $headColor[LeanLitNat], {}};
+exprNodeInfo[LeanLitStr[s_]] :=
+  {"\"" <> s <> "\"", $headColor[LeanLitStr], {}};
+exprNodeInfo[LeanProj[t_, i_, struct_]] :=
+  {shortName[t] <> "." <> ToString[i], $headColor[LeanProj], {struct}};
+exprNodeInfo[LeanTruncated[_]] :=
+  {"\[Ellipsis]", $headColor[LeanTruncated], {}};
+exprNodeInfo[LeanNoValue[]] :=
+  {"\[Dash]", $headColor[LeanNoValue], {}};
+exprNodeInfo[other_] :=
+  {ToString[Short[other]], GrayLevel[0.6], {}};
 
 (* ============================================================================ *)
-(* LeanTerm SummaryBox                                                          *)
+(* Call Graph — collect constant references as edges                            *)
+(* ============================================================================ *)
+
+(* Collect all LeanConst names referenced in an expression *)
+collectConsts[e_] := Union[Cases[e, LeanConst[n_String, _] :> n, Infinity]];
+
+callGraph[data_Association] := Module[{name, typeExpr, termExpr, refs, edges, verts},
+  name = data["Name"];
+  typeExpr = Lookup[data, "Type", LeanNoValue[]];
+  termExpr = Lookup[data, "Term", LeanNoValue[]];
+  refs = Union[collectConsts[typeExpr], collectConsts[termExpr]];
+  refs = DeleteCases[refs, name]; (* remove self-references *)
+  edges = DirectedEdge[shortName[name], shortName[#]] & /@ refs;
+  verts = Union[Prepend[shortName /@ refs, shortName[name]]];
+  Graph[verts, edges,
+    VertexLabels -> "Name",
+    VertexStyle -> (shortName[name] -> $kindColor[Lookup[data, "Kind", "def"]]),
+    VertexSize -> 0.4,
+    GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Left},
+    EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.03]],
+    ImageSize -> Medium]];
+
+(* ============================================================================ *)
+(* LeanTerm SummaryBox — using Interpretable -> Automatic                       *)
 (* ============================================================================ *)
 
 LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
@@ -179,39 +270,38 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
   icon = Graphics[{col, Disk[]}, ImageSize -> 12];
   sn = shortName[name];
 
-  iBox[obj,
-    BoxForm`ArrangeSummaryBox[LeanTerm, obj, icon,
-      {
-        BoxForm`SummaryItem[{"Kind: ", Style[kind, Bold, col]}],
-        BoxForm`SummaryItem[{"Name: ", Style[sn, Bold]}]
-      },
-      {
-        BoxForm`SummaryItem[{"Full name: ", name}],
-        BoxForm`SummaryItem[{"Type: ",
-          RawBoxes[MakeBoxes[typeExpr, StandardForm]]}],
-        If[termExpr =!= LeanNoValue[],
-          BoxForm`SummaryItem[{"Term: ",
-            RawBoxes[MakeBoxes[termExpr, StandardForm]]}],
-          Nothing]
-      },
-      StandardForm]]];
+  BoxForm`ArrangeSummaryBox[LeanTerm, obj, icon,
+    {
+      BoxForm`SummaryItem[{"Kind: ", Style[kind, Bold, col]}],
+      BoxForm`SummaryItem[{"Name: ", Style[sn, Bold]}]
+    },
+    {
+      BoxForm`SummaryItem[{"Full name: ", name}],
+      BoxForm`SummaryItem[{"Type: ",
+        RawBoxes[MakeBoxes[typeExpr, StandardForm]]}],
+      If[termExpr =!= LeanNoValue[],
+        BoxForm`SummaryItem[{"Term: ",
+          RawBoxes[MakeBoxes[termExpr, StandardForm]]}],
+        Nothing]
+    },
+    StandardForm,
+    "Interpretable" -> Automatic]];
 
 (* ============================================================================ *)
 (* Expression head formatting                                                   *)
 (* ============================================================================ *)
 
-(* -- LeanConst: short name in blue, tooltip shows full name + levels -- *)
 LeanConst /: MakeBoxes[expr : LeanConst[name_String, levels_List], StandardForm] :=
-  iBox[expr,
-    TooltipBox[
-      StyleBox[shortName[name],
-        FontColor -> RGBColor[0.15, 0.35, 0.6], FontWeight -> Bold],
-      RowBox[{MakeBoxes[name], " ", MakeBoxes[levels, StandardForm]}]]];
+  With[{short = shortName[name]},
+    InterpretationBox[
+      TooltipBox[
+        StyleBox[short, FontColor -> RGBColor[0.15, 0.35, 0.6], FontWeight -> Bold],
+        RowBox[{MakeBoxes[name], " ", MakeBoxes[levels, StandardForm]}]],
+      expr]];
 
-(* -- LeanForall: (n : dom) -> body, {n : dom} -> body, [n : dom] -> body -- *)
 LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], StandardForm] :=
   With[{nm = cleanName[name]},
-    iBox[expr,
+    InterpretationBox[
       RowBox[{
         Switch[bi,
           "implicit",
@@ -229,17 +319,17 @@ LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], 
               RowBox[{"(", StyleBox[nm, FontSlant -> Italic],
                 " : ", MakeBoxes[dom, StandardForm], ")"}]]],
         StyleBox[" \[Rule] ", FontColor -> GrayLevel[0.4]],
-        MakeBoxes[body, StandardForm]}]]];
+        MakeBoxes[body, StandardForm]}],
+      expr]];
 
-(* -- LeanApp: fn arg -- *)
 LeanApp /: MakeBoxes[expr : LeanApp[fn_, arg_], StandardForm] :=
-  iBox[expr,
-    RowBox[{MakeBoxes[fn, StandardForm], " ", MakeBoxes[arg, StandardForm]}]];
+  InterpretationBox[
+    RowBox[{MakeBoxes[fn, StandardForm], " ", MakeBoxes[arg, StandardForm]}],
+    expr];
 
-(* -- LeanLam: fun (name : type) => body -- *)
 LeanLam /: MakeBoxes[expr : LeanLam[name_String, type_, body_, bi_String], StandardForm] :=
   With[{nm = cleanName[name]},
-    iBox[expr,
+    InterpretationBox[
       RowBox[{
         StyleBox["fun ", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
         Switch[bi,
@@ -253,100 +343,102 @@ LeanLam /: MakeBoxes[expr : LeanLam[name_String, type_, body_, bi_String], Stand
             RowBox[{"(", StyleBox[nm, FontSlant -> Italic],
               " : ", MakeBoxes[type, StandardForm], ")"}]],
         StyleBox[" => ", FontColor -> GrayLevel[0.4]],
-        MakeBoxes[body, StandardForm]}]]];
+        MakeBoxes[body, StandardForm]}],
+      expr]];
 
-(* -- LeanBVar: #idx -- *)
 LeanBVar /: MakeBoxes[expr : LeanBVar[idx_Integer], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     TooltipBox[
       StyleBox["#" <> ToString[idx], FontColor -> GrayLevel[0.5]],
-      RowBox[{"bound var ", MakeBoxes[idx]}]]];
+      RowBox[{"bound var ", MakeBoxes[idx]}]],
+    expr];
 
-(* -- LeanSort -- *)
 LeanSort /: MakeBoxes[expr : LeanSort[LeanLevelZero[]], StandardForm] :=
-  iBox[expr, StyleBox["Prop", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold]];
+  InterpretationBox[StyleBox["Prop", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold], expr];
 LeanSort /: MakeBoxes[expr : LeanSort[LeanLevelSucc[LeanLevelZero[]]], StandardForm] :=
-  iBox[expr, StyleBox["Type", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold]];
+  InterpretationBox[StyleBox["Type", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold], expr];
 LeanSort /: MakeBoxes[expr : LeanSort[level_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     RowBox[{StyleBox["Sort", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
-      " ", MakeBoxes[level, StandardForm]}]];
+      " ", MakeBoxes[level, StandardForm]}],
+    expr];
 
-(* -- LeanLitNat / LeanLitStr -- *)
 LeanLitNat /: MakeBoxes[expr : LeanLitNat[n_Integer], StandardForm] :=
-  iBox[expr, StyleBox[ToString[n], FontColor -> RGBColor[0.1, 0.5, 0.1]]];
+  InterpretationBox[StyleBox[ToString[n], FontColor -> RGBColor[0.1, 0.5, 0.1]], expr];
 LeanLitStr /: MakeBoxes[expr : LeanLitStr[s_String], StandardForm] :=
-  iBox[expr, StyleBox["\"" <> s <> "\"", FontColor -> RGBColor[0.7, 0.3, 0.1]]];
+  InterpretationBox[StyleBox["\"" <> s <> "\"", FontColor -> RGBColor[0.7, 0.3, 0.1]], expr];
 
-(* -- LeanLet -- *)
 LeanLet /: MakeBoxes[expr : LeanLet[name_String, type_, val_, body_], StandardForm] :=
-  iBox[expr,
-    RowBox[{
-      StyleBox["let ", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
+  InterpretationBox[
+    RowBox[{StyleBox["let ", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
       StyleBox[cleanName[name], FontSlant -> Italic, Bold],
       " : ", MakeBoxes[type, StandardForm],
       " := ", MakeBoxes[val, StandardForm],
-      "; ", MakeBoxes[body, StandardForm]}]];
+      "; ", MakeBoxes[body, StandardForm]}],
+    expr];
 
-(* -- LeanNoValue -- *)
 LeanNoValue /: MakeBoxes[expr : LeanNoValue[], StandardForm] :=
-  iBox[expr, StyleBox["\[Dash]", FontColor -> GrayLevel[0.6]]];
+  InterpretationBox[StyleBox["\[Dash]", FontColor -> GrayLevel[0.6]], expr];
 
-(* -- LeanTruncated -- *)
 LeanTruncated /: MakeBoxes[expr : LeanTruncated[info_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     TooltipBox[StyleBox["\[Ellipsis]", FontColor -> GrayLevel[0.5]],
-      MakeBoxes[info, StandardForm]]];
+      MakeBoxes[info, StandardForm]],
+    expr];
 
-(* -- LeanProj -- *)
 LeanProj /: MakeBoxes[expr : LeanProj[typeName_, idx_Integer, struct_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     RowBox[{MakeBoxes[struct, StandardForm], ".",
-      StyleBox[ToString[idx], FontColor -> GrayLevel[0.5]]}]];
+      StyleBox[ToString[idx], FontColor -> GrayLevel[0.5]]}],
+    expr];
 
-(* -- LeanFVar / LeanMVar -- *)
 LeanFVar /: MakeBoxes[expr : LeanFVar[name_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     StyleBox[cleanName[ToString[name]],
-      FontColor -> RGBColor[0.4, 0.4, 0.7], FontSlant -> Italic]];
+      FontColor -> RGBColor[0.4, 0.4, 0.7], FontSlant -> Italic],
+    expr];
 LeanMVar /: MakeBoxes[expr : LeanMVar[name_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     StyleBox["?" <> cleanName[ToString[name]],
-      FontColor -> RGBColor[0.7, 0.4, 0.4], FontSlant -> Italic]];
+      FontColor -> RGBColor[0.7, 0.4, 0.4], FontSlant -> Italic],
+    expr];
 
 (* ============================================================================ *)
-(* Level head formatting                                                        *)
+(* Level formatting                                                             *)
 (* ============================================================================ *)
 
 LeanLevelZero /: MakeBoxes[expr : LeanLevelZero[], StandardForm] :=
-  iBox[expr, StyleBox["0", FontColor -> GrayLevel[0.5], FontSize -> 9]];
+  InterpretationBox[StyleBox["0", FontColor -> GrayLevel[0.5], FontSize -> 9], expr];
 
 LeanLevelSucc /: MakeBoxes[expr : LeanLevelSucc[l_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     RowBox[{MakeBoxes[l, StandardForm],
-      StyleBox["+1", FontColor -> GrayLevel[0.5], FontSize -> 9]}]];
+      StyleBox["+1", FontColor -> GrayLevel[0.5], FontSize -> 9]}],
+    expr];
 
 LeanLevelMax /: MakeBoxes[expr : LeanLevelMax[a_, b_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     RowBox[{StyleBox["max", FontColor -> GrayLevel[0.5], FontSize -> 9],
-      "(", MakeBoxes[a, StandardForm], ", ",
-      MakeBoxes[b, StandardForm], ")"}]];
+      "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}],
+    expr];
 
 LeanLevelIMax /: MakeBoxes[expr : LeanLevelIMax[a_, b_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     RowBox[{StyleBox["imax", FontColor -> GrayLevel[0.5], FontSize -> 9],
-      "(", MakeBoxes[a, StandardForm], ", ",
-      MakeBoxes[b, StandardForm], ")"}]];
+      "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}],
+    expr];
 
 LeanLevelParam /: MakeBoxes[expr : LeanLevelParam[name_String], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     StyleBox[name, FontColor -> RGBColor[0.4, 0.55, 0.4],
-      FontSlant -> Italic, FontSize -> 9]];
+      FontSlant -> Italic, FontSize -> 9],
+    expr];
 
 LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] :=
-  iBox[expr,
+  InterpretationBox[
     StyleBox["?" <> ToString[name], FontColor -> GrayLevel[0.6],
-      FontSlant -> Italic, FontSize -> 9]];
+      FontSlant -> Italic, FontSize -> 9],
+    expr];
 
 (* ============================================================================ *)
 (* Public API                                                                   *)
@@ -357,8 +449,6 @@ LeanLoadEnvironment[imports_List, searchPath_String] :=
 
 LeanFreeEnvironment[handle_Integer] := ($freeEnvFn[handle]; Null);
 
-(* --- LeanImport --- *)
-
 Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> ""};
 LeanImport[opts : OptionsPattern[]] := Module[{raw},
   raw = callNative[$listTheoremsFn,
@@ -367,11 +457,8 @@ LeanImport[opts : OptionsPattern[]] := Module[{raw},
     OptionValue["Imports"]];
   If[!AssociationQ[raw], Return[$Failed]];
   toLeanObject /@ raw];
-
 LeanImport[module_String, opts : OptionsPattern[]] :=
   LeanImport["Imports" -> {module}, opts];
-
-(* --- Type / Value / ConstantInfo / ListConstants --- *)
 
 Options[LeanExpr] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Depth" -> 100};
 LeanExpr[name_String, opts : OptionsPattern[]] :=
