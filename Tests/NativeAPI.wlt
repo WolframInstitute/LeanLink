@@ -17,20 +17,26 @@ VerificationTest[
 
 VerificationTest[
   Head[$env["LeanLink.Examples.identity"]],
-  LeanTheorem,
-  TestID -> "LeanImport-Theorem-Head"
+  LeanTerm,
+  TestID -> "LeanImport-LeanTerm-Head"
 ]
 
 VerificationTest[
-  Head[$env["LeanLink.Examples.Vec.head"]],
-  LeanDefinition,
-  TestID -> "LeanImport-Definition-Head"
+  $env["LeanLink.Examples.identity"]["Kind"],
+  "theorem",
+  TestID -> "LeanImport-Theorem-Kind"
 ]
 
 VerificationTest[
-  Head[$env["LeanLink.Examples.Vec"]],
-  LeanInductive,
-  TestID -> "LeanImport-Inductive-Head"
+  $env["LeanLink.Examples.Vec.head"]["Kind"],
+  "def",
+  TestID -> "LeanImport-Definition-Kind"
+]
+
+VerificationTest[
+  $env["LeanLink.Examples.Vec"]["Kind"],
+  "inductive",
+  TestID -> "LeanImport-Inductive-Kind"
 ]
 
 (* === Property access === *)
@@ -42,21 +48,15 @@ VerificationTest[
 ]
 
 VerificationTest[
-  $env["LeanLink.Examples.identity"]["Kind"],
-  "theorem",
-  TestID -> "Property-Kind"
-]
-
-VerificationTest[
   MatchQ[$env["LeanLink.Examples.identity"]["Type"], _LeanForall],
   True,
   TestID -> "Property-Type"
 ]
 
 VerificationTest[
-  !MatchQ[$env["LeanLink.Examples.identity"]["Value"], _LeanNoValue],
+  !MatchQ[$env["LeanLink.Examples.identity"]["Term"], _LeanNoValue],
   True,
-  TestID -> "Property-Value-Exists"
+  TestID -> "Property-Term-Exists"
 ]
 
 VerificationTest[
