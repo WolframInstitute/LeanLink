@@ -14,23 +14,25 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVers
 
 ## Quick Start
 
-LeanLink ships with a built-in `LeanLink.Examples` module containing textbook proofs and dependent types.
-
-Point to the native build directory:
+LeanLink ships with built-in examples: textbook proofs and dependent types.
 
 ```wolfram
 nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
 ```
 
-### Import a Module
+### Import from a .lean file
 
 ```wolfram
-env = LeanImport["LeanLink", "ProjectDir" -> nativeDir, "Filter" -> "LeanLink.Examples"]
+exFile = FileNameJoin[{nativeDir, "lib", "LeanLink", "Examples.lean"}];
+```
+
+```wolfram
+env = LeanImport[exFile, "ProjectDir" -> nativeDir]
 ```
 
 ### Browse Constants
 
-Keys of the returned Association are fully qualified names:
+Internal names are filtered — only top-level theorems, definitions, and inductives show:
 
 ```wolfram
 Keys[env]
@@ -38,7 +40,7 @@ Keys[env]
 
 ### Typed Objects
 
-Each value is a `LeanTerm` with its kind (theorem, def, inductive, axiom, ...) shown in the summary:
+Each value is a `LeanTerm` with its kind shown in a colored summary:
 
 ```wolfram
 env["LeanLink.Examples.identity"]
@@ -72,7 +74,7 @@ env["LeanLink.Examples.identity"]["Properties"]
 
 ### Expression Graph
 
-Visualize the type as a tree. Each node is color-coded by its expression head: blue for `∀`, purple for `λ`, green for constants.
+Visualize the type as a tree — nodes are colored by head: blue for ∀, purple for λ, green for constants.
 
 ```wolfram
 env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
@@ -84,19 +86,19 @@ env["LeanLink.Examples.Vec.map"]["ExprGraph"]
 
 ### Call Graph
 
-See which constants a proof references:
+See which constants a proof depends on:
 
 ```wolfram
 env["LeanLink.Examples.contrapositive"]["CallGraph"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.zero_add_proof"]["CallGraph"]
+env["LeanLink.Examples.add_zero"]["CallGraph"]
 ```
 
 ## Low-Level API
 
-For fine-grained queries, use the raw functions directly:
+Query individual constants without importing everything:
 
 ```wolfram
 LeanExpr["LeanLink.Examples.modus_ponens", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir]
@@ -114,19 +116,13 @@ The TuringMachineSearch project proves that the {2,2} Turing machine rule 445 co
 projectDir = ParentDirectory[NotebookDirectory[], 2]
 ```
 
-Import the PlusOne module:
-
 ```wolfram
 tm = LeanImport["OneSidedTM", "ProjectDir" -> projectDir, "Filter" -> "rule445"]
 ```
 
-Expression graph of a successor proof:
-
 ```wolfram
 tm["OneSidedTM.rule445_computesSucc"]["ExprGraph"]
 ```
-
-Call graph showing proof dependencies:
 
 ```wolfram
 tm["OneSidedTM.rule445_computesSucc"]["CallGraph"]

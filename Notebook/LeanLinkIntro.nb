@@ -10,154 +10,217 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      9192,        199]
-NotebookOptionsPosition[      6153,        157]
-NotebookOutlinePosition[      6473,        171]
-CellTagsIndexPosition[      6430,        168]
+NotebookDataLength[     12229,        273]
+NotebookOptionsPosition[      8159,        220]
+NotebookOutlinePosition[      8479,        234]
+CellTagsIndexPosition[      8436,        231]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
-Cell["LeanLink", "Title",ExpressionUUID->"a9125abb-c13c-4dac-9644-a5698bdc352d"],
+Cell["LeanLink", "Title",ExpressionUUID->"92cf67cb-638e-428b-b229-fef1fad56275"],
 
-Cell["\<\
-Visualize Lean 4 proof structures as Wolfram Language graphs.\
-\>", "Text",ExpressionUUID->"3e3d167a-acdd-4144-a0ff-bd22574d5c8d"],
+Cell["Explore Lean 4 proof structures from Wolfram Language.", "Text",ExpressionUUID->"5ae54e1e-79d0-4795-88c5-d44541d1d80e"],
 
-Cell["Installation", "Chapter",ExpressionUUID->"06b63cb1-6c26-440d-af80-c8ae80f802a7"],
+Cell["Setup", "Chapter",ExpressionUUID->"0f0a5af8-584a-4985-9506-d2f721b97570"],
 
 Cell[BoxData[
  RowBox[{"PacletInstall", "[", 
   RowBox[{"\"\<https://www.wolframcloud.com/obj/nikm/LeanLink.paclet\>\"", ",",
     " ", 
    RowBox[{"ForceVersionInstall", " ", "->", " ", "True"}]}], "]"}]], "Input",\
-ExpressionUUID->"0ecd3d83-c072-45d4-9d3a-c18943fd0de3"],
+ExpressionUUID->"3993dcac-8eb3-41f2-b06a-3c6787d19244"],
 
 Cell[BoxData[
- RowBox[{"<<", " ", "LeanLink`"}]], "Input",ExpressionUUID->"52b2be9a-8309-45d3-b328-8192fbd98967"],
+ RowBox[{"<<", " ", "LeanLink`"}]], "Input",ExpressionUUID->"d374bebc-6178-4fe6-af76-e5433ef162aa"],
 
-Cell["Functions", "Chapter",ExpressionUUID->"67d6baac-dfd6-481f-ac5a-e2e88c95347b"],
+Cell["Quick Start", "Chapter",ExpressionUUID->"66e39386-4711-485c-9a5b-89b1ac577c3f"],
 
-Cell["LeanLink provides three functions:", "Text",ExpressionUUID->"ebcaaf75-4222-4d01-9028-ff17a467b9a7"],
+Cell["\<\
+LeanLink ships with built-in examples: textbook proofs and dependent types.\
+\>", "Text",ExpressionUUID->"11586cc5-067a-46a4-ae7b-4a76842af8fb"],
 
-Cell[TextData[{
- Cell["LeanExprGraph[file, name]", "InlineCode",ExpressionUUID->
-  "96688e18-d776-4a72-b4b7-aabd5d61e729"],
- " \[LongDash] expression tree of a proof term"
-}], "Item",ExpressionUUID->"6b422701-026f-423f-8563-c0835ad5d0b8"],
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"nativeDir", " ", "=", " ", 
+   RowBox[{"FileNameJoin", "[", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"PacletObject", "[", "\"\<LeanLink\>\"", "]"}], 
+       "[", "\"\<Location\>\"", "]"}], ",", " ", "\"\<Native\>\""}], "}"}], 
+    "]"}]}], ";"}]], "Input",ExpressionUUID->"0ccec481-5e5c-48df-8dd6-\
+e1b96aa39635"],
 
-Cell[TextData[{
- Cell["LeanCallGraph[file, name]", "InlineCode",ExpressionUUID->
-  "27bba3c2-9b7a-4e5a-9c74-8d4e20c8c5be"],
- " \[LongDash] dependency graph of theorem references"
-}], "Item",ExpressionUUID->"c27de947-79c5-452a-941e-ffb6b06d7516"],
-
-Cell[TextData[{
- Cell["LeanListTheorems[file]", "InlineCode",ExpressionUUID->
-  "4858c4cb-821b-4927-9fc3-dc3ee453c414"],
- " \[LongDash] enumerate all definitions and theorems"
-}], "Item",ExpressionUUID->"16ea96ec-01dd-40a1-af58-5c3b48fd1085"],
-
-Cell[TextData[{
- "All accept a raw ",
- Cell[".lean", "InlineCode",ExpressionUUID->
-  "58d8b20a-1b42-4098-b4b4-b1c6175abaf2"],
- " file as the first argument. No lake project required."
-}], "Text",ExpressionUUID->"722e707a-5bb2-4eab-af1e-74924ee6779a"],
-
-Cell["Quick Start", "Chapter",ExpressionUUID->"09041b67-a78d-46bc-8e55-c99803812f11"],
-
-Cell[TextData[{
- "LeanLink ships with a bundled ",
- Cell["Examples.lean", "InlineCode",ExpressionUUID->
-  "1450dd70-d240-4a86-9513-fc81360a8caa"],
- ":"
-}], "Text",ExpressionUUID->"ca56ab19-b60c-4ed4-abad-7768c13964d7"],
+Cell["Import from a .lean file", "Section",ExpressionUUID->"45606475-50d6-4611-be20-012722d0ffc6"],
 
 Cell[BoxData[
  RowBox[{
   RowBox[{"exFile", " ", "=", " ", 
-   RowBox[{
-    RowBox[{"PacletObject", "[", "\"\<LeanLink\>\"", "]"}], "[", 
-    RowBox[{"\"\<AssetLocation\>\"", ",", " ", "\"\<Examples\>\""}], "]"}]}], 
-  ";"}]], "Input",ExpressionUUID->"cbdc85c4-929d-4a3a-9f95-87257521cfc5"],
-
-Cell["List Theorems", "Section",ExpressionUUID->"4aaff012-11bc-4e55-9d8a-0a932fad98bb"],
-
-Cell[BoxData[
- RowBox[{"LeanListTheorems", "[", "exFile", "]"}]], "Input",ExpressionUUID->"3620957c-2b3a-4d81-b7ed-19f68bb0f8c3"],
+   RowBox[{"FileNameJoin", "[", 
+    RowBox[{"{", 
+     RowBox[{
+     "nativeDir", ",", " ", "\"\<lib\>\"", ",", " ", "\"\<LeanLink\>\"", ",", 
+      " ", "\"\<Examples.lean\>\""}], "}"}], "]"}]}], ";"}]], "Input",Expressi\
+onUUID->"1953e47f-8ee3-4875-b274-146006b0af2f"],
 
 Cell[BoxData[
- RowBox[{"LeanListTheorems", "[", 
-  RowBox[{"exFile", ",", " ", 
-   RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<add\>\""}]}], 
-  "]"}]], "Input",ExpressionUUID->"0c0e529a-aee0-4c2d-a18f-2f902978452e"],
+ RowBox[{"env", " ", "=", " ", 
+  RowBox[{"LeanImport", "[", 
+   RowBox[{"exFile", ",", " ", 
+    RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "nativeDir"}]}], 
+   "]"}]}]], "Input",ExpressionUUID->"9785f83b-ed74-4788-bf64-e075f29e234b"],
 
-Cell["Expression Graph", "Section",ExpressionUUID->"90f8bb17-e59e-4c5f-8782-aedb464bc72b"],
+Cell["Browse Constants", "Section",ExpressionUUID->"fd46c152-75a8-441d-9f07-de5ca1edd4ac"],
 
-Cell[BoxData[
- RowBox[{"LeanExprGraph", "[", 
-  RowBox[{"exFile", ",", " ", "\"\<modus_ponens\>\""}], "]"}]], "Input",Expres\
-sionUUID->"53853ca4-e678-4ca7-bab5-ee17e2f85595"],
-
-Cell[BoxData[
- RowBox[{"LeanExprGraph", "[", 
-  RowBox[{"exFile", ",", " ", "\"\<Vec.map\>\""}], "]"}]], "Input",ExpressionU\
-UID->"f8af1376-5948-4087-b8a3-27179d1061a2"],
-
-Cell["Call Graph", "Section",ExpressionUUID->"33c419b0-3691-488e-9600-83d91171989d"],
+Cell["\<\
+Internal names are filtered \[LongDash] only top-level theorems, definitions, \
+and inductives show:\
+\>", "Text",ExpressionUUID->"83673185-fa1e-435f-ba69-a9f9c0c8fa18"],
 
 Cell[BoxData[
- RowBox[{"LeanCallGraph", "[", 
-  RowBox[{"exFile", ",", " ", "\"\<zero_add_proof\>\""}], "]"}]], "Input",Expr\
-essionUUID->"f4076a90-44e9-4bc4-ae5a-1f6f445f2b88"],
+ RowBox[{"Keys", "[", "env", "]"}]], "Input",ExpressionUUID->"8811815a-19b9-4ecc-b2dc-e0a5d644f4fb"],
 
-Cell["TM {2,2} Rule 445 \[LongDash] Successor Proof", "Chapter",ExpressionUUID->"be7a0068-0efe-4d4a-9284-ef3f77628c52"],
+Cell["Typed Objects", "Section",ExpressionUUID->"87885888-9639-4b55-a956-a480b719eb62"],
+
+Cell[TextData[{
+ "Each value is a ",
+ Cell["LeanTerm", "InlineCode",ExpressionUUID->
+  "c5469644-ecf6-43e4-8559-9f6adba641ff"],
+ " with its kind shown in a colored summary:"
+}], "Text",ExpressionUUID->"e78ee54d-07dc-4b54-841d-a0e7b3cf49a5"],
+
+Cell[BoxData[
+ RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}]], "Input",Exp\
+ressionUUID->"b416e471-a3fc-473b-8666-ad3b040fe4b7"],
+
+Cell[BoxData[
+ RowBox[{"env", "[", "\"\<LeanLink.Examples.Vec\>\"", "]"}]], "Input",Expressi\
+onUUID->"7f9e7bff-1216-4ea7-b107-40937ad62eec"],
+
+Cell[BoxData[
+ RowBox[{"env", "[", "\"\<LeanLink.Examples.Vec.head\>\"", "]"}]], "Input",Exp\
+ressionUUID->"4261af95-fb7e-41cc-bd03-911d623238b3"],
+
+Cell["Property Access", "Section",ExpressionUUID->"3a863948-d749-4d80-a96a-b43a7cf5f562"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<Kind\>\"", "]"}]], "Input",ExpressionUUID->"9c23dfa0-d661-4a95-\
+98f0-074574bbf9be"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<Type\>\"", "]"}]], "Input",ExpressionUUID->"f87badd2-9390-4136-\
+8fe9-50e4d161004a"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<Term\>\"", "]"}]], "Input",ExpressionUUID->"f44a477a-376a-4c67-\
+abd6-6d509711ad89"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<Properties\>\"", "]"}]], "Input",ExpressionUUID->"e17d12c8-c9b0-\
+492a-b374-2e5ed1d72f64"],
+
+Cell["Expression Graph", "Section",ExpressionUUID->"2cc13917-27d5-4d43-9494-7265ecf44bdb"],
+
+Cell["\<\
+Visualize the type as a tree \[LongDash] nodes are colored by head: blue for \
+\[ForAll], purple for \[Lambda], green for constants.\
+\>", "Text",ExpressionUUID->"5a94b6c8-9a7f-4c44-b27d-4f86c875ab07"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.modus_ponens\>\"", "]"}], 
+  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",ExpressionUUID->"bc0adac3-d56f-\
+4247-a1ee-2b5a409fe5df"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.Vec.map\>\"", "]"}], 
+  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",ExpressionUUID->"ebff0e39-c02e-\
+4ec5-9178-dd97b4671a32"],
+
+Cell["Call Graph", "Section",ExpressionUUID->"f990850b-1042-41e9-bf33-b832effd36b3"],
+
+Cell["See which constants a proof depends on:", "Text",ExpressionUUID->"41af8102-428b-40f4-b9c2-bd33982b51e9"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.contrapositive\>\"", "]"}], 
+  "[", "\"\<CallGraph\>\"", "]"}]], "Input",ExpressionUUID->"0e558540-8e8e-\
+4811-8058-1001de024c1a"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.add_zero\>\"", "]"}], 
+  "[", "\"\<CallGraph\>\"", "]"}]], "Input",ExpressionUUID->"7d447aae-c103-\
+425f-996c-417b615df03e"],
+
+Cell["Low-Level API", "Chapter",ExpressionUUID->"70a7b957-375a-4288-9592-a3a9919b2195"],
+
+Cell["Query individual constants without importing everything:", "Text",ExpressionUUID->"199a3e01-c1dc-456b-862b-908da2e91799"],
+
+Cell[BoxData[
+ RowBox[{"LeanExpr", "[", 
+  RowBox[{"\"\<LeanLink.Examples.modus_ponens\>\"", ",", " ", 
+   RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+    RowBox[{"{", "\"\<LeanLink\>\"", "}"}]}], ",", " ", 
+   RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "nativeDir"}]}], 
+  "]"}]], "Input",ExpressionUUID->"44669925-51c5-42df-b8ea-dbbaa4adef9f"],
+
+Cell[BoxData[
+ RowBox[{"LeanValue", "[", 
+  RowBox[{"\"\<LeanLink.Examples.identity\>\"", ",", " ", 
+   RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+    RowBox[{"{", "\"\<LeanLink\>\"", "}"}]}], ",", " ", 
+   RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "nativeDir"}], ",", " ", 
+   RowBox[{"\"\<Depth\>\"", " ", "->", " ", "10"}]}], "]"}]], "Input",Expressi\
+onUUID->"556fd0ba-c39f-428f-8b30-5b2dcb888aef"],
+
+Cell["TM {2,2} Rule 445 \[LongDash] Successor Proof", "Chapter",ExpressionUUID->"58622b5e-39b7-43b6-a7b3-7db17e9e7ff4"],
 
 Cell["\<\
 The TuringMachineSearch project proves that the {2,2} Turing machine rule 445 \
 computes the successor function:\
-\>", "Text",ExpressionUUID->"586476e0-be0a-4886-882e-d818bdebabc9"],
+\>", "Text",ExpressionUUID->"cca9b466-a40c-45b0-9b92-79c1d5036324"],
+
+Cell[BoxData[
+ RowBox[{"projectDir", " ", "=", " ", 
+  RowBox[{"ParentDirectory", "[", 
+   RowBox[{
+    RowBox[{"NotebookDirectory", "[", "]"}], ",", " ", "2"}], 
+   "]"}]}]], "Input",ExpressionUUID->"9e56f289-a40a-43c6-b142-d513315d9949"],
+
+Cell[BoxData[
+ RowBox[{"tm", " ", "=", " ", 
+  RowBox[{"LeanImport", "[", 
+   RowBox[{"\"\<OneSidedTM\>\"", ",", " ", 
+    RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "projectDir"}], ",", " ", 
+    RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<rule445\>\""}]}], 
+   "]"}]}]], "Input",ExpressionUUID->"e85371cd-6a2d-4bfd-a831-3efd3d0c7724"],
 
 Cell[BoxData[
  RowBox[{
-  RowBox[{"projectDir", " ", "=", " ", "\"\<Proofs\>\""}], ";"}]], "Input",Exp\
-ressionUUID->"44ccbd85-b921-4218-adf5-bc1d67cce6b5"],
-
-Cell["List theorems from the PlusOne module:", "Text",ExpressionUUID->"88c4d0c7-76e2-4b54-8652-9001dd028e94"],
-
-Cell[BoxData[
- RowBox[{"LeanListTheorems", "[", 
-  RowBox[{
-   RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
-    RowBox[{"{", "\"\<OneSidedTM.PlusOne\>\"", "}"}]}], ",", " ", 
-   RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "projectDir"}], ",", " ", 
-   RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<rule445\>\""}]}], 
-  "]"}]], "Input",ExpressionUUID->"f1a7dd29-050b-4267-8ccc-b873e8e251c6"],
-
-Cell["Expression graph of a successor proof:", "Text",ExpressionUUID->"5f8ca1a7-b88e-4cc2-b24e-90c0f2d02485"],
+  RowBox[{"tm", "[", "\"\<OneSidedTM.rule445_computesSucc\>\"", "]"}], 
+  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",ExpressionUUID->"c8f75c2c-e8d8-\
+47d4-8814-37550c05b446"],
 
 Cell[BoxData[
- RowBox[{"LeanExprGraph", "[", 
-  RowBox[{"\"\<OneSidedTM.rule445_succ_1\>\"", ",", " ", 
-   RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
-    RowBox[{"{", "\"\<OneSidedTM.PlusOne\>\"", "}"}]}], ",", " ", 
-   RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "projectDir"}]}], 
-  "]"}]], "Input",ExpressionUUID->"1f15fb85-d657-41e5-a2dc-2275cdf52b19"],
-
-Cell["Call graph showing proof dependencies of the main theorem:", "Text",ExpressionUUID->"8b668363-fd10-4eeb-b9a8-cb34aabc79c4"],
-
-Cell[BoxData[
- RowBox[{"LeanCallGraph", "[", 
-  RowBox[{"\"\<OneSidedTM.rule445_computesSucc\>\"", ",", " ", 
-   RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
-    RowBox[{"{", "\"\<OneSidedTM.PlusOne\>\"", "}"}]}], ",", " ", 
-   RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "projectDir"}]}], 
-  "]"}]], "Input",ExpressionUUID->"6f1f4374-ae13-4356-a81c-b238bcc2a921"]
+ RowBox[{
+  RowBox[{"tm", "[", "\"\<OneSidedTM.rule445_computesSucc\>\"", "]"}], 
+  "[", "\"\<CallGraph\>\"", "]"}]], "Input",ExpressionUUID->"b6f1fa6c-5f31-\
+47a0-86cd-7cdf1232f7bc"]
 },
 FrontEndVersion->"15.0 for Mac OS X ARM (64-bit) (January 5, 2026)",
 StyleDefinitions->"Default.nb",
-ExpressionUUID->"d54125eb-8c3d-48f4-8860-bfafcfe4e58f"
+ExpressionUUID->"490e8da9-1d60-49d3-81df-76d0e195da42"
 ]
 (* End of Notebook Content *)
 
@@ -170,37 +233,48 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 80, 0, 70, "Title",ExpressionUUID->"a9125abb-c13c-4dac-9644-a5698bdc352d"],
-Cell[637, 22, 140, 2, 70, "Text",ExpressionUUID->"3e3d167a-acdd-4144-a0ff-bd22574d5c8d"],
-Cell[780, 26, 86, 0, 70, "Chapter",ExpressionUUID->"06b63cb1-6c26-440d-af80-c8ae80f802a7"],
-Cell[869, 28, 271, 5, 70, "Input",ExpressionUUID->"0ecd3d83-c072-45d4-9d3a-c18943fd0de3"],
-Cell[1143, 35, 113, 1, 70, "Input",ExpressionUUID->"52b2be9a-8309-45d3-b328-8192fbd98967"],
-Cell[1259, 38, 83, 0, 70, "Chapter",ExpressionUUID->"67d6baac-dfd6-481f-ac5a-e2e88c95347b"],
-Cell[1345, 40, 105, 0, 70, "Text",ExpressionUUID->"ebcaaf75-4222-4d01-9028-ff17a467b9a7"],
-Cell[1453, 42, 238, 4, 70, "Item",ExpressionUUID->"6b422701-026f-423f-8563-c0835ad5d0b8"],
-Cell[1694, 48, 245, 4, 70, "Item",ExpressionUUID->"c27de947-79c5-452a-941e-ffb6b06d7516"],
-Cell[1942, 54, 242, 4, 70, "Item",ExpressionUUID->"16ea96ec-01dd-40a1-af58-5c3b48fd1085"],
-Cell[2187, 60, 250, 5, 70, "Text",ExpressionUUID->"722e707a-5bb2-4eab-af1e-74924ee6779a"],
-Cell[2440, 67, 85, 0, 70, "Chapter",ExpressionUUID->"09041b67-a78d-46bc-8e55-c99803812f11"],
-Cell[2528, 69, 218, 5, 70, "Text",ExpressionUUID->"ca56ab19-b60c-4ed4-abad-7768c13964d7"],
-Cell[2749, 76, 290, 6, 70, "Input",ExpressionUUID->"cbdc85c4-929d-4a3a-9f95-87257521cfc5"],
-Cell[3042, 84, 87, 0, 70, "Section",ExpressionUUID->"4aaff012-11bc-4e55-9d8a-0a932fad98bb"],
-Cell[3132, 86, 129, 1, 70, "Input",ExpressionUUID->"3620957c-2b3a-4d81-b7ed-19f68bb0f8c3"],
-Cell[3264, 89, 218, 4, 70, "Input",ExpressionUUID->"0c0e529a-aee0-4c2d-a18f-2f902978452e"],
-Cell[3485, 95, 90, 0, 70, "Section",ExpressionUUID->"90f8bb17-e59e-4c5f-8782-aedb464bc72b"],
-Cell[3578, 97, 175, 3, 70, "Input",ExpressionUUID->"53853ca4-e678-4ca7-bab5-ee17e2f85595"],
-Cell[3756, 102, 170, 3, 70, "Input",ExpressionUUID->"f8af1376-5948-4087-b8a3-27179d1061a2"],
-Cell[3929, 107, 84, 0, 70, "Section",ExpressionUUID->"33c419b0-3691-488e-9600-83d91171989d"],
-Cell[4016, 109, 177, 3, 70, "Input",ExpressionUUID->"f4076a90-44e9-4bc4-ae5a-1f6f445f2b88"],
-Cell[4196, 114, 119, 0, 70, "Chapter",ExpressionUUID->"be7a0068-0efe-4d4a-9284-ef3f77628c52"],
-Cell[4318, 116, 191, 3, 70, "Text",ExpressionUUID->"586476e0-be0a-4886-882e-d818bdebabc9"],
-Cell[4512, 121, 156, 3, 70, "Input",ExpressionUUID->"44ccbd85-b921-4218-adf5-bc1d67cce6b5"],
-Cell[4671, 126, 109, 0, 70, "Text",ExpressionUUID->"88c4d0c7-76e2-4b54-8652-9001dd028e94"],
-Cell[4783, 128, 392, 7, 70, "Input",ExpressionUUID->"f1a7dd29-050b-4267-8ccc-b873e8e251c6"],
-Cell[5178, 137, 109, 0, 70, "Text",ExpressionUUID->"5f8ca1a7-b88e-4cc2-b24e-90c0f2d02485"],
-Cell[5290, 139, 359, 6, 70, "Input",ExpressionUUID->"1f15fb85-d657-41e5-a2dc-2275cdf52b19"],
-Cell[5652, 147, 129, 0, 70, "Text",ExpressionUUID->"8b668363-fd10-4eeb-b9a8-cb34aabc79c4"],
-Cell[5784, 149, 365, 6, 70, "Input",ExpressionUUID->"6f1f4374-ae13-4356-a81c-b238bcc2a921"]
+Cell[554, 20, 80, 0, 70, "Title",ExpressionUUID->"92cf67cb-638e-428b-b229-fef1fad56275"],
+Cell[637, 22, 125, 0, 70, "Text",ExpressionUUID->"5ae54e1e-79d0-4795-88c5-d44541d1d80e"],
+Cell[765, 24, 79, 0, 70, "Chapter",ExpressionUUID->"0f0a5af8-584a-4985-9506-d2f721b97570"],
+Cell[847, 26, 271, 5, 70, "Input",ExpressionUUID->"3993dcac-8eb3-41f2-b06a-3c6787d19244"],
+Cell[1121, 33, 113, 1, 70, "Input",ExpressionUUID->"d374bebc-6178-4fe6-af76-e5433ef162aa"],
+Cell[1237, 36, 85, 0, 70, "Chapter",ExpressionUUID->"66e39386-4711-485c-9a5b-89b1ac577c3f"],
+Cell[1325, 38, 154, 2, 70, "Text",ExpressionUUID->"11586cc5-067a-46a4-ae7b-4a76842af8fb"],
+Cell[1482, 42, 370, 10, 70, "Input",ExpressionUUID->"0ccec481-5e5c-48df-8dd6-e1b96aa39635"],
+Cell[1855, 54, 98, 0, 70, "Section",ExpressionUUID->"45606475-50d6-4611-be20-012722d0ffc6"],
+Cell[1956, 56, 331, 8, 70, "Input",ExpressionUUID->"1953e47f-8ee3-4875-b274-146006b0af2f"],
+Cell[2290, 66, 252, 5, 70, "Input",ExpressionUUID->"9785f83b-ed74-4788-bf64-e075f29e234b"],
+Cell[2545, 73, 90, 0, 70, "Section",ExpressionUUID->"fd46c152-75a8-441d-9f07-de5ca1edd4ac"],
+Cell[2638, 75, 179, 3, 70, "Text",ExpressionUUID->"83673185-fa1e-435f-ba69-a9f9c0c8fa18"],
+Cell[2820, 80, 114, 1, 70, "Input",ExpressionUUID->"8811815a-19b9-4ecc-b2dc-e0a5d644f4fb"],
+Cell[2937, 83, 87, 0, 70, "Section",ExpressionUUID->"87885888-9639-4b55-a956-a480b719eb62"],
+Cell[3027, 85, 240, 5, 70, "Text",ExpressionUUID->"e78ee54d-07dc-4b54-841d-a0e7b3cf49a5"],
+Cell[3270, 92, 146, 2, 70, "Input",ExpressionUUID->"b416e471-a3fc-473b-8666-ad3b040fe4b7"],
+Cell[3419, 96, 141, 2, 70, "Input",ExpressionUUID->"7f9e7bff-1216-4ea7-b107-40937ad62eec"],
+Cell[3563, 100, 146, 2, 70, "Input",ExpressionUUID->"4261af95-fb7e-41cc-bd03-911d623238b3"],
+Cell[3712, 104, 89, 0, 70, "Section",ExpressionUUID->"3a863948-d749-4d80-a96a-b43a7cf5f562"],
+Cell[3804, 106, 188, 4, 70, "Input",ExpressionUUID->"9c23dfa0-d661-4a95-98f0-074574bbf9be"],
+Cell[3995, 112, 188, 4, 70, "Input",ExpressionUUID->"f87badd2-9390-4136-8fe9-50e4d161004a"],
+Cell[4186, 118, 188, 4, 70, "Input",ExpressionUUID->"f44a477a-376a-4c67-abd6-6d509711ad89"],
+Cell[4377, 124, 194, 4, 70, "Input",ExpressionUUID->"e17d12c8-c9b0-492a-b374-2e5ed1d72f64"],
+Cell[4574, 130, 90, 0, 70, "Section",ExpressionUUID->"2cc13917-27d5-4d43-9494-7265ecf44bdb"],
+Cell[4667, 132, 211, 3, 70, "Text",ExpressionUUID->"5a94b6c8-9a7f-4c44-b27d-4f86c875ab07"],
+Cell[4881, 137, 197, 4, 70, "Input",ExpressionUUID->"bc0adac3-d56f-4247-a1ee-2b5a409fe5df"],
+Cell[5081, 143, 192, 4, 70, "Input",ExpressionUUID->"ebff0e39-c02e-4ec5-9178-dd97b4671a32"],
+Cell[5276, 149, 84, 0, 70, "Section",ExpressionUUID->"f990850b-1042-41e9-bf33-b832effd36b3"],
+Cell[5363, 151, 110, 0, 70, "Text",ExpressionUUID->"41af8102-428b-40f4-b9c2-bd33982b51e9"],
+Cell[5476, 153, 199, 4, 70, "Input",ExpressionUUID->"0e558540-8e8e-4811-8058-1001de024c1a"],
+Cell[5678, 159, 193, 4, 70, "Input",ExpressionUUID->"7d447aae-c103-425f-996c-417b615df03e"],
+Cell[5874, 165, 87, 0, 70, "Chapter",ExpressionUUID->"70a7b957-375a-4288-9592-a3a9919b2195"],
+Cell[5964, 167, 127, 0, 70, "Text",ExpressionUUID->"199a3e01-c1dc-456b-862b-908da2e91799"],
+Cell[6094, 169, 348, 6, 70, "Input",ExpressionUUID->"44669925-51c5-42df-b8ea-dbbaa4adef9f"],
+Cell[6445, 177, 407, 7, 70, "Input",ExpressionUUID->"556fd0ba-c39f-428f-8b30-5b2dcb888aef"],
+Cell[6855, 186, 119, 0, 70, "Chapter",ExpressionUUID->"58622b5e-39b7-43b6-a7b3-7db17e9e7ff4"],
+Cell[6977, 188, 191, 3, 70, "Text",ExpressionUUID->"cca9b466-a40c-45b0-9b92-79c1d5036324"],
+Cell[7171, 193, 239, 5, 70, "Input",ExpressionUUID->"9e56f289-a40a-43c6-b142-d513315d9949"],
+Cell[7413, 200, 342, 6, 70, "Input",ExpressionUUID->"e85371cd-6a2d-4bfd-a831-3efd3d0c7724"],
+Cell[7758, 208, 197, 4, 70, "Input",ExpressionUUID->"c8f75c2c-e8d8-47d4-8814-37550c05b446"],
+Cell[7958, 214, 197, 4, 70, "Input",ExpressionUUID->"b6f1fa6c-5f31-47a0-86cd-7cdf1232f7bc"]
 }
 ]
 *)
