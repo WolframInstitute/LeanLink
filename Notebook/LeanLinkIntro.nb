@@ -10,15 +10,19 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[     14925,        345]
-NotebookOptionsPosition[     10569,        289]
-NotebookOutlinePosition[     10889,        303]
-CellTagsIndexPosition[     10846,        300]
+NotebookDataLength[    141765,       3329]
+NotebookOptionsPosition[    135683,       3222]
+NotebookOutlinePosition[    136079,       3238]
+CellTagsIndexPosition[    136036,       3235]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
+
+Cell[CellGroupData[{
 Cell["LeanLink \[LongDash] Interactive Lean from Wolfram Language", "Title",ExpressionUUID->"7917c8ad-dc39-4dfa-a578-39a22b384db6"],
+
+Cell[CellGroupData[{
 
 Cell["Setup", "Chapter",ExpressionUUID->"f781a2ac-13a0-49a4-843a-aca7d76ff494"],
 
@@ -40,8 +44,11 @@ Cell[BoxData[{
       RowBox[{
        RowBox[{"PacletObject", "[", "\"\<LeanLink\>\"", "]"}], 
        "[", "\"\<Location\>\"", "]"}], ",", " ", "\"\<Native\>\""}], "}"}], 
-    "]"}]}], ";"}]}], "Input",ExpressionUUID->"664817d8-70b1-4a04-ba4c-\
-da917623460e"],
+    "]"}]}], ";"}]}], "Input",
+ CellLabel->"In[1]:=",ExpressionUUID->"664817d8-70b1-4a04-ba4c-da917623460e"]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Importing a Lean Environment", "Chapter",ExpressionUUID->"f34601c7-bab5-4c43-ac3b-9688c8eb1c25"],
 
@@ -49,6 +56,8 @@ Cell["\<\
 Import constants from a Lean module. This is lazy \[LongDash] only names and \
 kinds are loaded upfront:\
 \>", "Text",ExpressionUUID->"c5f07615-8485-4b24-bf8e-2e26798c8872"],
+
+Cell[CellGroupData[{
 
 Cell[BoxData[
  RowBox[{"env", " ", "=", " ", 
@@ -59,12 +68,1544 @@ Cell[BoxData[
     RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
      RowBox[{"{", "\"\<LeanLink\>\"", "}"}]}], ",", "\n", "  ", 
     RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<Examples\>\""}]}], 
-   "]"}]}]], "Input",ExpressionUUID->"fb97d635-f193-47f5-bf2b-c120d49e65d3"],
+   "]"}]}]], "Input",
+ CellLabel->"In[4]:=",ExpressionUUID->"fb97d635-f193-47f5-bf2b-c120d49e65d3"],
+
+Cell[BoxData[
+ RowBox[{"\[LeftAssociation]", 
+  RowBox[{
+   RowBox[{"\<\"LeanLink.Examples.Vec.nil\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.85, 0.5, 0.15], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"constructor\"", Bold, 
+                    RGBColor[0.85, 0.5, 0.15], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.nil\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.85, 0.5, 0.15], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"constructor\"", Bold, 
+                    RGBColor[0.85, 0.5, 0.15], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.nil\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"{a : Type} \[RightArrow] LeanLink.Examples.Vec a 0\"", 
+                    "Input", StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    "\"No value for: LeanLink.Examples.Vec.nil\"", 
+                    Short[#, 1]& ], "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"4 type, 1 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.Vec.nil", "Kind" -> "constructor", 
+       "_Handle" -> 1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.and_comm\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.and_comm\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.and_comm\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (P Q : Prop), P \[And] Q \[RightArrow] Q \
+\[And] P\"", "Input", StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    "\"fun x x_1 h => \:27e8h.right, h.left\:27e9\"", 
+                    Short[#, 1]& ], "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"1 type, 4 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.and_comm", "Kind" -> "theorem", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.identity\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.identity\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.identity\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (P : Prop), P \[RightArrow] P\"", "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox["\"fun x hp => hp\"", Short[#, 1]& ], "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.identity", "Kind" -> "theorem", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.contrapositive\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.contrapositive\"", Bold, 
+                    StripOnInput -> False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.contrapositive\"", Bold, 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (P Q : Prop), (P \[RightArrow] Q) \
+\[RightArrow] \[Not]Q \[RightArrow] \[Not]P\"", "Input", StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    "\"fun x x_1 hpq hnq hp => hnq (hpq hp)\"", 
+                    Short[#, 1]& ], "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"1 type, 1 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.contrapositive", "Kind" -> "theorem", 
+       "_Handle" -> 1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.add_zero\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.add_zero\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.add_zero\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (n : Nat), n + 0 = n\"", "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox["\"fun x => rfl\"", Short[#, 1]& ], "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"7 type, 7 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.add_zero", "Kind" -> "theorem", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.add_succ\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.add_succ\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.add_succ\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (m n : Nat), m + n.succ = (m + n).succ\"", 
+                    "Input", StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox["\"fun x x_1 => rfl\"", Short[#, 1]& ], "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"6 type, 6 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.add_succ", "Kind" -> "theorem", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.Vec\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.55, 0.3, 0.75], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"inductive\"", Bold, 
+                    RGBColor[0.55, 0.3, 0.75], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec\"", Bold, StripOnInput -> False],
+                     "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.55, 0.3, 0.75], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"inductive\"", Bold, 
+                    RGBColor[0.55, 0.3, 0.75], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec\"", Bold, StripOnInput -> False],
+                     "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"Type \[RightArrow] Nat \[RightArrow] Type\"", "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    "\"No value for: LeanLink.Examples.Vec\"", Short[#, 1]& ],
+                     "Input", StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"1 type, 2 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.Vec", "Kind" -> "inductive", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.modus_ponens\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.modus_ponens\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, 
+                GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.modus_ponens\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (P Q : Prop), P \[RightArrow] (P \
+\[RightArrow] Q) \[RightArrow] Q\"", "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox["\"fun x x_1 hp hpq => hpq hp\"", Short[#, 1]& ], 
+                    "Input", StripOnInput -> False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.modus_ponens", "Kind" -> "theorem", 
+       "_Handle" -> 1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.Vec.head\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.2, 0.65, 0.35], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"def\"", Bold, 
+                    RGBColor[0.2, 0.65, 0.35], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.head\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.2, 0.65, 0.35], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"def\"", Bold, 
+                    RGBColor[0.2, 0.65, 0.35], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.head\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"{a : Type} \[RightArrow] {n : Nat} \[RightArrow] \
+LeanLink.Examples.Vec a (n + 1) \[RightArrow] a\"", "Input", StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    "\"fun {a} {n} x =>\\n  match x with\\n  | \
+LeanLink.Examples.Vec.cons x a => x\"", Short[#, 1]& ], "Input", StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"7 type, 8 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.Vec.head", "Kind" -> "def", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.Vec.map\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.2, 0.65, 0.35], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"def\"", Bold, 
+                    RGBColor[0.2, 0.65, 0.35], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.map\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.2, 0.65, 0.35], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"def\"", Bold, 
+                    RGBColor[0.2, 0.65, 0.35], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.map\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"{a b : Type} \[RightArrow] {n : Nat} \[RightArrow] (a \
+\[RightArrow] b) \[RightArrow] LeanLink.Examples.Vec a n \[RightArrow] \
+LeanLink.Examples.Vec b n\"", "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    RowBox[{"\[LeftSkeleton]", "625", "\[RightSkeleton]"}], 
+                    Short[#, 1]& ], "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"2 type, 13 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.Vec.map", "Kind" -> "def", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.Vec.cons\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.85, 0.5, 0.15], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"constructor\"", Bold, 
+                    RGBColor[0.85, 0.5, 0.15], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.cons\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.85, 0.5, 0.15], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"constructor\"", Bold, 
+                    RGBColor[0.85, 0.5, 0.15], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.Vec.cons\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"{a : Type} \[RightArrow] {n : Nat} \[RightArrow] a \
+\[RightArrow] LeanLink.Examples.Vec a n \[RightArrow] LeanLink.Examples.Vec a \
+(n + 1)\"", "Input", StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox[
+                    "\"No value for: LeanLink.Examples.Vec.cons\"", 
+                    Short[#, 1]& ], "Input", StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"7 type, 1 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.Vec.cons", "Kind" -> "constructor", 
+       "_Handle" -> 1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}], ",", 
+   RowBox[{"\<\"LeanLink.Examples.add_comm\"\>", "\[Rule]", 
+    InterpretationBox[
+     RowBox[{
+      TagBox["LeanTerm",
+       "SummaryHead"], "[", 
+      DynamicModuleBox[{Typeset`open$$ = False, Typeset`embedState$$ = 
+       "Ready"}, 
+       TemplateBox[{
+         PaneSelectorBox[{False -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxOpener"]], 
+                 ButtonFunction :> (Typeset`open$$ = True), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.add_comm\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}], True -> GridBox[{{
+               PaneBox[
+                ButtonBox[
+                 DynamicBox[
+                  FEPrivate`FrontEndResource[
+                  "FEBitmaps", "SummaryBoxCloser"]], 
+                 ButtonFunction :> (Typeset`open$$ = False), Appearance -> 
+                 None, BaseStyle -> {}, Evaluator -> Automatic, Method -> 
+                 "Preemptive"], Alignment -> {Center, Center}, ImageSize -> 
+                Dynamic[{
+                  Automatic, 
+                   3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                    Magnification])}]], 
+               GraphicsBox[{
+                 RGBColor[0.25, 0.45, 0.85], 
+                 DiskBox[{0, 0}]}, ImageSize -> 12], 
+               GridBox[{{
+                  RowBox[{
+                    TagBox["\"Kind: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox["\"theorem\"", Bold, 
+                    RGBColor[0.25, 0.45, 0.85], StripOnInput -> False], 
+                    "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Name: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"LeanLink.Examples.add_comm\"", Bold, StripOnInput -> 
+                    False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Type: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    "\"\[ForAll] (m n : Nat), m + n = n + m\"", "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Term: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox[
+                    StyleBox[
+                    TagBox["\"Nat.add_comm\"", Short[#, 1]& ], "Input", 
+                    StripOnInput -> False], "SummaryItem"]}]}, {
+                  RowBox[{
+                    TagBox["\"Refs: \"", "SummaryItemAnnotation"], 
+                    "\[InvisibleSpace]", 
+                    TagBox["\"5 type, 1 term\"", "SummaryItem"]}]}}, 
+                GridBoxAlignment -> {
+                 "Columns" -> {{Left}}, "Rows" -> {{Automatic}}}, AutoDelete -> 
+                False, GridBoxItemSize -> {
+                 "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+                GridBoxSpacings -> {
+                 "Columns" -> {{2}}, "Rows" -> {{Automatic}}}, 
+                BaseStyle -> {
+                 ShowStringCharacters -> False, NumberMarks -> False, 
+                  PrintPrecision -> 3, ShowSyntaxStyles -> False}]}}, 
+             GridBoxAlignment -> {"Columns" -> {{Left}}, "Rows" -> {{Top}}}, 
+             AutoDelete -> False, 
+             GridBoxItemSize -> {
+              "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}, 
+             BaselinePosition -> {1, 1}]}, 
+          Dynamic[Typeset`open$$], ImageSize -> Automatic]},
+        "SummaryPanel"],
+       DynamicModuleValues:>{}], "]"}],
+     LeanLink`LeanTerm[<|
+      "Name" -> "LeanLink.Examples.add_comm", "Kind" -> "theorem", "_Handle" -> 
+       1|>],
+     Editable->False,
+     SelectWithContents->True,
+     Selectable->False]}]}], "\[RightAssociation]"}]], "Output",
+ CellChangeTimes->{3.9826049818476877`*^9, 3.982605051978372*^9},
+ CellLabel->"Out[4]=",ExpressionUUID->"e205b1c5-7175-44f1-9c3d-abc380cb52cf"]
+}, Open  ]],
 
 Cell["List the available constants:", "Text",ExpressionUUID->"c6e85bae-dd3c-4a24-9c77-593c0eb66b95"],
 
+Cell[CellGroupData[{
+
 Cell[BoxData[
- RowBox[{"Keys", "[", "env", "]"}]], "Input",ExpressionUUID->"5983bb6f-f233-4d66-b579-91654f200991"],
+ RowBox[{"Keys", "[", "env", "]"}]], "Input",
+ CellLabel->"In[5]:=",ExpressionUUID->"5983bb6f-f233-4d66-b579-91654f200991"],
+
+Cell[BoxData[
+ RowBox[{"{", 
+  RowBox[{"\<\"LeanLink.Examples.Vec.nil\"\>", 
+   ",", "\<\"LeanLink.Examples.and_comm\"\>", 
+   ",", "\<\"LeanLink.Examples.identity\"\>", 
+   ",", "\<\"LeanLink.Examples.contrapositive\"\>", 
+   ",", "\<\"LeanLink.Examples.add_zero\"\>", 
+   ",", "\<\"LeanLink.Examples.add_succ\"\>", 
+   ",", "\<\"LeanLink.Examples.Vec\"\>", 
+   ",", "\<\"LeanLink.Examples.modus_ponens\"\>", 
+   ",", "\<\"LeanLink.Examples.Vec.head\"\>", 
+   ",", "\<\"LeanLink.Examples.Vec.map\"\>", 
+   ",", "\<\"LeanLink.Examples.Vec.cons\"\>", 
+   ",", "\<\"LeanLink.Examples.add_comm\"\>"}], "}"}]], "Output",
+ CellChangeTimes->{3.982605055308937*^9},
+ CellLabel->"Out[5]=",ExpressionUUID->"2fe7c0ed-8c0a-4f34-9caa-34b1d2c755ce"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Inspecting Types and Terms", "Chapter",ExpressionUUID->"1741747d-fd88-4ab5-b7ab-cf9276352e56"],
 
@@ -75,44 +1616,1405 @@ Cell[TextData[{
  ". Access its type (as an expression tree) or as a pretty-printed string:"
 }], "Text",ExpressionUUID->"09da32bc-843a-4ef3-90d3-f37cd3883097"],
 
-Cell[BoxData[
- RowBox[{
-  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
-  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"4dc915c8-53a4-\
-4a01-a0a2-15c49f6b4f42"],
+Cell[CellGroupData[{
 
 Cell[BoxData[
  RowBox[{
   RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
-  "[", "\"\<Type\>\"", "]"}]], "Input",ExpressionUUID->"7d21ed10-d949-4e89-\
-8108-ad7fbebffb9e"],
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",
+ CellLabel->"In[6]:=",ExpressionUUID->"4dc915c8-53a4-4a01-a0a2-15c49f6b4f42"],
+
+Cell[BoxData["\<\"\[ForAll] (P : Prop), P \[RightArrow] P\"\>"], "Output",
+ CellChangeTimes->{3.9826049871054983`*^9, 3.982605057352491*^9},
+ CellLabel->"Out[6]=",ExpressionUUID->"1e354b82-cd2b-45df-b462-753cf42d71af"]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell[BoxData[
  RowBox[{
   RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
-  "[", "\"\<TermForm\>\"", "]"}]], "Input",ExpressionUUID->"3e6fc33f-1a91-\
-4fc7-a9f9-57b15eb2161a"],
+  "[", "\"\<Type\>\"", "]"}]], "Input",
+ CellLabel->"In[7]:=",ExpressionUUID->"7d21ed10-d949-4e89-8108-ad7fbebffb9e"],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{
+   RowBox[{"(", 
+    StyleBox["P",
+     FontSlant->Italic], 
+    RowBox[{" ", 
+     RowBox[{":", " "}]}], 
+    InterpretationBox[
+     StyleBox["Prop",
+      FontWeight->Bold,
+      FontColor->RGBColor[0.6, 0.2, 0.6]],
+     LeanLink`LeanSort[
+      LeanLink`LeanLevelZero[]]], ")"}], 
+   StyleBox[
+    RowBox[{" ", 
+     RowBox[{"\[Implies]", " "}]}],
+    FontColor->GrayLevel[0.4]], 
+   InterpretationBox[
+    RowBox[{
+     RowBox[{"(", 
+      StyleBox["a",
+       FontSlant->Italic], 
+      RowBox[{" ", 
+       RowBox[{":", " "}]}], 
+      InterpretationBox[
+       TooltipBox[
+        StyleBox["#0",
+         FontColor->GrayLevel[0.5]],
+        RowBox[{"bound var ", "0"}]],
+       LeanLink`LeanBVar[0]], ")"}], 
+     StyleBox[
+      RowBox[{" ", 
+       RowBox[{"\[Implies]", " "}]}],
+      FontColor->GrayLevel[0.4]], 
+     InterpretationBox[
+      TooltipBox[
+       StyleBox["#1",
+        FontColor->GrayLevel[0.5]],
+       RowBox[{"bound var ", "1"}]],
+      LeanLink`LeanBVar[1]]}],
+    LeanLink`LeanForall["a._@.LeanLink.Examples._hyg.160", 
+     LeanLink`LeanBVar[0], 
+     LeanLink`LeanBVar[1], "default"]]}],
+  LeanLink`LeanForall["P", 
+   LeanLink`LeanSort[
+    LeanLink`LeanLevelZero[]], 
+   LeanLink`LeanForall["a._@.LeanLink.Examples._hyg.160", 
+    LeanLink`LeanBVar[0], 
+    LeanLink`LeanBVar[1], "default"], "default"]]], "Output",
+ CellChangeTimes->{3.982604987138782*^9, 3.982605057385973*^9},
+ CellLabel->"Out[7]=",ExpressionUUID->"c39e248b-c963-4209-9d01-bc9567033b6d"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<TermForm\>\"", "]"}]], "Input",
+ CellLabel->"In[8]:=",ExpressionUUID->"3e6fc33f-1a91-4fc7-a9f9-57b15eb2161a"],
+
+Cell[BoxData["\<\"fun x hp => hp\"\>"], "Output",
+ CellChangeTimes->{3.982604987155553*^9, 3.982605057388603*^9},
+ CellLabel->"Out[8]=",ExpressionUUID->"def2d17d-7ddf-463f-a96d-1e9821be5dd8"]
+}, Open  ]],
 
 Cell["\<\
 View the type with definitions unfolded (level 1 = unfold each definition \
 once):\
 \>", "Text",ExpressionUUID->"6f2b9133-5935-4b3f-9a91-5c31a5b8fed7"],
 
+Cell[CellGroupData[{
+
 Cell[BoxData[
  RowBox[{
   RowBox[{"env", "[", "\"\<LeanLink.Examples.Vec.head\>\"", "]"}], "[", 
-  RowBox[{"\"\<TypeForm\>\"", ",", " ", "1"}], "]"}]], "Input",ExpressionUUID->\
-"7bf7771a-9c1f-4af7-bc95-049d42c31833"],
+  RowBox[{"\"\<TypeForm\>\"", ",", " ", "1"}], "]"}]], "Input",
+ CellChangeTimes->{{3.9826050223992662`*^9, 3.982605022867812*^9}},
+ CellLabel->"In[9]:=",ExpressionUUID->"7bf7771a-9c1f-4af7-bc95-049d42c31833"],
+
+Cell[BoxData["\<\"{a : Type} \[RightArrow] {n : Nat} \[RightArrow] \
+LeanLink.Examples.Vec a (instHAdd.1 n 1) \[RightArrow] a\"\>"], "Output",
+ CellChangeTimes->{3.9826049871611958`*^9, 3.982605057391061*^9},
+ CellLabel->"Out[9]=",ExpressionUUID->"677bd8ed-9da2-4d21-bf3d-783c7863325b"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Expression Graphs", "Chapter",ExpressionUUID->"cc3bc018-9fa4-4eb4-90d3-93703b305fb8"],
 
 Cell["Visualize the structure of a definition as a graph:", "Text",ExpressionUUID->"bee9c7e4-6641-40e9-bd99-4439d40872e2"],
 
+Cell[CellGroupData[{
+
 Cell[BoxData[
  RowBox[{
   RowBox[{"env", "[", "\"\<LeanLink.Examples.modus_ponens\>\"", "]"}], 
-  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",ExpressionUUID->"37c3ac0f-4abd-\
-4b6b-a5f6-676f686fe48b"],
+  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",
+ CellLabel->"In[10]:=",ExpressionUUID->"37c3ac0f-4abd-4b6b-a5f6-676f686fe48b"],
+
+Cell[BoxData[
+ GraphicsBox[
+  NamespaceBox["NetworkGraphics",
+   DynamicModuleBox[{Typeset`graph = HoldComplete[
+     Graph[{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 
+      15}, {{{2, 3}, {1, 2}, {5, 6}, {4, 5}, {7, 8}, {10, 11}, {10, 12}, {9, 
+       10}, {13, 14}, {13, 15}, {9, 13}, {7, 9}, {4, 7}, {1, 4}}, Null, {
+       "level", "type", "level", "type", "type", "type", "body", "type", "fn",
+         "arg", "body", "body", "body", "body"}}, {
+      AspectRatio -> Rational[1, 2], 
+       EdgeLabels -> {
+        DirectedEdge[7, 9, "body"] -> 
+         Style["body", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[1, 4, "body"] -> 
+         Style["body", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[10, 11, "type"] -> 
+         Style["type", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[10, 12, "body"] -> 
+         Style["body", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[2, 3, "level"] -> 
+         Style["level", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[9, 10, "type"] -> 
+         Style["type", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[4, 5, "type"] -> 
+         Style["type", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[1, 2, "type"] -> 
+         Style["type", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[9, 13, "body"] -> 
+         Style["body", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[5, 6, "level"] -> 
+         Style["level", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[13, 15, "arg"] -> 
+         Style["arg", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[13, 14, "fn"] -> 
+         Style["fn", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[7, 8, "type"] -> 
+         Style["type", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]], DirectedEdge[4, 7, "body"] -> 
+         Style["body", FontSize -> 5, FontFamily -> "Menlo", 
+           LightDarkSwitched[
+            GrayLevel[0.3], 
+            GrayLevel[0.7]]]}, EdgeStyle -> {
+         Directive[
+          GrayLevel[0.5], 
+          Arrowheads[0.02]]}, 
+       GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top}, 
+       ImageSize -> 600, PerformanceGoal -> "Quality", 
+       VertexShapeFunction -> {5 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["Sort", "sort"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         12 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["bvar 2", "bvar"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[
+              0.9607843137254902, 0.9607843137254902, 0.9607843137254902]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         6 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["zero", "?"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         7 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["\[Lambda] hp", "lam"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], White] > 
+               0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], Black] > 
+               0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[1., 0.9764705882352941, 0.7686274509803921]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         14 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["bvar 0", "bvar"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[
+              0.9607843137254902, 0.9607843137254902, 0.9607843137254902]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         4 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["\[Lambda] x", "lam"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], White] > 
+               0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], Black] > 
+               0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[1., 0.9764705882352941, 0.7686274509803921]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         8 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["bvar 1", "bvar"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[
+              0.9607843137254902, 0.9607843137254902, 0.9607843137254902]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         9 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["\[Lambda] hpq", "lam"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], White] > 
+               0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], Black] > 
+               0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[1., 0.9764705882352941, 0.7686274509803921]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         3 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["zero", "?"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         15 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["bvar 1", "bvar"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[
+              0.9607843137254902, 0.9607843137254902, 0.9607843137254902]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         2 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["Sort", "sort"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[0.8431372549019608, 0.8, 0.7843137254901961], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         1 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["\[Lambda] x", "lam"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], White] > 
+               0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[1., 0.9764705882352941, 0.7686274509803921], Black] > 
+               0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[1., 0.9764705882352941, 0.7686274509803921]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         10 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["\[ForAll] a", "forall"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[1., 0.8784313725490196, 0.6980392156862745], White] > 
+               0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[1., 0.8784313725490196, 0.6980392156862745], Black] > 
+               0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[1., 0.8784313725490196, 0.6980392156862745]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         13 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["app", "app"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[
+                 0.8823529411764706, 0.7450980392156863, 0.9058823529411765], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[
+                 0.8823529411764706, 0.7450980392156863, 0.9058823529411765], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[
+              0.8823529411764706, 0.7450980392156863, 0.9058823529411765]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& ), 
+         11 -> (Inset[
+           Framed[
+            Style[
+             Tooltip["bvar 2", "bvar"], "Text", FontSize -> 7, 
+             LightDarkSwitched[
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 White] > 0.4, White, Black], 
+              If[ColorDistance[
+                 RGBColor[
+                 0.9607843137254902, 0.9607843137254902, 0.9607843137254902], 
+                 Black] > 0.4, White, 
+               GrayLevel[0.9]]], Bold], Background -> LightDarkSwitched[
+              RGBColor[
+              0.9607843137254902, 0.9607843137254902, 0.9607843137254902]], 
+            RoundingRadius -> 3, FrameStyle -> LightDarkSwitched[
+              GrayLevel[0.4], 
+              GrayLevel[0.6]], FrameMargins -> {{3, 3}, {1, 1}}], #, #3]& )}, 
+       VertexSize -> {0.05}}]]}, 
+    TagBox[
+     TagBox[{
+       {GrayLevel[0.5], Opacity[0.7], CapForm["Round"], Arrowheads[0.02], {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$1", Automatic, Center], DynamicLocation[
+            "VertexID$2", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$1"], InsetBox[
+          StyleBox["\<\"type\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$1", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$1", Automatic, Center], DynamicLocation[
+            "VertexID$4", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$2"], InsetBox[
+          StyleBox["\<\"body\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$2", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$2", Automatic, Center], DynamicLocation[
+            "VertexID$3", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$3"], InsetBox[
+          StyleBox["\<\"level\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$3", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$4", Automatic, Center], DynamicLocation[
+            "VertexID$5", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$4"], InsetBox[
+          StyleBox["\<\"type\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$4", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$4", Automatic, Center], DynamicLocation[
+            "VertexID$7", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$5"], InsetBox[
+          StyleBox["\<\"body\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$5", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$5", Automatic, Center], DynamicLocation[
+            "VertexID$6", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$6"], InsetBox[
+          StyleBox["\<\"level\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$6", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$7", Automatic, Center], DynamicLocation[
+            "VertexID$8", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$7"], InsetBox[
+          StyleBox["\<\"type\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$7", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$7", Automatic, Center], DynamicLocation[
+            "VertexID$9", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$8"], InsetBox[
+          StyleBox["\<\"body\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$8", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$9", Automatic, Center], DynamicLocation[
+            "VertexID$10", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$9"], InsetBox[
+          StyleBox["\<\"type\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$9", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$9", Automatic, Center], DynamicLocation[
+            "VertexID$13", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$10"], InsetBox[
+          StyleBox["\<\"body\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$10", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$10", Automatic, Center], DynamicLocation[
+            "VertexID$11", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$11"], InsetBox[
+          StyleBox["\<\"type\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$11", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$10", Automatic, Center], DynamicLocation[
+            "VertexID$12", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$12"], InsetBox[
+          StyleBox["\<\"body\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$12", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$13", Automatic, Center], DynamicLocation[
+            "VertexID$14", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$13"], InsetBox[
+          StyleBox["\<\"fn\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$13", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}, {
+         TagBox[
+          ArrowBox[{
+           DynamicLocation["VertexID$13", Automatic, Center], DynamicLocation[
+            "VertexID$15", Automatic, Center]}],
+          "DynamicName",
+          BoxID -> "EdgeLabelID$14"], InsetBox[
+          StyleBox["\<\"arg\"\>",
+           StripOnInput->False,
+           LineColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FrontFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           BackFaceColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           GraphicsColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]],
+           FontFamily->"Menlo",
+           FontSize->5,
+           FontColor->LightDarkSwitched[
+             GrayLevel[0.3], 
+             GrayLevel[0.7]]], DynamicLocation[
+          "EdgeLabelID$14", Automatic, Scaled[0.5]], ImageScaled[{0.5, 0.5}],
+          BaseStyle->"Graphics"]}}, 
+       {RGBColor[0.500000001565661, 0.699951173440661, 0.999877931253161], 
+        EdgeForm[{GrayLevel[0.0000999867918018385], Opacity[0.7]}], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"\[Lambda] x\"\>",
+              "\"lam\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "lam", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[1., 0.9764705882352941, 0.7686274509803921]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {0., 2.}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$1"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"Sort\"\>",
+              "\"sort\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "sort", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {0., 1.6}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$2"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"zero\"\>",
+              "\"?\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "?", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {0., 1.2000000000000002}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$3"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"\[Lambda] x\"\>",
+              "\"lam\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "lam", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[1., 0.9764705882352941, 0.7686274509803921]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {1., 1.6}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$4"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"Sort\"\>",
+              "\"sort\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "sort", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {1., 1.2000000000000002}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$5"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"zero\"\>",
+              "\"?\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "?", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[0.8431372549019608, 0.8, 0.7843137254901961]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {1., 0.8}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$6"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"\[Lambda] hp\"\>",
+              "\"lam\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "lam", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[1., 0.9764705882352941, 0.7686274509803921]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {2., 1.2000000000000002}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$7"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"bvar 1\"\>",
+              "\"bvar\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "bvar", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[
+             0.9607843137254902, 0.9607843137254902, 0.9607843137254902]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {2., 0.8}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$8"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"\[Lambda] hpq\"\>",
+              "\"lam\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "lam", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[1., 0.9764705882352941, 0.7686274509803921]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {3., 0.8}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$9"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"\[ForAll] a\"\>",
+              "\"forall\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "forall", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[1., 0.8784313725490196, 0.6980392156862745]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {2., 0.4}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$10"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"bvar 2\"\>",
+              "\"bvar\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "bvar", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[
+             0.9607843137254902, 0.9607843137254902, 0.9607843137254902]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {1., 0.}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$11"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"bvar 2\"\>",
+              "\"bvar\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "bvar", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[
+             0.9607843137254902, 0.9607843137254902, 0.9607843137254902]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {2., 0.}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$12"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"app\"\>",
+              "\"app\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "app", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[
+             0.8823529411764706, 0.7450980392156863, 0.9058823529411765]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {3., 0.4}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$13"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"bvar 0\"\>",
+              "\"bvar\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "bvar", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[
+             0.9607843137254902, 0.9607843137254902, 0.9607843137254902]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {3., 0.}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$14"], 
+        TagBox[InsetBox[
+          FrameBox[
+           StyleBox[
+            TagBox[
+             TooltipBox["\<\"bvar 1\"\>",
+              "\"bvar\"",
+              TooltipStyle->"TextStyling"],
+             Annotation[#, "bvar", "Tooltip"]& ], "Text",
+            StripOnInput->False,
+            LineColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FrontFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            BackFaceColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            GraphicsColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]],
+            FontSize->7,
+            FontWeight->Bold,
+            FontColor->LightDarkSwitched[
+              GrayLevel[0], 
+              GrayLevel[1]]],
+           Background->LightDarkSwitched[
+             RGBColor[
+             0.9607843137254902, 0.9607843137254902, 0.9607843137254902]],
+           FrameMargins->{{3, 3}, {1, 1}},
+           FrameStyle->LightDarkSwitched[
+             GrayLevel[0.4], 
+             GrayLevel[0.6]],
+           RoundingRadius->3,
+           StripOnInput->False], {4., 0.}, {0.009999999999999998, 0.009999999999999998}],
+         "DynamicName",
+         BoxID -> "VertexID$15"]}},
+      MouseAppearanceTag["NetworkGraphics"],
+      BaseStyle->{FrontEnd`GraphicsFocusColor -> None}],
+     EventHandlerTag[{{"KeyDown", "Backspace"} :> {}}],
+     PassEventsDown -> False],
+    AllowKernelInitialization->False]],
+  DefaultBaseStyle->"NetworkGraphics",
+  FormatType->TraditionalForm,
+  FrameTicks->None,
+  ImageSize->600]], "Output",
+ CellChangeTimes->{3.982605027414114*^9, 3.982605059316082*^9},
+ CellLabel->"Out[10]=",ExpressionUUID->"26d6b615-2dbc-489c-8851-c2f8c8d837eb"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Constructing Expressions & Type-Checking", "Chapter",ExpressionUUID->"45da83d3-5baa-4575-a838-b6a12e5d44d0"],
 
@@ -120,6 +3022,8 @@ Cell["\<\
 Build Lean expressions from WL heads and type-check them against the \
 environment:\
 \>", "Text",ExpressionUUID->"c5779c7b-afc6-48d5-82e5-c0a2786f83c2"],
+
+Cell[CellGroupData[{
 
 Cell[BoxData[{
  RowBox[{
@@ -131,22 +3035,39 @@ Cell[BoxData[{
        RowBox[{"{", "}"}]}], "]"}], ",", " ", 
      RowBox[{"LeanLitNat", "[", "42", "]"}]}], "]"}]}], ";"}], "\n", 
  RowBox[{"LeanTypeCheck", "[", 
-  RowBox[{"expr", ",", " ", "env"}], "]"}]}], "Input",ExpressionUUID->\
-"7b4d1b1e-0d5c-4ef3-a112-df10eab639df"],
+  RowBox[{"expr", ",", " ", "env"}], "]"}]}], "Input",
+ CellLabel->"In[11]:=",ExpressionUUID->"7b4d1b1e-0d5c-4ef3-a112-df10eab639df"],
+
+Cell[BoxData["$Failed"], "Output",
+ CellChangeTimes->{{3.98260503373909*^9, 3.982605061617694*^9}},
+ CellLabel->"Out[12]=",ExpressionUUID->"496277d5-4cf8-4078-92bf-8c47f3e5ad1f"]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell[BoxData[
  RowBox[{"LeanTypeCheck", "[", 
   RowBox[{
    RowBox[{"LeanConst", "[", 
     RowBox[{"\"\<LeanLink.Examples.identity\>\"", ",", " ", 
-     RowBox[{"{", "}"}]}], "]"}], ",", " ", "env"}], "]"}]], "Input",Expressio\
-nUUID->"a3f88f0a-1eea-45b5-9395-edc0fdea2b1d"],
+     RowBox[{"{", "}"}]}], "]"}], ",", " ", "env"}], "]"}]], "Input",
+ CellLabel->"In[13]:=",ExpressionUUID->"a3f88f0a-1eea-45b5-9395-edc0fdea2b1d"],
+
+Cell[BoxData["$Failed"], "Output",
+ CellChangeTimes->{3.982605065503799*^9},
+ CellLabel->"Out[13]=",ExpressionUUID->"20b6eac7-eed8-4040-9163-f110030f2966"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Interactive Tactic Proofs", "Chapter",ExpressionUUID->"aa63bf66-ee7a-4dde-b70e-971a700f8241"],
 
 Cell["\<\
 Open a proof goal for a theorem and step through it interactively:\
 \>", "Text",ExpressionUUID->"82ad8c07-602b-40bd-b114-3edea2bdd55a"],
+
+Cell[CellGroupData[{
 
 Cell["Example 1: Identity (\[ForAll] P : Prop, P \[RightArrow] P)", "Section",ExpressionUUID->"46e0b1f9-c846-4a5e-94d7-3ac644ccbd03"],
 
@@ -193,7 +3114,10 @@ Cell[BoxData[{
      RowBox[{"s2", "[", "\"\<stateId\>\"", "]"}], ",", 
      " ", "\"\<exact h\>\""}], "]"}]}], ";"}], "\n", 
  RowBox[{"FormatLeanState", "[", "s3", "]"}]}], "Input",ExpressionUUID->\
-"03f2747a-3397-455f-974e-181d6d6c8f9e"],
+"03f2747a-3397-455f-974e-181d6d6c8f9e"]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Example 2: Modus Ponens (P \[RightArrow] (P \[RightArrow] Q) \
 \[RightArrow] Q)", "Section",ExpressionUUID->"fb5ace37-8553-4c46-b28c-\
@@ -226,7 +3150,10 @@ Cell[BoxData[{
      RowBox[{"s1", "[", "\"\<stateId\>\"", "]"}], ",", 
      " ", "\"\<exact hPQ hP\>\""}], "]"}]}], ";"}], "\n", 
  RowBox[{"FormatLeanState", "[", "s2", "]"}]}], "Input",ExpressionUUID->\
-"6b6bf558-ed9e-4cf4-9276-c154acce0b64"],
+"6b6bf558-ed9e-4cf4-9276-c154acce0b64"]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Example 3: Contrapositive ((P \[RightArrow] Q) \[RightArrow] \[Not]Q \
 \[RightArrow] \[Not]P)", "Section",ExpressionUUID->"2009e135-bb77-4010-a2e6-\
@@ -259,7 +3186,10 @@ Cell[BoxData[{
      RowBox[{"s1", "[", "\"\<stateId\>\"", "]"}], ",", 
      " ", "\"\<exact hNQ (hPQ hP)\>\""}], "]"}]}], ";"}], "\n", 
  RowBox[{"FormatLeanState", "[", "s2", "]"}]}], "Input",ExpressionUUID->\
-"ebb00eb6-3fb8-4be2-bdd4-0ede2c1f9fbd"],
+"ebb00eb6-3fb8-4be2-bdd4-0ede2c1f9fbd"]
+}, Open  ]],
+
+Cell[CellGroupData[{
 
 Cell["Example 4: Piping Tactics", "Section",ExpressionUUID->"8cf3703d-9026-4c8a-8c7f-d5932ad44723"],
 
@@ -286,7 +3216,12 @@ Cell[BoxData[{
        "}"}]}], "]"}]}], ";"}], "\n", 
  RowBox[{"FormatLeanState", "[", "sf", "]"}]}], "Input",ExpressionUUID->\
 "59ad4416-7253-4667-ad73-1fa534be49f6"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
 },
+WindowSize->{808, 911},
+WindowMargins->{{441, Automatic}, {Automatic, 24}},
 FrontEndVersion->"15.0 for Mac OS X ARM (64-bit) (January 5, 2026)",
 StyleDefinitions->"Default.nb",
 ExpressionUUID->"1a0f2d41-326f-4294-9082-cea3b1356cd0"
@@ -302,53 +3237,103 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 131, 0, 70, "Title",ExpressionUUID->"7917c8ad-dc39-4dfa-a578-39a22b384db6"],
-Cell[688, 22, 79, 0, 70, "Chapter",ExpressionUUID->"f781a2ac-13a0-49a4-843a-aca7d76ff494"],
-Cell[770, 24, 120, 0, 70, "Text",ExpressionUUID->"0d97b888-cff1-418e-9295-ac8e8f76bd8a"],
-Cell[893, 26, 617, 17, 70, "Input",ExpressionUUID->"664817d8-70b1-4a04-ba4c-da917623460e"],
-Cell[1513, 45, 102, 0, 70, "Chapter",ExpressionUUID->"f34601c7-bab5-4c43-ac3b-9688c8eb1c25"],
-Cell[1618, 47, 183, 3, 70, "Text",ExpressionUUID->"c5f07615-8485-4b24-bf8e-2e26798c8872"],
-Cell[1804, 52, 482, 9, 70, "Input",ExpressionUUID->"fb97d635-f193-47f5-bf2b-c120d49e65d3"],
-Cell[2289, 63, 100, 0, 70, "Text",ExpressionUUID->"c6e85bae-dd3c-4a24-9c77-593c0eb66b95"],
-Cell[2392, 65, 114, 1, 70, "Input",ExpressionUUID->"5983bb6f-f233-4d66-b579-91654f200991"],
-Cell[2509, 68, 100, 0, 70, "Chapter",ExpressionUUID->"1741747d-fd88-4ab5-b7ab-cf9276352e56"],
-Cell[2612, 70, 270, 5, 70, "Text",ExpressionUUID->"09da32bc-843a-4ef3-90d3-f37cd3883097"],
-Cell[2885, 77, 192, 4, 70, "Input",ExpressionUUID->"4dc915c8-53a4-4a01-a0a2-15c49f6b4f42"],
-Cell[3080, 83, 188, 4, 70, "Input",ExpressionUUID->"7d21ed10-d949-4e89-8108-ad7fbebffb9e"],
-Cell[3271, 89, 192, 4, 70, "Input",ExpressionUUID->"3e6fc33f-1a91-4fc7-a9f9-57b15eb2161a"],
-Cell[3466, 95, 161, 3, 70, "Text",ExpressionUUID->"6f2b9133-5935-4b3f-9a91-5c31a5b8fed7"],
-Cell[3630, 100, 217, 4, 70, "Input",ExpressionUUID->"7bf7771a-9c1f-4af7-bc95-049d42c31833"],
-Cell[3850, 106, 91, 0, 70, "Chapter",ExpressionUUID->"cc3bc018-9fa4-4eb4-90d3-93703b305fb8"],
-Cell[3944, 108, 122, 0, 70, "Text",ExpressionUUID->"bee9c7e4-6641-40e9-bd99-4439d40872e2"],
-Cell[4069, 110, 197, 4, 70, "Input",ExpressionUUID->"37c3ac0f-4abd-4b6b-a5f6-676f686fe48b"],
-Cell[4269, 116, 114, 0, 70, "Chapter",ExpressionUUID->"45da83d3-5baa-4575-a838-b6a12e5d44d0"],
-Cell[4386, 118, 162, 3, 70, "Text",ExpressionUUID->"c5779c7b-afc6-48d5-82e5-c0a2786f83c2"],
-Cell[4551, 123, 437, 11, 70, "Input",ExpressionUUID->"7b4d1b1e-0d5c-4ef3-a112-df10eab639df"],
-Cell[4991, 136, 274, 6, 70, "Input",ExpressionUUID->"a3f88f0a-1eea-45b5-9395-edc0fdea2b1d"],
-Cell[5268, 144, 99, 0, 70, "Chapter",ExpressionUUID->"aa63bf66-ee7a-4dde-b70e-971a700f8241"],
-Cell[5370, 146, 145, 2, 70, "Text",ExpressionUUID->"82ad8c07-602b-40bd-b114-3edea2bdd55a"],
-Cell[5518, 150, 133, 0, 70, "Section",ExpressionUUID->"46e0b1f9-c846-4a5e-94d7-3ac644ccbd03"],
-Cell[5654, 152, 298, 7, 70, "Input",ExpressionUUID->"4ca0a99c-d43f-4714-aa35-69db4b78966b"],
-Cell[5955, 161, 99, 0, 70, "Text",ExpressionUUID->"614ffa39-3ab5-4f8b-a26b-aa183e11ea55"],
-Cell[6057, 163, 329, 8, 70, "Input",ExpressionUUID->"f43ecec5-be1f-4685-abc7-af19fcff2e0e"],
-Cell[6389, 173, 102, 0, 70, "Text",ExpressionUUID->"ea4bda9b-8344-4d04-904c-6817f4eb5265"],
-Cell[6494, 175, 329, 8, 70, "Input",ExpressionUUID->"2f7f5d40-bab8-41cf-bb32-4e68f0dce7a2"],
-Cell[6826, 185, 124, 0, 70, "Text",ExpressionUUID->"684ffa7c-1723-4c39-8a67-dc2aa51f990c"],
-Cell[6953, 187, 329, 8, 70, "Input",ExpressionUUID->"03f2747a-3397-455f-974e-181d6d6c8f9e"],
-Cell[7285, 197, 155, 2, 70, "Section",ExpressionUUID->"fb5ace37-8553-4c46-b28c-e194758727f7"],
-Cell[7443, 201, 304, 7, 70, "Input",ExpressionUUID->"ceb055f0-3040-441f-9d25-ffc10fbccb0a"],
-Cell[7750, 210, 338, 8, 70, "Input",ExpressionUUID->"2c5a9e69-a6e4-4777-8221-218fe33f865b"],
-Cell[8091, 220, 334, 8, 70, "Input",ExpressionUUID->"6b6bf558-ed9e-4cf4-9276-c154acce0b64"],
-Cell[8428, 230, 169, 2, 70, "Section",ExpressionUUID->"2009e135-bb77-4010-a2e6-b09bfddd3443"],
-Cell[8600, 234, 306, 7, 70, "Input",ExpressionUUID->"63081829-7c3b-49b7-9e4e-878930718db8"],
-Cell[8909, 243, 342, 8, 70, "Input",ExpressionUUID->"5f5ecbb8-41fb-40b4-af70-8beb189c8dd1"],
-Cell[9254, 253, 340, 8, 70, "Input",ExpressionUUID->"ebb00eb6-3fb8-4be2-bdd4-0ede2c1f9fbd"],
-Cell[9597, 263, 99, 0, 70, "Section",ExpressionUUID->"8cf3703d-9026-4c8a-8c7f-d5932ad44723"],
-Cell[9699, 265, 106, 0, 70, "Text",ExpressionUUID->"5e58fc16-b04b-447e-9d38-90ab110a3c8f"],
-Cell[9808, 267, 298, 7, 70, "Input",ExpressionUUID->"2e48bd1e-65c8-4c86-b848-0872aee8a523"],
-Cell[10109, 276, 456, 11, 70, "Input",ExpressionUUID->"59ad4416-7253-4667-ad73-1fa534be49f6"]
+Cell[CellGroupData[{
+Cell[576, 22, 131, 0, 157, "Title",ExpressionUUID->"7917c8ad-dc39-4dfa-a578-39a22b384db6"],
+Cell[CellGroupData[{
+Cell[732, 26, 79, 0, 67, "Chapter",ExpressionUUID->"f781a2ac-13a0-49a4-843a-aca7d76ff494"],
+Cell[814, 28, 120, 0, 33, "Text",ExpressionUUID->"0d97b888-cff1-418e-9295-ac8e8f76bd8a"],
+Cell[937, 30, 638, 17, 70, "Input",ExpressionUUID->"664817d8-70b1-4a04-ba4c-da917623460e"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[1612, 52, 102, 0, 67, "Chapter",ExpressionUUID->"f34601c7-bab5-4c43-ac3b-9688c8eb1c25"],
+Cell[1717, 54, 183, 3, 33, "Text",ExpressionUUID->"c5f07615-8485-4b24-bf8e-2e26798c8872"],
+Cell[CellGroupData[{
+Cell[1925, 61, 505, 10, 90, "Input",ExpressionUUID->"fb97d635-f193-47f5-bf2b-c120d49e65d3"],
+Cell[2433, 73, 70844, 1504, 631, "Output",ExpressionUUID->"e205b1c5-7175-44f1-9c3d-abc380cb52cf"]
+}, Open  ]],
+Cell[73292, 1580, 100, 0, 33, "Text",ExpressionUUID->"c6e85bae-dd3c-4a24-9c77-593c0eb66b95"],
+Cell[CellGroupData[{
+Cell[73417, 1584, 137, 2, 29, "Input",ExpressionUUID->"5983bb6f-f233-4d66-b579-91654f200991"],
+Cell[73557, 1588, 736, 15, 115, "Output",ExpressionUUID->"2fe7c0ed-8c0a-4f34-9caa-34b1d2c755ce"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[74342, 1609, 100, 0, 67, "Chapter",ExpressionUUID->"1741747d-fd88-4ab5-b7ab-cf9276352e56"],
+Cell[74445, 1611, 270, 5, 33, "Text",ExpressionUUID->"09da32bc-843a-4ef3-90d3-f37cd3883097"],
+Cell[CellGroupData[{
+Cell[74740, 1620, 213, 4, 29, "Input",ExpressionUUID->"4dc915c8-53a4-4a01-a0a2-15c49f6b4f42"],
+Cell[74956, 1626, 218, 2, 33, "Output",ExpressionUUID->"1e354b82-cd2b-45df-b462-753cf42d71af"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[75211, 1633, 209, 4, 29, "Input",ExpressionUUID->"7d21ed10-d949-4e89-8108-ad7fbebffb9e"],
+Cell[75423, 1639, 1539, 51, 33, "Output",ExpressionUUID->"c39e248b-c963-4209-9d01-bc9567033b6d"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[76999, 1695, 213, 4, 29, "Input",ExpressionUUID->"3e6fc33f-1a91-4fc7-a9f9-57b15eb2161a"],
+Cell[77215, 1701, 191, 2, 33, "Output",ExpressionUUID->"def2d17d-7ddf-463f-a96d-1e9821be5dd8"]
+}, Open  ]],
+Cell[77421, 1706, 161, 3, 33, "Text",ExpressionUUID->"6f2b9133-5935-4b3f-9a91-5c31a5b8fed7"],
+Cell[CellGroupData[{
+Cell[77607, 1713, 306, 5, 29, "Input",ExpressionUUID->"7bf7771a-9c1f-4af7-bc95-049d42c31833"],
+Cell[77916, 1720, 286, 3, 33, "Output",ExpressionUUID->"677bd8ed-9da2-4d21-bf3d-783c7863325b"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[78251, 1729, 91, 0, 67, "Chapter",ExpressionUUID->"cc3bc018-9fa4-4eb4-90d3-93703b305fb8"],
+Cell[78345, 1731, 122, 0, 33, "Text",ExpressionUUID->"bee9c7e4-6641-40e9-bd99-4439d40872e2"],
+Cell[CellGroupData[{
+Cell[78492, 1735, 219, 4, 29, "Input",ExpressionUUID->"37c3ac0f-4abd-4b6b-a5f6-676f686fe48b"],
+Cell[78714, 1741, 49975, 1271, 327, "Output",ExpressionUUID->"26d6b615-2dbc-489c-8851-c2f8c8d837eb"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[128738, 3018, 114, 0, 67, "Chapter",ExpressionUUID->"45da83d3-5baa-4575-a838-b6a12e5d44d0"],
+Cell[128855, 3020, 162, 3, 33, "Text",ExpressionUUID->"c5779c7b-afc6-48d5-82e5-c0a2786f83c2"],
+Cell[CellGroupData[{
+Cell[129042, 3027, 459, 11, 49, "Input",ExpressionUUID->"7b4d1b1e-0d5c-4ef3-a112-df10eab639df"],
+Cell[129504, 3040, 178, 2, 33, "Output",ExpressionUUID->"496277d5-4cf8-4078-92bf-8c47f3e5ad1f"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[129719, 3047, 296, 6, 29, "Input",ExpressionUUID->"a3f88f0a-1eea-45b5-9395-edc0fdea2b1d"],
+Cell[130018, 3055, 155, 2, 33, "Output",ExpressionUUID->"20b6eac7-eed8-4040-9163-f110030f2966"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[130222, 3063, 99, 0, 67, "Chapter",ExpressionUUID->"aa63bf66-ee7a-4dde-b70e-971a700f8241"],
+Cell[130324, 3065, 145, 2, 33, "Text",ExpressionUUID->"82ad8c07-602b-40bd-b114-3edea2bdd55a"],
+Cell[CellGroupData[{
+Cell[130494, 3071, 133, 0, 66, "Section",ExpressionUUID->"46e0b1f9-c846-4a5e-94d7-3ac644ccbd03"],
+Cell[130630, 3073, 298, 7, 49, "Input",ExpressionUUID->"4ca0a99c-d43f-4714-aa35-69db4b78966b"],
+Cell[130931, 3082, 99, 0, 33, "Text",ExpressionUUID->"614ffa39-3ab5-4f8b-a26b-aa183e11ea55"],
+Cell[131033, 3084, 329, 8, 49, "Input",ExpressionUUID->"f43ecec5-be1f-4685-abc7-af19fcff2e0e"],
+Cell[131365, 3094, 102, 0, 33, "Text",ExpressionUUID->"ea4bda9b-8344-4d04-904c-6817f4eb5265"],
+Cell[131470, 3096, 329, 8, 49, "Input",ExpressionUUID->"2f7f5d40-bab8-41cf-bb32-4e68f0dce7a2"],
+Cell[131802, 3106, 124, 0, 33, "Text",ExpressionUUID->"684ffa7c-1723-4c39-8a67-dc2aa51f990c"],
+Cell[131929, 3108, 329, 8, 49, "Input",ExpressionUUID->"03f2747a-3397-455f-974e-181d6d6c8f9e"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[132295, 3121, 155, 2, 66, "Section",ExpressionUUID->"fb5ace37-8553-4c46-b28c-e194758727f7"],
+Cell[132453, 3125, 304, 7, 49, "Input",ExpressionUUID->"ceb055f0-3040-441f-9d25-ffc10fbccb0a"],
+Cell[132760, 3134, 338, 8, 49, "Input",ExpressionUUID->"2c5a9e69-a6e4-4777-8221-218fe33f865b"],
+Cell[133101, 3144, 334, 8, 49, "Input",ExpressionUUID->"6b6bf558-ed9e-4cf4-9276-c154acce0b64"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[133472, 3157, 169, 2, 70, "Section",ExpressionUUID->"2009e135-bb77-4010-a2e6-b09bfddd3443"],
+Cell[133644, 3161, 306, 7, 70, "Input",ExpressionUUID->"63081829-7c3b-49b7-9e4e-878930718db8"],
+Cell[133953, 3170, 342, 8, 70, "Input",ExpressionUUID->"5f5ecbb8-41fb-40b4-af70-8beb189c8dd1"],
+Cell[134298, 3180, 340, 8, 70, "Input",ExpressionUUID->"ebb00eb6-3fb8-4be2-bdd4-0ede2c1f9fbd"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[134675, 3193, 99, 0, 70, "Section",ExpressionUUID->"8cf3703d-9026-4c8a-8c7f-d5932ad44723"],
+Cell[134777, 3195, 106, 0, 70, "Text",ExpressionUUID->"5e58fc16-b04b-447e-9d38-90ab110a3c8f"],
+Cell[134886, 3197, 298, 7, 70, "Input",ExpressionUUID->"2e48bd1e-65c8-4c86-b848-0872aee8a523"],
+Cell[135187, 3206, 456, 11, 70, "Input",ExpressionUUID->"59ad4416-7253-4667-ad73-1fa534be49f6"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
 }
 ]
 *)
 
 (* End of internal cache information *)
+
