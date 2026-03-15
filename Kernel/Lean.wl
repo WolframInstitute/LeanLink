@@ -186,18 +186,27 @@ $termCache = <||>;
 
 isFFIError[r_] := StringQ[r] && StringStartsQ[r, "ERROR"];
 
-fetchField[handle_Integer, name_String, "Type"] :=
-  Lookup[$termCache, Key[{handle, name, "Type"}],
-    $termCache[{handle, name, "Type"}] =
-      With[{r = Quiet[decodeWXF[$getTypeFn[handle, name, 100]]]},
-        If[isFFIError[r], $Failed, r]]];
+fetchField[handle_Integer, name_String, "Type", depth_Integer : 100] :=
+  If[depth =!= 100,
+    (* Non-default depth: don't cache *)
+    With[{r = Quiet[decodeWXF[$getTypeFn[handle, name, depth]]]},
+      If[isFFIError[r], $Failed, r]],
+    (* Default depth: cache *)
+    Lookup[$termCache, Key[{handle, name, "Type"}],
+      $termCache[{handle, name, "Type"}] =
+        With[{r = Quiet[decodeWXF[$getTypeFn[handle, name, 100]]]},
+          If[isFFIError[r], $Failed, r]]]];
 
-fetchField[handle_Integer, name_String, "Term"] :=
-  Lookup[$termCache, Key[{handle, name, "Term"}],
-    $termCache[{handle, name, "Term"}] =
-      With[{r = Quiet[decodeWXF[$getValueFn[handle, name, 100]]]},
-        If[isFFIError[r], $Failed,
-          If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]]];
+fetchField[handle_Integer, name_String, "Term", depth_Integer : 100] :=
+  If[depth =!= 100,
+    With[{r = Quiet[decodeWXF[$getValueFn[handle, name, depth]]]},
+      If[isFFIError[r], $Failed,
+        If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]],
+    Lookup[$termCache, Key[{handle, name, "Term"}],
+      $termCache[{handle, name, "Term"}] =
+        With[{r = Quiet[decodeWXF[$getValueFn[handle, name, 100]]]},
+          If[isFFIError[r], $Failed,
+            If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]]]];
 
 fetchField[handle_Integer, name_String, "TypeRefs"] :=
   Lookup[$termCache, Key[{handle, name, "TypeRefs"}],
@@ -216,21 +225,28 @@ fetchField[handle_Integer, name_String, "TermRefs"] :=
     Lookup[$termCache, Key[{handle, name, "TermRefs"}], {}]];
 
 (* Property access — lazy fetch from handle *)
-LeanTerm /: LeanTerm[data_Association][prop_String, opts___Rule] :=
-  Module[{handle = Lookup[data, "_Handle", None], name = Lookup[data, "Name", ""]},
+(* Second arg: integer depth for Type/Term/TypeForm/TermForm, or Rule opts *)
+LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
+  Module[{handle = Lookup[data, "_Handle", None], name = Lookup[data, "Name", ""],
+          depth = Replace[First[{args}, Automatic], Except[_Integer] -> Automatic],
+          opts = Cases[{args}, _Rule]},
     Switch[prop,
       "Properties", {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm",
         "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
       "Name", data["Name"],
       "Kind", data["Kind"],
       "Type",
-        If[KeyExistsQ[data, "Type"], data["Type"],
-          If[IntegerQ[handle], fetchField[handle, name, "Type"], Missing["NoHandle"]]],
+        If[KeyExistsQ[data, "Type"] && depth === Automatic, data["Type"],
+          If[IntegerQ[handle],
+            fetchField[handle, name, "Type", Replace[depth, Automatic -> 100]],
+            Missing["NoHandle"]]],
       "Term",
-        If[KeyExistsQ[data, "Term"], data["Term"],
-          If[IntegerQ[handle], fetchField[handle, name, "Term"], Missing["NoHandle"]]],
-      "TypeForm", leanPP[LeanTerm[data]["Type"]],
-      "TermForm", leanPP[LeanTerm[data]["Term"]],
+        If[KeyExistsQ[data, "Term"] && depth === Automatic, data["Term"],
+          If[IntegerQ[handle],
+            fetchField[handle, name, "Term", Replace[depth, Automatic -> 100]],
+            Missing["NoHandle"]]],
+      "TypeForm", leanPP[LeanTerm[data]["Type"], Replace[depth, Automatic -> 6]],
+      "TermForm", leanPP[LeanTerm[data]["Term"], Replace[depth, Automatic -> 6]],
       "TypeRefs",
         If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"],
           If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]],
@@ -240,7 +256,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, opts___Rule] :=
       "ExprGraph", exprToGraph[
         With[{term = LeanTerm[data]["Term"]},
           Replace[term, LeanNoValue[] -> LeanTerm[data]["Type"]]]],
-      "CallGraph", callGraph[data, opts],
+      "CallGraph", callGraph[data, Sequence @@ opts],
       _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]]];
 
 (* ============================================================================ *)
