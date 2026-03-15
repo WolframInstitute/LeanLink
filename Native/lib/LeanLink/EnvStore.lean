@@ -340,4 +340,134 @@ def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteAr
     return WXF.serialize result
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+-- ============================================================================
+-- Phase 3: Proof state store for interactive tactics
+-- ============================================================================
+
+/-- Saved proof state: the MetaM state + list of remaining goal MVarIds -/
+structure ProofState where
+  env : Environment
+  metaState : Meta.State
+  coreState : Core.State
+  goals : List MVarId
+
+/-- Global mutable store of proof states, keyed by UInt64 ID. -/
+private initialize proofStore : IO.Ref (Std.HashMap UInt64 ProofState) ← IO.mkRef {}
+
+/-- Counter for proof state IDs. -/
+private initialize nextProofId : IO.Ref UInt64 ← IO.mkRef 1
+
+/-- Serialize a single goal to WXF -/
+def goalToWXF (env : Environment) (mstate : Meta.State) (goalId : MVarId) : IO ByteArray := do
+  let ctx : Core.Context := {
+    fileName := "<tactic>"
+    fileMap := { source := "", positions := #[0] }
+  }
+  let st : Core.State := { env }
+  let res ←
+    ((goalId.withContext do
+      let target ← goalId.getType
+      let targetPP ← PrettyPrinter.ppExpr target
+      let lctx ← getLCtx
+      let mut ctxEntries : Array ByteArray := #[]
+      for ldecl in lctx do
+        unless ldecl.isImplementationDetail do
+          let tyPP ← PrettyPrinter.ppExpr ldecl.type
+          ctxEntries := ctxEntries.push (WXF.wlAssociation #[
+            (WXF.string "name", WXF.string ldecl.userName.toString),
+            (WXF.string "type", WXF.string s!"{tyPP}")])
+      return WXF.wlAssociation #[
+        (WXF.string "target", WXF.string s!"{targetPP}"),
+        (WXF.string "targetExpr", WXF.exprToWXF target),
+        (WXF.string "context", WXF.wlList ctxEntries)]
+    : MetaM ByteArray).run' (s := mstate) |>.run ctx st).toIO'
+  match res with
+  | .ok (ba, _) => return ba
+  | .error _ => return WXF.string "ERROR: failed to serialize goal"
+
+/-- Open a proof goal for a named constant's type. -/
+@[export leanlink_open_goal]
+def openGoalExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  let some ci := env.find? name
+    | return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+  let ctx : Core.Context := {
+    fileName := "<tactic>"
+    fileMap := { source := "", positions := #[0] }
+  }
+  let st : Core.State := { env }
+  let res ←
+    ((do
+      let goalMVar ← Meta.mkFreshExprMVar (some ci.type) .syntheticOpaque `mainGoal
+      let goalId := goalMVar.mvarId!
+      let mstate ← getThe Meta.State
+      return (goalId, mstate)
+    : MetaM (MVarId × Meta.State)).run' |>.run ctx st).toIO'
+  match res with
+  | .error _ => return WXF.serialize (WXF.string "ERROR: failed to create goal")
+  | .ok ((goalId, mstate), coreState') =>
+    let proofId ← nextProofId.get
+    nextProofId.set (proofId + 1)
+    let ps : ProofState := {
+      env := env
+      metaState := mstate
+      coreState := coreState'
+      goals := [goalId]
+    }
+    proofStore.modify (·.insert proofId ps)
+    let goalWXF ← goalToWXF env mstate goalId
+    return WXF.serialize (WXF.wlAssociation #[
+      (WXF.string "stateId", WXF.integer proofId.toNat),
+      (WXF.string "goals", WXF.wlList #[goalWXF]),
+      (WXF.string "goalCount", WXF.integer 1)])
+
+/-- Apply a tactic string to a proof state. -/
+@[export leanlink_apply_tactic]
+def applyTacticExport (stateId : UInt64) (tacticStr : @& String) : IO ByteArray := do
+  let store ← proofStore.get
+  let some ps := store[stateId]?
+    | return WXF.serialize (WXF.string s!"ERROR: invalid state ID: {stateId}")
+  if ps.goals.isEmpty then
+    return WXF.serialize (WXF.string "ERROR: no goals to solve")
+  let ctx : Core.Context := {
+    fileName := "<tactic>"
+    fileMap := { source := "", positions := #[0] }
+  }
+  -- Parse the tactic
+  let tacticStx ← match Parser.runParserCategory ps.env `tactic tacticStr "<input>" with
+    | .ok stx => pure stx
+    | .error msg => return WXF.serialize (WXF.string s!"ERROR: parse error: {msg}")
+  -- Run the tactic: TacticM → TermElabM → MetaM → CoreM → IO
+  let goalId := ps.goals.head!
+  let res ←
+    ((do
+      let newGoals ← Elab.Tactic.run goalId (Elab.Tactic.evalTactic tacticStx)
+      let mstate ← getThe Meta.State
+      return (newGoals, mstate)
+    : Elab.TermElabM (List MVarId × Meta.State)).run' (ctx := {}) |>.run' (s := ps.metaState) |>.run ctx ps.coreState).toIO'
+  match res with
+  | .error e =>
+    let errMsg ← e.toMessageData.toString
+    return WXF.serialize (WXF.string s!"ERROR: tactic failed: {errMsg}")
+  | .ok ((newGoals, newMetaState), newCoreState) =>
+    let allGoals := newGoals ++ ps.goals.tail!
+    let newProofId ← nextProofId.get
+    nextProofId.set (newProofId + 1)
+    let newPS : ProofState := {
+      env := ps.env
+      metaState := newMetaState
+      coreState := newCoreState
+      goals := allGoals
+    }
+    proofStore.modify (·.insert newProofId newPS)
+    let mut goalWXFs : Array ByteArray := #[]
+    for g in allGoals do
+      goalWXFs := goalWXFs.push (← goalToWXF ps.env newMetaState g)
+    return WXF.serialize (WXF.wlAssociation #[
+      (WXF.string "stateId", WXF.integer newProofId.toNat),
+      (WXF.string "goals", WXF.wlList goalWXFs),
+      (WXF.string "goalCount", WXF.integer allGoals.length)])
+
 end LeanLink

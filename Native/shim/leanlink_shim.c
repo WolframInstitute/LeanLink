@@ -42,6 +42,8 @@ extern lean_object* leanlink_get_value_unfolded(uint64_t handle, lean_object* na
 extern lean_object* leanlink_pp_type(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
 extern lean_object* leanlink_pp_value(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
 extern lean_object* leanlink_type_check(uint64_t handle, lean_object* exprWXF, lean_object* w);
+extern lean_object* leanlink_open_goal(uint64_t handle, lean_object* name, lean_object* w);
+extern lean_object* leanlink_apply_tactic(uint64_t stateId, lean_object* tactic, lean_object* w);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -348,6 +350,40 @@ DLLEXPORT int leanlink_wl_type_check(
 
     lean_object* io_res = leanlink_type_check(handle, ba, lean_io_mk_world());
     /* ba is consumed by leanlink_type_check */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * openGoal(handle, constName) -> MTensor (WXF with stateId + goals)
+ */
+DLLEXPORT int leanlink_wl_open_goal(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name = MArgument_getUTF8String(Args[1]);
+    lean_object* lean_name = lean_mk_string(name);
+
+    lean_object* io_res = leanlink_open_goal(handle, lean_name, lean_io_mk_world());
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * applyTactic(stateId, tacticStr) -> MTensor (WXF with new stateId + goals)
+ */
+DLLEXPORT int leanlink_wl_apply_tactic(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t stateId = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* tactic = MArgument_getUTF8String(Args[1]);
+    lean_object* lean_tactic = lean_mk_string(tactic);
+
+    lean_object* io_res = leanlink_apply_tactic(stateId, lean_tactic, lean_io_mk_world());
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 

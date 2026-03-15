@@ -52,6 +52,15 @@ LeanListConstants::usage = "LeanListConstants[opts] lists all constants as \[Lef
 LeanLoadEnvironment::usage = "LeanLoadEnvironment[{\"Module1\", ...}, searchPath] loads a Lean environment handle for repeated queries.";
 LeanFreeEnvironment::usage = "LeanFreeEnvironment[handle] frees a loaded Lean environment and releases memory.";
 
+(* Phase 2: Type-checking *)
+LeanTypeCheck::usage = "LeanTypeCheck[expr, handle|env] type-checks a WL expression tree against a Lean environment.";
+
+(* Phase 3: Interactive tactics *)
+LeanOpenGoal::usage = "LeanOpenGoal[term] opens an interactive proof goal for a LeanTerm. Returns <|\"stateId\" \[Rule] ..., \"goals\" \[Rule] ...|>.";
+LeanApplyTactic::usage = "LeanApplyTactic[stateId, tactic] applies a tactic string to a proof state. Returns new state.";
+FormatLeanGoal::usage = "FormatLeanGoal[goal] formats a single goal for display.";
+FormatLeanState::usage = "FormatLeanState[state] formats a full proof state for display.";
+
 Begin["`Private`"];
 
 (* ============================================================================ *)
@@ -101,6 +110,10 @@ $ppValueFn := $ppValueFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_pp_value", {Integer, "UTF8String", Integer}, {Integer, 1}];
 $typeCheckFn := $typeCheckFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_type_check", {Integer, {Integer, 1}}, {Integer, 1}];
+$openGoalFn := $openGoalFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_open_goal", {Integer, "UTF8String"}, {Integer, 1}];
+$applyTacticFn := $applyTacticFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_apply_tactic", {Integer, "UTF8String"}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -994,5 +1007,63 @@ LeanListConstants[opts : OptionsPattern[]] :=
     resolveProjDir[OptionValue["ProjectDir"]],
     OptionValue["Imports"]];
 
+(* ============================================================================ *)
+(* Phase 3: Interactive Tactics                                                  *)
+(* ============================================================================ *)
+
+(* Open a proof goal for a LeanTerm — creates initial tactic state *)
+LeanOpenGoal[term_LeanTerm] :=
+  Module[{data = term[[1]], handle, name, result},
+    handle = Lookup[data, "_Handle", None];
+    name = Lookup[data, "Name", ""];
+    If[!IntegerQ[handle], Return[$Failed]];
+    result = Quiet[decodeWXF[$openGoalFn[handle, name]]];
+    If[!AssociationQ[result], $Failed, result]];
+
+(* Apply a tactic string to a proof state *)
+LeanApplyTactic[stateId_Integer, tactic_String] :=
+  Module[{result},
+    result = Quiet[decodeWXF[$applyTacticFn[stateId, tactic]]];
+    If[!AssociationQ[result],
+      If[StringQ[result] && StringStartsQ[result, "ERROR:"],
+        <|"Error" -> StringDrop[result, 7]|>, $Failed],
+      result]];
+
+(* Convenience: pipe multiple tactics *)
+LeanApplyTactic[stateId_Integer, tactics_List] :=
+  Fold[
+    If[AssociationQ[#1] && KeyExistsQ[#1, "stateId"],
+      LeanApplyTactic[#1["stateId"], #2], #1] &,
+    <|"stateId" -> stateId|>,
+    tactics];
+
+(* Format a goal for display *)
+FormatLeanGoal[goal_Association] :=
+  Module[{ctx = Lookup[goal, "context", {}], target = Lookup[goal, "target", "?"]},
+    Column[{
+      If[Length[ctx] > 0,
+        Column[
+          (Style[#["name"] <> " : " <> #["type"], "Input"] & /@ ctx),
+          Spacings -> 0.3],
+        Nothing],
+      Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
+      Style["\[RightTriangle] " <> target, Bold, "Input"]
+    }, Spacings -> 0.2]];
+
+(* Format a full proof state *)
+FormatLeanState[state_Association] :=
+  Module[{goals = Lookup[state, "goals", {}], n = Lookup[state, "goalCount", 0]},
+    If[n == 0,
+      Style["\[Checkmark] No goals — proof complete!", Darker[Green], Bold],
+      Column[
+        Join[
+          {Style[ToString[n] <> If[n == 1, " goal", " goals"], Gray, Italic]},
+          MapIndexed[
+            Column[{
+              Style["Goal " <> ToString[#2[[1]]], Bold, Blue],
+              FormatLeanGoal[#1]}, Spacings -> 0.3] &, goals]],
+        Spacings -> 0.8]]];
+
 End[];
 EndPackage[];
+
