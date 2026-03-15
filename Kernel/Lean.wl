@@ -85,6 +85,10 @@ $getValueFn := $getValueFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_get_value", {Integer, "UTF8String", Integer}, {Integer, 1}];
 $getConstantFn := $getConstantFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_get_constant", {Integer, "UTF8String"}, {Integer, 1}];
+$getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_get_used_constants", {Integer, "UTF8String"}, {Integer, 1}];
+$listConstantNamesFn := $listConstantNamesFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_list_constant_names", {Integer, "UTF8String"}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -95,7 +99,10 @@ decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 cleanName[s_String] := StringReplace[s, RegularExpression["\\._@\\..*"] -> ""];
 cleanName[other_] := other;
 
-shortName[s_String] := Last[StringSplit[s, "."], s];
+(* Match code.lean shortConstName: strip ._@. and ._hyg. suffixes, keep full name *)
+shortName[s_String] := StringReplace[s, {
+  RegularExpression["\\._@\\..*"] -> "",
+  RegularExpression["\\._hyg\\..*"] -> ""}];
 
 (* ============================================================================ *)
 (* Environment management                                                       *)
@@ -176,63 +183,130 @@ toLeanObject[LeanConstant[name_String, kind_String, type_, value_]] :=
   LeanTerm[<|"Name" -> name, "Kind" -> kind, "Type" -> type, "Term" -> value|>];
 toLeanObject[other_] := other;
 
-(* Attach environment kind lookup to all LeanTerms in an env *)
-attachEnvKinds[env_Association] := Module[{kindMap},
-  kindMap = Association @ KeyValueMap[
-    Function[{k, v},
-      k -> Replace[v, {LeanTerm[d_Association] :> Lookup[d, "Kind", "def"], _ -> "def"}]],
-    env];
-  Association @ KeyValueMap[
-    Function[{k, v},
-      k -> Replace[v, LeanTerm[d_Association] :> LeanTerm[Append[d, "_KindLookup" -> kindMap]]]],
-    env]];
+(* Attach environment kind lookup and call graph adjacency to all LeanTerms *)
+(* When handle is provided, does BFS to collect types/terms of referenced constants *)
+attachEnvKinds[env_Association, handle_ : None] := Module[
+  {result, typeRefs, termRefs, frontier, visited, maxDepth = 10, depth = 0},
+
+  (* Start with imported constants, adding per-constant refs *)
+  result = env;
+
+  (* Attach TypeRefs/TermRefs to each imported constant *)
+  If[IntegerQ[handle] && handle > 0,
+    (* Use FFI getUsedConstants (matches DOT getUsedConstantsAsSet) *)
+    Do[
+      Quiet @ With[{uc = decodeWXF[$getUsedConstantsFn[handle, name]]},
+        If[AssociationQ[uc],
+          result = MapAt[
+            Replace[LeanTerm[d_Association] :>
+              LeanTerm[Append[d, {"TypeRefs" -> Lookup[uc, "type", {}],
+                                  "TermRefs" -> Lookup[uc, "value", {}]}]]],
+            result, Key[name]]]],
+      {name, Keys[env]}],
+    (* Fallback: walk decoded expressions *)
+    result = Association @ KeyValueMap[
+      Function[{k, v},
+        k -> Replace[v, LeanTerm[d_Association] :>
+          LeanTerm[Append[d,
+            {"TypeRefs" -> collectConsts[Lookup[d, "Type", LeanNoValue[]]],
+             "TermRefs" -> collectConsts[Lookup[d, "Term", LeanNoValue[]]]}]]]],
+      env]];
+
+  (* BFS to discover referenced constants not in the original import *)
+  If[IntegerQ[handle] && handle > 0,
+    visited = Keys[result] // Association[# -> True & /@ #] &;
+    frontier = Complement[
+      Union @ Flatten @ Join[
+        Cases[Values[result], LeanTerm[d_] :> Lookup[d, "TypeRefs", {}]],
+        Cases[Values[result], LeanTerm[d_] :> Lookup[d, "TermRefs", {}]]],
+      Keys[visited]];
+    While[frontier =!= {} && depth < maxDepth,
+      depth++;
+      Do[
+        Module[{kind = "def", tRefs = {}, vRefs = {}},
+          (* Get kind *)
+          Quiet @ With[{r = decodeWXF[$getConstantFn[handle, name]]},
+            If[MatchQ[r, LeanConstant[_, _String, __]],
+              kind = r[[2]]]];
+          (* Get used constants *)
+          Quiet @ With[{uc = decodeWXF[$getUsedConstantsFn[handle, name]]},
+            If[AssociationQ[uc],
+              tRefs = Lookup[uc, "type", {}];
+              vRefs = Lookup[uc, "value", {}]]];
+          (* Add as new LeanTerm entry *)
+          AssociateTo[result, name ->
+            LeanTerm[<|"Name" -> name, "Kind" -> kind,
+                       "TypeRefs" -> tRefs, "TermRefs" -> vRefs|>]]];
+        AssociateTo[visited, name -> True],
+        {name, frontier}];
+      frontier = Complement[
+        Union @ Flatten @ KeyValueMap[
+          Function[{k, v},
+            Replace[v, {LeanTerm[d_] :> Join[Lookup[d, "TypeRefs", {}], Lookup[d, "TermRefs", {}]],
+                        _ -> {}}]],
+          KeyTake[result, frontier]],
+        Keys[visited]]]];
+
+  (* Store only the handle integer in each LeanTerm for callGraph BFS *)
+  If[IntegerQ[handle] && handle > 0,
+    Association @ KeyValueMap[
+      Function[{k, v},
+        k -> Replace[v, LeanTerm[d_Association] :>
+          LeanTerm[Append[d, "_Handle" -> handle]]]],
+      result],
+    result]];
 
 (* Property access *)
-LeanTerm /: LeanTerm[data_Association][prop_String] :=
+LeanTerm /: LeanTerm[data_Association][prop_String, opts___Rule] :=
   Switch[prop,
-    "Properties", {"Name", "Kind", "Type", "Term", "ExprGraph", "CallGraph"},
-    "ExprGraph", exprToGraph[Lookup[data, "Type", LeanNoValue[]]],
-    "CallGraph", callGraph[data],
+    "Properties", {"Name", "Kind", "Type", "Term", "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
+    "ExprGraph", exprToGraph[
+      Replace[Lookup[data, "Term", LeanNoValue[]], LeanNoValue[] -> Lookup[data, "Type", LeanNoValue[]]]],
+    "CallGraph", callGraph[data, opts],
     _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]];
 
 (* ============================================================================ *)
 (* Expression Graph                                                             *)
 (* ============================================================================ *)
 
+(* Expr graph node background colors — match code.lean exprKindColor exactly *)
 $headColor = <|
-  LeanForall -> RGBColor[0.25, 0.5, 0.85],
-  LeanLam -> RGBColor[0.6, 0.25, 0.65],
-  LeanApp -> GrayLevel[0.35],
-  LeanConst -> RGBColor[0.15, 0.55, 0.35],
-  LeanBVar -> RGBColor[0.5, 0.5, 0.5],
-  LeanSort -> RGBColor[0.6, 0.2, 0.6],
-  LeanLet -> RGBColor[0.75, 0.55, 0.15],
-  LeanLitNat -> RGBColor[0.15, 0.55, 0.2],
-  LeanLitStr -> RGBColor[0.75, 0.35, 0.1],
-  LeanProj -> GrayLevel[0.45],
-  LeanTruncated -> GrayLevel[0.6],
-  LeanNoValue -> GrayLevel[0.65]
+  LeanApp     -> RGBColor @@ ({225, 190, 231} / 255.),  (* #e1bee7 *)
+  LeanLam     -> RGBColor @@ ({255, 249, 196} / 255.),  (* #fff9c4 *)
+  LeanForall  -> RGBColor @@ ({255, 224, 178} / 255.),  (* #ffe0b2 *)
+  LeanLet     -> RGBColor @@ ({178, 223, 219} / 255.),  (* #b2dfdb *)
+  LeanConst   -> RGBColor @@ ({187, 222, 251} / 255.),  (* #bbdefb *)
+  LeanBVar    -> RGBColor @@ ({245, 245, 245} / 255.),  (* #f5f5f5 *)
+  LeanSort    -> RGBColor @@ ({215, 204, 200} / 255.),  (* #d7ccc8 *)
+  LeanLitNat  -> RGBColor @@ ({200, 230, 201} / 255.),  (* #c8e6c9 *)
+  LeanLitStr  -> RGBColor @@ ({200, 230, 201} / 255.),  (* #c8e6c9 *)
+  LeanProj    -> RGBColor @@ ({179, 229, 252} / 255.),  (* #b3e5fc *)
+  LeanTruncated -> RGBColor @@ ({224, 224, 224} / 255.),(* #e0e0e0 *)
+  LeanNoValue -> RGBColor @@ ({224, 224, 224} / 255.)   (* #e0e0e0 *)
 |>;
 
-exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, lbls = <||>, cols = <||>, walk},
-  walk[e_] := Module[{myId, label, col, children},
+exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, lbls = <||>, cols = <||>, kinds = <||>, walk},
+  walk[e_] := Module[{myId, label, col, children, edgeLbls},
     myId = ++id;
-    {label, col, children} = exprNodeInfo[e];
+    {label, col, children, edgeLbls} = exprNodeInfo[e];
     AppendTo[verts, myId];
     AssociateTo[lbls, myId -> label];
     AssociateTo[cols, myId -> col];
-    Do[Module[{childId = walk[child]},
-      AppendTo[edges, DirectedEdge[myId, childId]]],
-      {child, children}];
+    AssociateTo[kinds, myId -> Replace[Head[e], {LeanForall -> "forall", LeanLam -> "lam", LeanApp -> "app",
+      LeanConst -> "const", LeanBVar -> "bvar", LeanSort -> "sort", LeanLet -> "let",
+      LeanLitNat -> "litNat", LeanLitStr -> "litStr", LeanProj -> "proj", _ -> "?"}]];
+    MapThread[Function[{child, elbl}, Module[{childId = walk[child]},
+      AppendTo[edges, DirectedEdge[myId, childId, elbl]]]],
+      {children, edgeLbls}];
     myId];
   walk[expr];
   If[Length[verts] == 0, Return[Graph[{}]]];
   Graph[verts, edges,
     VertexShapeFunction -> Map[
-      With[{bg = cols[#], lbl = lbls[#]},
+      With[{bg = cols[#], lbl = lbls[#], kind = kinds[#]},
         # -> Function[
           Inset[Framed[
-            Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
+            Style[Tooltip[lbl, kind], "Text", FontSize -> 7,
               LightDarkSwitched[
                 If[ColorDistance[bg, White] > 0.4, White, Black],
                 If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]],
@@ -245,32 +319,39 @@ exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, lbls = <||>, cols 
     GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
     VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
     EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]],
+    EdgeLabels -> (# -> Style[#[[3]], FontSize -> 5, FontFamily -> "Menlo",
+      LightDarkSwitched[GrayLevel[0.3], GrayLevel[0.7]]] & /@ edges),
     ImageSize -> Max[300, Min[1200, 40 * Length[verts]]],
     AspectRatio -> 1/2,
     PerformanceGoal -> "Quality"]];
 
 exprNodeInfo[LeanForall[n_, dom_, body_, bi_]] :=
-  {"\[ForAll]" <> cleanName[n], $headColor[LeanForall], {dom, body}};
+  {"\[ForAll] " <> cleanName[n], $headColor[LeanForall], {dom, body}, {"type", "body"}};
 exprNodeInfo[LeanLam[n_, type_, body_, _]] :=
-  {"\[Lambda]" <> cleanName[n], $headColor[LeanLam], {type, body}};
+  {"\[Lambda] " <> cleanName[n], $headColor[LeanLam], {type, body}, {"type", "body"}};
 exprNodeInfo[LeanApp[fn_, arg_]] :=
-  {"App", $headColor[LeanApp], {fn, arg}};
+  {"app", $headColor[LeanApp], {fn, arg}, {"fn", "arg"}};
 exprNodeInfo[LeanConst[n_, _]] :=
-  {shortName[n], $headColor[LeanConst], {}};
+  {shortName[n], $headColor[LeanConst], {}, {}};
 exprNodeInfo[LeanBVar[i_]] :=
-  {"#" <> ToString[i], $headColor[LeanBVar], {}};
-exprNodeInfo[LeanSort[LeanLevelZero[]]] := {"Prop", $headColor[LeanSort], {}};
-exprNodeInfo[LeanSort[LeanLevelSucc[LeanLevelZero[]]]] := {"Type", $headColor[LeanSort], {}};
-exprNodeInfo[LeanSort[_]] := {"Sort", $headColor[LeanSort], {}};
+  {"bvar " <> ToString[i], $headColor[LeanBVar], {}, {}};
+(* Sort always shows level subtree, matching DOT walkExpr *)
+exprNodeInfo[LeanSort[l_]] := {"Sort", $headColor[LeanSort], {l}, {"level"}};
+(* Level nodes *)
+exprNodeInfo[LeanLevelZero[]] := {"zero", RGBColor @@ ({215, 204, 200} / 255.), {}, {}};
+exprNodeInfo[LeanLevelSucc[l_]] := {"succ", RGBColor @@ ({215, 204, 200} / 255.), {l}, {"level"}};
+exprNodeInfo[LeanLevelMax[a_, b_]] := {"max", RGBColor @@ ({215, 204, 200} / 255.), {a, b}, {"left", "right"}};
+exprNodeInfo[LeanLevelIMax[a_, b_]] := {"imax", RGBColor @@ ({215, 204, 200} / 255.), {a, b}, {"left", "right"}};
+exprNodeInfo[LeanLevelParam[n_]] := {n, RGBColor @@ ({215, 204, 200} / 255.), {}, {}};
 exprNodeInfo[LeanLet[n_, type_, val_, body_]] :=
-  {"let " <> cleanName[n], $headColor[LeanLet], {type, val, body}};
-exprNodeInfo[LeanLitNat[n_]] := {ToString[n], $headColor[LeanLitNat], {}};
-exprNodeInfo[LeanLitStr[s_]] := {"\"" <> s <> "\"", $headColor[LeanLitStr], {}};
+  {"let " <> cleanName[n], $headColor[LeanLet], {type, val, body}, {"type", "val", "body"}};
+exprNodeInfo[LeanLitNat[n_]] := {ToString[n], $headColor[LeanLitNat], {}, {}};
+exprNodeInfo[LeanLitStr[s_]] := {"\"" <> s <> "\"", $headColor[LeanLitStr], {}, {}};
 exprNodeInfo[LeanProj[t_, i_, struct_]] :=
-  {shortName[t] <> "." <> ToString[i], $headColor[LeanProj], {struct}};
-exprNodeInfo[LeanTruncated[_]] := {"\[Ellipsis]", $headColor[LeanTruncated], {}};
-exprNodeInfo[LeanNoValue[]] := {"\[Dash]", $headColor[LeanNoValue], {}};
-exprNodeInfo[other_] := {ToString[Short[other]], GrayLevel[0.6], {}};
+  {shortName[t] <> "." <> ToString[i], $headColor[LeanProj], {struct}, {"struct"}};
+exprNodeInfo[LeanTruncated[_]] := {"\[Ellipsis]", $headColor[LeanTruncated], {}, {}};
+exprNodeInfo[LeanNoValue[]] := {"\[Dash]", $headColor[LeanNoValue], {}, {}};
+exprNodeInfo[other_] := {ToString[Short[other]], GrayLevel[0.6], {}, {}};
 
 (* ============================================================================ *)
 (* Call Graph                                                                   *)
@@ -278,24 +359,70 @@ exprNodeInfo[other_] := {ToString[Short[other]], GrayLevel[0.6], {}};
 
 collectConsts[e_] := Union[Cases[e, LeanConst[n_String, _] :> n, Infinity]];
 
-callGraph[data_Association] := Module[
-  {name, typeExpr, termExpr, kindLookup,
-   typeRefs, termRefs, allRefs, edges, verts,
-   rootShort, vertColors, edgeStyles, edgeLabels,
-   getKind, getVertColor, classifyEdge},
+Options[callGraph] = {"Depth" -> 10};
+callGraph[data_Association, opts___Rule] := Module[
+  {name, handle,
+   nodes, edgeList, frontier, visited,
+   typeRefs, termRefs, allRefs, maxDepth, depth = 0,
+   verts, edges, vertColors, fullNames, edgeStyles, edgeLabels,
+   getKind, getVertColor, classifyEdge,
+   kindCache, refsCache, getRefsFor},
+
+  maxDepth = Lookup[{opts}, "Depth", 10];
 
   name = data["Name"];
-  typeExpr = Lookup[data, "Type", LeanNoValue[]];
-  termExpr = Lookup[data, "Term", LeanNoValue[]];
-  kindLookup = Lookup[data, "_KindLookup", <||>];
+  handle = Lookup[data, "_Handle", None];
 
-  typeRefs = collectConsts[typeExpr];
-  termRefs = collectConsts[termExpr];
-  allRefs = Union[typeRefs, termRefs];
-  allRefs = DeleteCases[allRefs, name];
+  (* Cache for kinds and refs discovered during BFS *)
+  kindCache = <|name -> Lookup[data, "Kind", "def"]|>;
+  refsCache = <|name -> {Lookup[data, "TypeRefs", {}], Lookup[data, "TermRefs", {}]}|>;
 
-  (* Kind lookup: try env, fall back to heuristic *)
-  getKind[n_String] := Module[{k = Lookup[kindLookup, n, None]},
+  (* Query FFI for a constant's kind and refs, caching results *)
+  getRefsFor[n_String] := If[KeyExistsQ[refsCache, n],
+    refsCache[n],
+    Module[{tRefs = {}, vRefs = {}, kind = "def"},
+      If[IntegerQ[handle] && handle > 0,
+        Quiet @ With[{r = decodeWXF[$getConstantFn[handle, n]]},
+          If[MatchQ[r, LeanConstant[_, _String, __]],
+            kind = r[[2]]]];
+        Quiet @ With[{uc = decodeWXF[$getUsedConstantsFn[handle, n]]},
+          If[AssociationQ[uc],
+            tRefs = Lookup[uc, "type", {}];
+            vRefs = Lookup[uc, "value", {}]]]];
+      AssociateTo[kindCache, n -> kind];
+      AssociateTo[refsCache, n -> {tRefs, vRefs}];
+      {tRefs, vRefs}]];
+
+  (* BFS from root *)
+  nodes = <|name -> True|>;
+  edgeList = {};
+  frontier = {name};
+  While[frontier =!= {} && depth < maxDepth,
+    depth++;
+    Module[{newFrontier = {}},
+      Do[
+        {typeRefs, termRefs} = getRefsFor[src];
+        allRefs = Union[typeRefs, termRefs];
+        (* Match code.lean isInternalName *)
+        allRefs = Select[DeleteCases[allRefs, src],
+          !StringContainsQ[#, "._" | ".match_" | ".proof_" | "._uniq" |
+            ".brecOn" | ".below" | ".casesOn" | ".noConfusion"] &];
+        Do[
+          classifyEdge = Which[
+            MemberQ[termRefs, ref] && MemberQ[typeRefs, ref], "term+type",
+            MemberQ[termRefs, ref], "term",
+            True, "type"];
+          AppendTo[edgeList, {src, ref, classifyEdge}];
+          If[!KeyExistsQ[nodes, ref],
+            AssociateTo[nodes, ref -> True];
+            getRefsFor[ref]; (* pre-cache kind *)
+            AppendTo[newFrontier, ref]],
+          {ref, allRefs}],
+        {src, frontier}];
+      frontier = newFrontier]];
+
+  (* Kind lookup from cache, fall back to heuristic *)
+  getKind[n_String] := Module[{k = Lookup[kindCache, n, None]},
     If[k =!= None, k,
       Which[
         StringEndsQ[n, ".rec"] || StringEndsQ[n, ".recOn"] ||
@@ -305,24 +432,20 @@ callGraph[data_Association] := Module[
           UpperCaseQ[StringTake[n, 1]], "structure",
         True, "def"]]];
 
-  (* Edge classification: term, type, or term+type *)
-  classifyEdge[ref_String] := Which[
-    MemberQ[termRefs, ref] && MemberQ[typeRefs, ref], "term+type",
-    MemberQ[termRefs, ref], "term",
-    True, "type"];
-
   (* Colors matching code.lean *)
   getVertColor[n_String] :=
     Lookup[$callNodeColor, getKind[n], GrayLevel[0.88]];
 
-  rootShort = shortName[name];
-  verts = Union[Prepend[shortName /@ allRefs, rootShort]];
-  edges = DirectedEdge[rootShort, shortName[#], classifyEdge[#]] & /@ allRefs;
+  verts = shortName /@ Keys[nodes];
+  edges = DeleteDuplicates[
+    DirectedEdge[shortName[#[[1]]], shortName[#[[2]]], #[[3]]] & /@ edgeList];
 
   (* Per-vertex colors *)
   vertColors = Association[
-    rootShort -> getVertColor[name],
-    Sequence @@ (shortName[#] -> getVertColor[#] & /@ allRefs)];
+    (shortName[#] -> getVertColor[#]) & /@ Keys[nodes]];
+
+  (* Full name lookup for tooltips *)
+  fullNames = Association[(shortName[#] -> #) & /@ Keys[nodes]];
 
   (* Edge styles matching code.lean *)
   edgeStyles = Table[
@@ -346,10 +469,12 @@ callGraph[data_Association] := Module[
 
   Graph[verts, edges,
     VertexShapeFunction -> Map[
-      With[{bg = Lookup[vertColors, #, GrayLevel[0.88]], lbl = #},
+      With[{bg = Lookup[vertColors, #, GrayLevel[0.88]], lbl = #,
+            fullName = Lookup[fullNames, #, #],
+            kind = getKind[Lookup[fullNames, #, #]]},
         # -> Function[
           Inset[Framed[
-            Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
+            Style[Tooltip[lbl, fullName <> " (" <> ToString[kind] <> ")"], "Text", FontSize -> 7,
               LightDarkSwitched[
                 If[ColorDistance[bg, White] > 0.4, White, Black],
                 If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]],
@@ -372,11 +497,13 @@ callGraph[data_Association] := Module[
 (* ============================================================================ *)
 
 LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
-  {name, kind, typeExpr, termExpr, col, icon, sn},
+  {name, kind, typeExpr, termExpr, col, icon, sn, nTypeRefs, nTermRefs},
   name = Lookup[data, "Name", "?"];
   kind = Lookup[data, "Kind", "?"];
   typeExpr = Lookup[data, "Type", None];
   termExpr = Lookup[data, "Term", LeanNoValue[]];
+  nTypeRefs = Length[Lookup[data, "TypeRefs", {}]];
+  nTermRefs = Length[Lookup[data, "TermRefs", {}]];
   col = Lookup[$kindColor, kind, GrayLevel[0.5]];
   icon = Graphics[{col, Disk[]}, ImageSize -> 12];
   sn = shortName[name];
@@ -387,12 +514,15 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
       BoxForm`SummaryItem[{"Name: ", Style[sn, Bold]}]
     },
     {
-      BoxForm`SummaryItem[{"Full name: ", name}],
+      If[name =!= sn, BoxForm`SummaryItem[{"Full name: ", name}], Nothing],
       BoxForm`SummaryItem[{"Type: ",
-        RawBoxes[MakeBoxes[typeExpr, StandardForm]]}],
+        If[typeExpr =!= None, Short[typeExpr, 1], "—"]}],
       If[termExpr =!= LeanNoValue[],
-        BoxForm`SummaryItem[{"Term: ",
-          RawBoxes[MakeBoxes[termExpr, StandardForm]]}],
+        BoxForm`SummaryItem[{"Term: ", Short[termExpr, 1]}],
+        Nothing],
+      If[nTypeRefs + nTermRefs > 0,
+        BoxForm`SummaryItem[{"Refs: ",
+          ToString[nTypeRefs] <> " type, " <> ToString[nTermRefs] <> " term"}],
         Nothing]
     },
     StandardForm,
@@ -437,7 +567,7 @@ LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], 
               MakeBoxes[dom, StandardForm],
               RowBox[{"(", StyleBox[nm, FontSlant -> Italic],
                 " : ", MakeBoxes[dom, StandardForm], ")"}]]],
-        StyleBox[" \[Rule] ", FontColor -> GrayLevel[0.4]],
+        StyleBox[" \[Implies] ", FontColor -> GrayLevel[0.4]],
         MakeBoxes[body, StandardForm]}]]];
 
 LeanApp /: MakeBoxes[expr : LeanApp[fn_, arg_], StandardForm] :=
@@ -459,7 +589,7 @@ LeanLam /: MakeBoxes[expr : LeanLam[name_String, type_, body_, bi_String], Stand
           _,
             RowBox[{"(", StyleBox[nm, FontSlant -> Italic],
               " : ", MakeBoxes[type, StandardForm], ")"}]],
-        StyleBox[" => ", FontColor -> GrayLevel[0.4]],
+        StyleBox[" \[Implies] ", FontColor -> GrayLevel[0.4]],
         MakeBoxes[body, StandardForm]}]]];
 
 LeanBVar /: MakeBoxes[expr : LeanBVar[idx_Integer], StandardForm] :=
@@ -569,9 +699,62 @@ isInternalName[name_String] :=
   StringContainsQ[name, $internalPatterns];
 
 (* LeanImport[module, opts] -- shorthand for Imports -> {module} *)
+(* If module is a directory of sub-modules (no top-level .olean), auto-discover sub-modules *)
 LeanImport[module_String, opts : OptionsPattern[]] /;
   !StringContainsQ[module, "/" | "\\"] && !StringEndsQ[module, ".lean"] :=
-  LeanImport["Imports" -> {module}, opts];
+  Module[{projDir, buildLib, srcDir, oleans, subModules, results = <||>, filter,
+          srcFiles, allNames, grouped},
+    projDir = resolveProjDir[OptionValue["ProjectDir"]];
+    buildLib = FileNameJoin[{projDir, ".lake", "build", "lib"}];
+    filter = OptionValue["Filter"];
+    (* Check if module is a directory of sub-modules *)
+    If[DirectoryQ[buildLib] &&
+       !FileExistsQ[FileNameJoin[{buildLib, module <> ".olean"}]] &&
+       DirectoryQ[FileNameJoin[{buildLib, module}]],
+      (* Auto-discover sub-modules from .olean files *)
+      oleans = FileNames["*.olean", FileNameJoin[{buildLib, module}], Infinity];
+      subModules = StringReplace[
+        FileNameDrop[#, FileNameDepth[buildLib]] & /@ oleans,
+        {".olean" -> "", "/" -> "."}];
+      If[subModules =!= {},
+        (* Extract definition names from source .lean files *)
+        srcDir = FileNameJoin[{projDir, Sequence @@ StringSplit[module, "."]}];
+        srcFiles = If[DirectoryQ[srcDir],
+          FileNames["*.lean", srcDir, Infinity], {}];
+        allNames = Flatten[Function[{file},
+          With[{content = Import[file, "Text"],
+                modPrefix = StringReplace[
+                  StringDrop[file, StringLength[projDir] + 1],
+                  {".lean" -> "", "/" -> "."}] <> "."},
+            StringCases[content,
+              RegularExpression[
+                "(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.']*)"
+              ] :> modPrefix <> "$1"]]] /@ srcFiles];
+        (* Apply user filter *)
+        If[filter =!= "",
+          allNames = Select[allNames, StringContainsQ[#, filter] &]];
+        allNames = Select[allNames, !isInternalName[#] &];
+        (* Group names by sub-module *)
+        grouped = GroupBy[allNames,
+          StringJoin[Riffle[Most[StringSplit[#, "."]], "."]] &];
+        (* For each sub-module, load env and query matching constants *)
+        KeyValueMap[
+          Function[{sub, names},
+            If[MemberQ[subModules, sub],
+              Module[{h, raw = <||>},
+                h = Quiet[getOrLoadEnv[projDir, {sub}]];
+                If[IntegerQ[h] && h > 0,
+                  Do[
+                    With[{c = Quiet[decodeWXF[$getConstantFn[h, nm]]]},
+                      If[MatchQ[c, _LeanConstant],
+                        AssociateTo[raw, nm -> c]]],
+                    {nm, names}];
+                  If[Length[raw] > 0,
+                    results = Join[results,
+                      attachEnvKinds[toLeanObject /@ raw, h]]]]]]],
+          grouped];
+        Return[results, Module]]];
+    LeanImport["Imports" -> {module}, opts]];
 
 (* LeanImport[file, opts] -- standalone .lean file: compile via lean CLI *)
 LeanImport[file_String, opts : OptionsPattern[]] /;
@@ -631,19 +814,20 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
           If[MatchQ[r, _LeanConstant],
             AssociateTo[raw, name -> r]]],
         {name, names}];
+      res = attachEnvKinds[toLeanObject /@ raw, handle];
       DeleteDirectory[tmpDir, DeleteContents -> True];
-      attachEnvKinds[toLeanObject /@ raw]]];
+      res]];
 
 (* LeanImport[opts] -- base form *)
-LeanImport[opts : OptionsPattern[]] := Module[{raw},
-  raw = callNative[$listTheoremsFn,
-    {OptionValue["Filter"]},
-    resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"]];
+LeanImport[opts : OptionsPattern[]] := Module[{handle, raw, result},
+  If[$ShimLib === $Failed, Message[LeanLink::nolib]; Return[$Failed]];
+  handle = getOrLoadEnv[resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"]];
+  If[handle === $Failed, Return[$Failed]];
+  raw = decodeWXF[$listTheoremsFn[handle, OptionValue["Filter"]]];
   If[!AssociationQ[raw], Return[$Failed]];
   (* Filter out internal/generated names *)
   raw = KeySelect[raw, !isInternalName[#] &];
-  attachEnvKinds[toLeanObject /@ raw]];
+  attachEnvKinds[toLeanObject /@ raw, handle]];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
 

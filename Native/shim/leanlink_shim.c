@@ -34,6 +34,8 @@ extern lean_object* leanlink_list_theorems(uint64_t handle, lean_object* filter,
 extern lean_object* leanlink_get_type(uint64_t handle, lean_object* name, uint32_t depth, lean_object* w);
 extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint32_t depth, lean_object* w);
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name, lean_object* w);
+extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name, lean_object* w);
+extern lean_object* leanlink_list_constant_names(uint64_t handle, lean_object* filter, lean_object* w);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -168,6 +170,24 @@ DLLEXPORT int leanlink_wl_list_theorems(
 }
 
 /*
+ * listConstantNames(handle, filter) -> MTensor (WXF bytes, names only)
+ */
+DLLEXPORT int leanlink_wl_list_constant_names(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* filter_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* filter = lean_mk_string(filter_cstr);
+
+    lean_object* io_res = leanlink_list_constant_names(handle, filter, lean_io_mk_world());
+    lean_dec(filter);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
  * getType(handle, name, depth) -> MTensor (WXF bytes)
  */
 DLLEXPORT int leanlink_wl_get_type(
@@ -219,6 +239,25 @@ DLLEXPORT int leanlink_wl_get_constant(
     lean_object* name = lean_mk_string(name_cstr);
 
     lean_object* io_res = leanlink_get_constant(handle, name, lean_io_mk_world());
+    lean_dec(name);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * getUsedConstants(handle, name) -> MTensor (WXF bytes)
+ * Returns <|"type" -> {names...}, "value" -> {names...}|>
+ */
+DLLEXPORT int leanlink_wl_get_used_constants(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_get_used_constants(handle, name, lean_io_mk_world());
     lean_dec(name);
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }

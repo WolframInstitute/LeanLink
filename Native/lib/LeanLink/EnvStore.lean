@@ -86,6 +86,20 @@ def listTheoremsExport (handle : UInt64) (filterStr : @& String) : IO ByteArray 
     else acc
   return WXF.serialize (WXF.wlAssociation entries)
 
+/-- List constant names only (no types/values), filtered by substring.
+    Returns WXF-encoded List of strings. Much faster than listTheorems for large envs. -/
+@[export leanlink_list_constant_names]
+def listConstantNamesExport (handle : UInt64) (filterStr : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let filter := filterStr.trim
+  let names := env.constants.fold (init := #[]) fun acc name _ci =>
+    let nameStr := name.toString
+    if filter == "" || (nameStr.splitOn filter).length > 1 then
+      acc.push (WXF.string nameStr)
+    else acc
+  return WXF.serialize (WXF.wlList names)
+
 /-- Get the type of a constant as WXF-encoded Lean expression. -/
 @[export leanlink_get_type]
 def getTypeExport (handle : UInt64) (constName : @& String) (depth : UInt32) : IO ByteArray := do
@@ -117,6 +131,35 @@ def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray :
   let name := constName.toName
   match env.find? name with
   | some ci => return WXF.serialize (WXF.constantToWXF ci)
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
+/-- Get used constants from a constant's type and value expressions.
+    Returns WXF-encoded Association: <|"type" -> {names...}, "value" -> {names...}|> -/
+@[export leanlink_get_used_constants]
+def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  match env.find? name with
+  | some ci =>
+    let typeNames := ci.type.getUsedConstants
+    let typeConsts := typeNames.map fun n => WXF.string n.toString
+    let valueNames := match ci.value? with
+      | some v => v.getUsedConstants
+      | none => #[]
+    let valueConsts := valueNames.map fun n => WXF.string n.toString
+    -- Also include structural refs (e.g. inductive→constructor) via getUsedConstantsAsSet
+    let allUsed := ci.getUsedConstantsAsSet
+    let typeSet : Lean.NameHashSet := typeNames.foldl (fun s n => s.insert n) {}
+    let valueSet : Lean.NameHashSet := valueNames.foldl (fun s n => s.insert n) {}
+    let structConsts := allUsed.fold (init := #[]) fun acc n =>
+      if typeSet.contains n || valueSet.contains n then acc
+      else acc.push (WXF.string n.toString)
+    let result := WXF.wlAssociation #[
+      (WXF.string "type", WXF.wlList typeConsts),
+      (WXF.string "value", WXF.wlList (valueConsts ++ structConsts))
+    ]
+    return WXF.serialize result
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
 end LeanLink

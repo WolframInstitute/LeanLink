@@ -17,6 +17,7 @@ add_library(LeanLinkShim SHARED
     ${IR_DIR}/LeanLink.c
     ${IR_DIR}/LeanLink/WXF.c
     ${IR_DIR}/LeanLink/EnvStore.c
+    ${IR_DIR}/LeanLink/Examples.c
 )
 
 target_include_directories(LeanLinkShim PRIVATE
@@ -32,6 +33,7 @@ add_executable(test_lean_proper test_lean_proper.c
     ${IR_DIR}/LeanLink.c
     ${IR_DIR}/LeanLink/WXF.c
     ${IR_DIR}/LeanLink/EnvStore.c
+    ${IR_DIR}/LeanLink/Examples.c
 )
 target_include_directories(test_lean_proper PRIVATE ${LEAN_HOME}/include)
 target_link_directories(test_lean_proper PRIVATE ${LEAN_HOME}/lib/lean)

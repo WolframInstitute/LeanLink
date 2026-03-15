@@ -1,6 +1,9 @@
 (* ::Package:: *)
 (* LeanLink.wl -- Main entry point: subprocess graph API + native integration *)
 
+(* Load ImportDOT from Utilities.wl before main package *)
+Get[FileNameJoin[{DirectoryName[$InputFileName], "Utilities.wl"}]];
+
 BeginPackage["LeanLink`"];
 
 (* Subprocess graph API *)
