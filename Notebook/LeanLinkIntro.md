@@ -1,8 +1,8 @@
 # LeanLink
 
-Visualize Lean 4 proof structures as Wolfram Language graphs.
+Explore Lean 4 proof structures from Wolfram Language.
 
-## Installation
+## Setup
 
 ```wolfram
 PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]
@@ -12,77 +12,25 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVers
 << LeanLink`
 ```
 
-## Functions
-
-LeanLink provides two layers of API:
-
-**Native API** (LibraryLink, fast):
-
-- `LeanImport[opts]` — one-shot import returning an Association of typed objects
-- `LeanExpr[name, opts]` — type of a constant as a symbolic expression tree
-- `LeanValue[name, opts]` — proof or definition body
-- `LeanConstantInfo[name, opts]` — full constant info
-- `LeanListConstants[opts]` — list all constants
-
-**Subprocess API** (invokes `lean` CLI):
-
-- `LeanExprGraph[name, opts]` — expression tree graph
-- `LeanCallGraph[name, opts]` — dependency graph
-- `LeanListTheorems[opts]` — enumerate theorems and definitions
-
 ## Quick Start
 
-LeanLink ships with a bundled `Examples.lean`:
+LeanLink ships with a built-in `LeanLink.Examples` module containing textbook proofs and dependent types.
 
-```wolfram
-exFile = PacletObject["LeanLink"]["AssetLocation", "Examples"];
-```
-
-### List Theorems
-
-```wolfram
-LeanListTheorems[exFile]
-```
-
-```wolfram
-LeanListTheorems[exFile, "Filter" -> "add"]
-```
-
-### Expression Graph
-
-```wolfram
-LeanExprGraph[exFile, "modus_ponens"]
-```
-
-```wolfram
-LeanExprGraph[exFile, "Vec.map"]
-```
-
-### Call Graph
-
-```wolfram
-LeanCallGraph[exFile, "zero_add_proof"]
-```
-
-## Native API — LeanImport
-
-`LeanImport` loads a Lean module via LibraryLink and returns an Association of typed objects. Each object has a kind-specific head (`LeanTheorem`, `LeanDefinition`, `LeanAxiom`, `LeanInductive`, `LeanConstructor`, `LeanRecursor`) with formatted output and property access.
-
-Set up the project directory (the directory containing `lakefile.lean` and `.lake/build/lib/`):
+Point to the native build directory:
 
 ```wolfram
 nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
 ```
 
-### Import a module
-
-Import all constants from `LeanLink.Examples`:
+### Import a Module
 
 ```wolfram
 env = LeanImport["LeanLink", "ProjectDir" -> nativeDir, "Filter" -> "LeanLink.Examples"]
 ```
 
-The result is an Association where keys are fully qualified names and values are typed Lean objects:
+### Browse Constants
+
+Keys of the returned Association are fully qualified names:
 
 ```wolfram
 Keys[env]
@@ -90,7 +38,7 @@ Keys[env]
 
 ### Typed Objects
 
-Each value has a kind-specific head:
+Each value is a `LeanTerm` with its kind (theorem, def, inductive, axiom, ...) shown in the summary:
 
 ```wolfram
 env["LeanLink.Examples.identity"]
@@ -106,12 +54,6 @@ env["LeanLink.Examples.Vec.head"]
 
 ### Property Access
 
-Every object supports property access:
-
-```wolfram
-env["LeanLink.Examples.identity"]["Name"]
-```
-
 ```wolfram
 env["LeanLink.Examples.identity"]["Kind"]
 ```
@@ -121,27 +63,47 @@ env["LeanLink.Examples.identity"]["Type"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.identity"]["Value"]
+env["LeanLink.Examples.identity"]["Term"]
 ```
-
-List all available properties:
 
 ```wolfram
 env["LeanLink.Examples.identity"]["Properties"]
 ```
 
-### Native Type Queries
+### Expression Graph
 
-Get just the type of a constant:
+Visualize the type as a tree. Each node is color-coded by its expression head: blue for `∀`, purple for `λ`, green for constants.
+
+```wolfram
+env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
+```
+
+```wolfram
+env["LeanLink.Examples.Vec.map"]["ExprGraph"]
+```
+
+### Call Graph
+
+See which constants a proof references:
+
+```wolfram
+env["LeanLink.Examples.contrapositive"]["CallGraph"]
+```
+
+```wolfram
+env["LeanLink.Examples.zero_add_proof"]["CallGraph"]
+```
+
+## Low-Level API
+
+For fine-grained queries, use the raw functions directly:
 
 ```wolfram
 LeanExpr["LeanLink.Examples.modus_ponens", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir]
 ```
 
-Get the proof term:
-
 ```wolfram
-LeanValue["LeanLink.Examples.contrapositive", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir, "Depth" -> 10]
+LeanValue["LeanLink.Examples.identity", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir, "Depth" -> 10]
 ```
 
 ## TM {2,2} Rule 445 — Successor Proof
@@ -149,27 +111,23 @@ LeanValue["LeanLink.Examples.contrapositive", "Imports" -> {"LeanLink"}, "Projec
 The TuringMachineSearch project proves that the {2,2} Turing machine rule 445 computes the successor function:
 
 ```wolfram
-projectDir = FileNameJoin[NotebookDirectory[], "Proofs"];
+projectDir = ParentDirectory[NotebookDirectory[], 2]
 ```
 
-List theorems from the PlusOne module:
+Import the PlusOne module:
 
 ```wolfram
-LeanListTheorems["Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir, "Filter" -> "rule445"]
+tm = LeanImport["OneSidedTM", "ProjectDir" -> projectDir, "Filter" -> "rule445"]
 ```
 
 Expression graph of a successor proof:
 
 ```wolfram
-LeanExprGraph["OneSidedTM.rule445_computesSucc", 
- "Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir, 
- "Depth" -> 5]
+tm["OneSidedTM.rule445_computesSucc"]["ExprGraph"]
 ```
 
-Call graph showing proof dependencies of the main theorem:
+Call graph showing proof dependencies:
 
 ```wolfram
-LeanCallGraph["OneSidedTM.rule445_computesSucc", 
- "Imports" -> {"OneSidedTM.PlusOne"}, "ProjectDir" -> projectDir, 
- "Depth" -> 2]
+tm["OneSidedTM.rule445_computesSucc"]["CallGraph"]
 ```
