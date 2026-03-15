@@ -6,6 +6,7 @@
 
 # Wolfram
 *.mx
+*.nb
 *.wl.bak
 
 # AG

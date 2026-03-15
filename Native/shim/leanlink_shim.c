@@ -15,6 +15,13 @@
 
 /* Lean FFI init (not in lean.h but exported from libleanshared) */
 extern void lean_initialize(void);
+extern void lean_initialize_thread(void);
+
+/* Ensure current thread is registered with Lean runtime.
+   WL may call LibraryLink functions from different threads. */
+static void ensure_thread(void) {
+    lean_initialize_thread();
+}
 
 /* Lean module initializer */
 extern lean_object* initialize_LeanLink(uint8_t builtin, lean_object* w);
@@ -92,6 +99,7 @@ DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) {
 DLLEXPORT int leanlink_wl_load_env(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
+    ensure_thread();
     const char* imports_cstr = MArgument_getUTF8String(Args[0]);
     const char* path_cstr = MArgument_getUTF8String(Args[1]);
 
@@ -120,6 +128,7 @@ DLLEXPORT int leanlink_wl_load_env(
 DLLEXPORT int leanlink_wl_free_env(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
+    ensure_thread();
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     lean_object* io_res = leanlink_free_env(handle, lean_io_mk_world());
     lean_dec_ref(io_res);
@@ -132,6 +141,7 @@ DLLEXPORT int leanlink_wl_free_env(
 DLLEXPORT int leanlink_wl_list_theorems(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
+    ensure_thread();
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* filter_cstr = MArgument_getUTF8String(Args[1]);
     lean_object* filter = lean_mk_string(filter_cstr);
@@ -147,6 +157,7 @@ DLLEXPORT int leanlink_wl_list_theorems(
 DLLEXPORT int leanlink_wl_get_type(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
+    ensure_thread();
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* name_cstr = MArgument_getUTF8String(Args[1]);
     uint32_t depth = (uint32_t)MArgument_getInteger(Args[2]);
@@ -163,6 +174,7 @@ DLLEXPORT int leanlink_wl_get_type(
 DLLEXPORT int leanlink_wl_get_value(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
+    ensure_thread();
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* name_cstr = MArgument_getUTF8String(Args[1]);
     uint32_t depth = (uint32_t)MArgument_getInteger(Args[2]);
@@ -179,6 +191,7 @@ DLLEXPORT int leanlink_wl_get_value(
 DLLEXPORT int leanlink_wl_get_constant(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
+    ensure_thread();
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* name_cstr = MArgument_getUTF8String(Args[1]);
     lean_object* name = lean_mk_string(name_cstr);

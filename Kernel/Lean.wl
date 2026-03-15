@@ -53,12 +53,23 @@ $getConstantFn := $getConstFn = LibraryFunctionLoad[$ShimLib,
 (* Decode WXF bytes from MTensor result *)
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
-(* Resolve search path from project dir *)
-resolveSearchPath[projDir_String] := Module[{p},
-  p = FileNameJoin[{projDir, ".lake", "build", "lib"}];
-  If[DirectoryQ[p], p,
-    p = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}];
-    If[DirectoryQ[p], p, projDir]]];
+(* Resolve search path: project build lib + Lean stdlib *)
+resolveSearchPath[projDir_String] := Module[{buildLib, leanLib, paths},
+  buildLib = FileNameJoin[{projDir, ".lake", "build", "lib"}];
+  (* Find lean stdlib from lean-toolchain file *)
+  leanLib = Module[{dir = projDir, tc, version, toolchainDir},
+    (* Walk up to find lean-toolchain *)
+    While[StringLength[dir] > 1,
+      tc = FileNameJoin[{dir, "lean-toolchain"}];
+      If[FileExistsQ[tc],
+        version = StringTrim[Import[tc, "Text"]];
+        (* Format: "leanprover/lean4:v4.15.0" -> "leanprover--lean4---v4.15.0" *)
+        toolchainDir = StringReplace[version, {"/" -> "--", ":" -> "---"}];
+        Return[FileNameJoin[{$HomeDirectory, ".elan", "toolchains", toolchainDir, "lib", "lean"}], Module]];
+      dir = DirectoryName[dir]];
+    Nothing];
+  paths = Select[{buildLib, leanLib}, StringQ[#] && DirectoryQ[#] &];
+  StringRiffle[paths, ":"]];
 
 (* Environment cache: projDir+imports -> handle *)
 $envCache = <||>;

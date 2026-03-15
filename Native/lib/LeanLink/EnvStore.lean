@@ -26,7 +26,6 @@ private initialize nextHandle : IO.Ref UInt64 ← IO.mkRef 1
 
 /-- Load an environment from module imports with a given search path. -/
 def loadEnv (imports : Array String) (searchPath : String) : IO Environment := do
-  IO.println s!"[loadEnv] imports={imports}, searchPath={searchPath}"
   -- Build search path from user-provided paths
   let userPaths : List System.FilePath := (searchPath.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
   -- Try to add lean stdlib path from env vars
@@ -37,15 +36,10 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
     | none => match leanPath with
       | some lp => (lp.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
       | none => []
-  let sp := userPaths ++ libPaths
-  IO.println s!"[loadEnv] search paths = {sp}"
-  Lean.searchPathRef.set sp
-  IO.println s!"[loadEnv] searchPathRef set OK"
+  Lean.searchPathRef.set (userPaths ++ libPaths)
   -- Import modules
   let modules : Array Import := imports.map fun m => { module := m.toName }
-  IO.println s!"[loadEnv] calling importModules for {modules.size} modules..."
   let env ← Lean.importModules modules {} 0
-  IO.println s!"[loadEnv] importModules OK"
   return env
 
 -- ============================================================================
@@ -56,24 +50,20 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
     Returns 0 on success. -/
 @[export leanlink_init]
 def initLeanLink : IO UInt32 := do
-  IO.println "[leanlink_init] OK"
   return 0
 
 /-- Load an environment from comma-separated imports and colon-separated search paths.
     Returns a handle (UInt64) for the loaded environment. Returns 0 on failure. -/
 @[export leanlink_load_env]
 def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt64 := do
-  IO.println s!"[loadEnvExport] called with imports='{importsStr}' search='{searchPathStr}'"
   let imports := (importsStr.splitOn ",").toArray.filter (· ≠ "")
   try
     let env ← loadEnv imports searchPathStr
     let handle ← nextHandle.get
     nextHandle.set (handle + 1)
     envStore.modify fun m => m.insert handle env
-    IO.println s!"[loadEnvExport] success, handle={handle}"
     return handle
-  catch e =>
-    IO.println s!"[loadEnvExport] ERROR: {toString e}"
+  catch _ =>
     return 0
 
 /-- Free a previously loaded environment. -/
