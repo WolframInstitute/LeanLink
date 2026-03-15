@@ -181,7 +181,7 @@ leanImportArgs[imports_List] := ("+import=" <> # &) /@ imports;
 (* LeanExprGraph                                                                     *)
 (* ============================================================================ *)
 
-Options[LeanExprGraph] = {
+Options[LeanExprGraph] = Join[{
   "ConstDepth" -> 1,
   "Depth" -> 10000,
   "MaxNodes" -> 200000,
@@ -190,7 +190,7 @@ Options[LeanExprGraph] = {
   "Files" -> {},
   "Imports" -> {},
   "RawDOT" -> False
-};
+}, Options[Graph]];
 
 LeanExprGraph[file_String, root_String, opts : OptionsPattern[]] :=
   LeanExprGraph[root, "Files" -> {file}, opts];
@@ -219,13 +219,13 @@ LeanExprGraph::err = "Lean error: `1`";
 (* LeanCallGraph                                                                     *)
 (* ============================================================================ *)
 
-Options[LeanCallGraph] = {
+Options[LeanCallGraph] = Join[{
   "Depth" -> 0,
   "ProjectDir" -> Automatic,
   "Files" -> {},
   "Imports" -> {},
   "RawDOT" -> False
-};
+}, Options[Graph]];
 
 LeanCallGraph[file_String, root_String, opts : OptionsPattern[]] :=
   LeanCallGraph[root, "Files" -> {file}, opts];
