@@ -184,16 +184,20 @@ $callEdgeColor = <|
 (* --- Lazy fetch cache: keyed by {handle, name, field} --- *)
 $termCache = <||>;
 
+isFFIError[r_] := StringQ[r] && StringStartsQ[r, "ERROR"];
+
 fetchField[handle_Integer, name_String, "Type"] :=
   Lookup[$termCache, Key[{handle, name, "Type"}],
     $termCache[{handle, name, "Type"}] =
-      Quiet[decodeWXF[$getTypeFn[handle, name, 100]]]];
+      With[{r = Quiet[decodeWXF[$getTypeFn[handle, name, 100]]]},
+        If[isFFIError[r], $Failed, r]]];
 
 fetchField[handle_Integer, name_String, "Term"] :=
   Lookup[$termCache, Key[{handle, name, "Term"}],
     $termCache[{handle, name, "Term"}] =
       With[{r = Quiet[decodeWXF[$getValueFn[handle, name, 100]]]},
-        If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]];
+        If[isFFIError[r], $Failed,
+          If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]]];
 
 fetchField[handle_Integer, name_String, "TypeRefs"] :=
   Lookup[$termCache, Key[{handle, name, "TypeRefs"}],
