@@ -1,141 +1,151 @@
-# LeanLink
-
-Explore Lean 4 proof structures from Wolfram Language.
+# LeanLink — Interactive Lean from Wolfram Language
 
 ## Setup
 
-```wolfram
-PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]
-```
+Load the paclet and point it at the Lean project:
 
 ```wolfram
-<< LeanLink`
+PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];
+Needs["LeanLink`"];
+nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
 ```
 
-## Quick Start
+## Importing a Lean Environment
 
-LeanLink ships with built-in examples: textbook proofs and dependent types.
-
-### Import a standalone .lean file
+Import constants from a Lean module. This is lazy — only names and kinds are loaded upfront:
 
 ```wolfram
-exFile = PacletFind["LeanLink"][[1]]["AssetLocation", "Examples"]
+env = LeanImport["LeanLink.Examples",
+  "ProjectDir" -> nativeDir,
+  "Imports" -> {"LeanLink"},
+  "Filter" -> "Examples"]
 ```
 
-```wolfram
-env = LeanImport[exFile]
-```
-
-### Browse Constants
-
-Internal names are filtered — only top-level theorems, definitions, and inductives show:
+List the available constants:
 
 ```wolfram
 Keys[env]
 ```
 
-### Typed Objects
+## Inspecting Types and Terms
 
-Each value is a `LeanTerm` with its kind shown in a colored summary:
+Each entry is a `LeanTerm`. Access its type (as an expression tree) or as a pretty-printed string:
 
 ```wolfram
-env["id_proof"]
+env["LeanLink.Examples.identity"]["TypeForm"]
 ```
 
 ```wolfram
-env["Vec"]
+env["LeanLink.Examples.identity"]["Type"]
 ```
 
 ```wolfram
-env["Vec.head"]
+env["LeanLink.Examples.identity"]["TermForm"]
 ```
 
-### Property Access
+View the type with definitions unfolded (level 1 = unfold each definition once):
 
 ```wolfram
-env["id_proof"]["Kind"]
+env["LeanLink.Examples.Vec.head"]["TypeForm", 1]
 ```
 
+## Expression Graphs
+
+Visualize the structure of a definition as a graph:
+
 ```wolfram
-env["id_proof"]["Type"]
+env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
 ```
 
-```wolfram
-env["id_proof"]["Term"]
-```
+## Constructing Expressions & Type-Checking
+
+Build Lean expressions from WL heads and type-check them against the environment:
 
 ```wolfram
-env["id_proof"]["Properties"]
-```
-
-### Expression Graph
-
-Visualize the type as a tree — nodes are colored by head: blue for ∀, purple for λ, green for constants.
-
-```wolfram
-env["modus_ponens"]["ExprGraph"]
+expr = LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]];
+LeanTypeCheck[expr, env]
 ```
 
 ```wolfram
-env["Vec.map"]["ExprGraph"]
+LeanTypeCheck[LeanConst["LeanLink.Examples.identity", {}], env]
 ```
 
-### Call Graph
+## Interactive Tactic Proofs
 
-See which constants a proof depends on:
+Open a proof goal for a theorem and step through it interactively:
+
+### Example 1: Identity (∀ P : Prop, P → P)
 
 ```wolfram
-env["contrapositive"]["CallGraph"]
+s0 = LeanOpenGoal[env["LeanLink.Examples.identity"]];
+FormatLeanState[s0]
 ```
 
+Introduce the proposition P:
+
 ```wolfram
-env["zero_add_proof"]["CallGraph"]
+s1 = LeanApplyTactic[s0["stateId"], "intro P"];
+FormatLeanState[s1]
 ```
 
-## Module Import
-
-Import from a Lake project with compiled `.olean` files:
+Introduce the hypothesis h : P:
 
 ```wolfram
-nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
+s2 = LeanApplyTactic[s1["stateId"], "intro h"];
+FormatLeanState[s2]
 ```
 
+Close the goal — h is exactly what we need:
+
 ```wolfram
-env2 = LeanImport["LeanLink.Examples", "ProjectDir" -> nativeDir]
+s3 = LeanApplyTactic[s2["stateId"], "exact h"];
+FormatLeanState[s3]
 ```
 
-```wolfram
-env2["LeanLink.Examples.modus_ponens"]["ExprGraph"]
-```
-
-## Low-Level API
-
-Query individual constants without importing everything:
+### Example 2: Modus Ponens (P → (P → Q) → Q)
 
 ```wolfram
-LeanExpr["LeanLink.Examples.modus_ponens", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir]
-```
-
-```wolfram
-LeanValue["LeanLink.Examples.identity", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir, "Depth" -> 10]
-```
-
-## TM {2,2} Rule 445 — Successor Proof
-
-The TuringMachineSearch project proves that the {2,2} Turing machine rule 445 computes the successor function:
-
-```wolfram
-projectDir = ParentDirectory[NotebookDirectory[], 2]
+s0 = LeanOpenGoal[env["LeanLink.Examples.modus_ponens"]];
+FormatLeanState[s0]
 ```
 
 ```wolfram
-tm = LeanImport["OneSidedTM", "ProjectDir" -> projectDir, "Filter" -> "rule445"]
+s1 = LeanApplyTactic[s0["stateId"], "intro P Q hP hPQ"];
+FormatLeanState[s1]
 ```
 
 ```wolfram
-tm["OneSidedTM.rule445_computesSucc"]["ExprGraph"]
+s2 = LeanApplyTactic[s1["stateId"], "exact hPQ hP"];
+FormatLeanState[s2]
+```
+
+### Example 3: Contrapositive ((P → Q) → ¬Q → ¬P)
+
+```wolfram
+s0 = LeanOpenGoal[env["LeanLink.Examples.contrapositive"]];
+FormatLeanState[s0]
 ```
 
 ```wolfram
-tm["OneSidedTM.rule445_computesSucc"]["CallGraph"]
+s1 = LeanApplyTactic[s0["stateId"], "intro P Q hPQ hNQ hP"];
+FormatLeanState[s1]
+```
+
+```wolfram
+s2 = LeanApplyTactic[s1["stateId"], "exact hNQ (hPQ hP)"];
+FormatLeanState[s2]
+```
+
+### Example 4: Piping Tactics
+
+Apply multiple tactics in one call:
+
+```wolfram
+s0 = LeanOpenGoal[env["LeanLink.Examples.and_comm"]];
+FormatLeanState[s0]
+```
+
+```wolfram
+sf = LeanApplyTactic[s0["stateId"], {"intro h", "exact \[LeftAngleBracket]h.2, h.1\[RightAngleBracket]"}];
+FormatLeanState[sf]
 ```
