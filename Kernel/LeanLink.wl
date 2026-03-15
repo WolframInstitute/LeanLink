@@ -152,11 +152,11 @@ runLean[projDir_String, args_List] := Module[{cmd, res},
       "StandardError" -> "RunProcess failed for: " <> StringRiffle[cmd, " "]|>,
     res]];
 
-dotToGraph[dotStr_String] := Module[{tmpFile, g},
+dotToGraph[dotStr_String, graphOpts___] := Module[{tmpFile, g},
   tmpFile = FileNameJoin[{$TemporaryDirectory, CreateUUID[] <> ".dot"}];
   With[{s = OpenWrite[tmpFile, CharacterEncoding -> "UTF-8"]},
     WriteString[s, dotStr]; Close[s]];
-  g = ImportDOT[tmpFile];
+  g = ImportDOT[tmpFile, graphOpts];
   DeleteFile[tmpFile];
   g];
 
@@ -210,7 +210,8 @@ LeanExprGraph[root_String, opts : OptionsPattern[]] := Module[
   If[res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"]] == 0,
     Message[LeanExprGraph::err, res["StandardError"]]; Return[$Failed]];
   dotStr = decodeUTF8[extractDOT[res["StandardOutput"]]];
-  If[TrueQ[OptionValue["RawDOT"]], dotStr, dotToGraph[dotStr]]
+  If[TrueQ[OptionValue["RawDOT"]], dotStr,
+    dotToGraph[dotStr, FilterRules[{opts}, Options[Graph]]]]
 ];
 LeanExprGraph::err = "Lean error: `1`";
 
@@ -234,12 +235,16 @@ LeanCallGraph[root_String, opts : OptionsPattern[]] := Module[
   files = OptionValue["Files"];
   projDir = Replace[OptionValue["ProjectDir"],
     Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
-  args = Join[{"call"}, leanFileArgs[files], leanImportArgs[OptionValue["Imports"]], {root}];
+  args = Join[{
+    "call",
+    "+depth=" <> ToString[OptionValue["Depth"]]},
+    leanFileArgs[files], leanImportArgs[OptionValue["Imports"]], {root}];
   res = runLean[projDir, args];
   If[res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"]] == 0,
     Message[LeanCallGraph::err, res["StandardError"]]; Return[$Failed]];
   dotStr = decodeUTF8[extractDOT[res["StandardOutput"]]];
-  If[TrueQ[OptionValue["RawDOT"]], dotStr, dotToGraph[dotStr]]
+  If[TrueQ[OptionValue["RawDOT"]], dotStr,
+    dotToGraph[dotStr, FilterRules[{opts}, Options[Graph]]]]
 ];
 LeanCallGraph::err = "Lean error: `1`";
 
