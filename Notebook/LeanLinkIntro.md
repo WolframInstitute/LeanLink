@@ -43,8 +43,14 @@ env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
 
 ## Constructing Expressions
 
+Build a Lean expression and bind it to an environment for type-checking:
+
 ```wolfram
-LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]]]
+LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]], env]
+```
+
+```wolfram
+%["TypeForm"]
 ```
 
 ## Interactive Tactic Proofs
@@ -74,35 +80,17 @@ s0 = LeanState[env["LeanLink.Examples.modus_ponens"]]
 ```
 
 ```wolfram
-s1 = LeanTactic["intro P Q hP hPQ"][s0]
+LeanTactic[{"intro P Q hP hPQ", "exact hPQ hP"}][s0]
 ```
 
-```wolfram
-s2 = LeanTactic["exact hPQ hP"][s1]
-```
-
-### Contrapositive: $(P \to Q) \to \neg Q \to \neg P$
-
-```wolfram
-s0 = LeanState[env["LeanLink.Examples.contrapositive"]]
-```
-
-```wolfram
-s1 = LeanTactic["intro P Q hPQ hNQ hP"][s0]
-```
-
-```wolfram
-s2 = LeanTactic["exact hNQ (hPQ hP)"][s1]
-```
-
-### Piping Multiple Tactics
+### And Commutativity: $P \land Q \to Q \land P$
 
 ```wolfram
 s0 = LeanState[env["LeanLink.Examples.and_comm"]]
 ```
 
 ```wolfram
-sf = LeanTactic[{"intro h", "exact \[LeftAngleBracket]h.2, h.1\[RightAngleBracket]"}][s0]
+LeanTactic[{"intro P Q h", "exact And.intro h.2 h.1"}][s0]
 ```
 
 ### Accessing Goal Properties

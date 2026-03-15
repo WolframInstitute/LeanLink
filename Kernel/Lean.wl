@@ -253,6 +253,15 @@ LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
                 _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj] :=
   LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>];
 
+(* Constructor with env — binds handle for type-checking *)
+LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
+                _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj,
+          env_Association] :=
+  With[{h = Lookup[Values[env][[1]][[1]], "_Handle", None]},
+    If[IntegerQ[h],
+      LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>],
+      LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]]];
+
 (* Internal type-check helper *)
 typeCheck[expr_, handle_Integer] :=
   Module[{wxfBytes, result},

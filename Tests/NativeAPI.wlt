@@ -322,6 +322,19 @@ VerificationTest[
   TestID -> "Constructed-LeanTerm-Head"
 ]
 
+VerificationTest[
+  $bound = LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]], $filtered];
+  $bound["TypeForm"],
+  "Nat",
+  TestID -> "Constructed-LeanTerm-TypeForm"
+]
+
+VerificationTest[
+  $bound["Type"],
+  LeanConst["Nat", {}],
+  TestID -> "Constructed-LeanTerm-TypeExpr"
+]
+
 (* ================================================================ *)
 (* LeanState + LeanTactic                                            *)
 (* ================================================================ *)
@@ -367,6 +380,13 @@ VerificationTest[
   sf["Complete"],
   True,
   TestID -> "LeanTactic-ModusPonens-PipeComplete"
+]
+VerificationTest[
+  s0 = LeanState[$filtered["LeanLink.Examples.and_comm"]];
+  sf = LeanTactic[{"intro P Q h", "exact And.intro h.2 h.1"}][s0];
+  sf["Complete"],
+  True,
+  TestID -> "LeanTactic-AndComm-PipeComplete"
 ]
 
 EndTestSection[]
