@@ -479,10 +479,11 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
   {name, kind, typeExpr, termExpr, col, icon, sn, nTypeRefs, nTermRefs},
   name = Lookup[data, "Name", "?"];
   kind = Lookup[data, "Kind", "?"];
-  typeExpr = Lookup[data, "Type", None];
-  termExpr = Lookup[data, "Term", LeanNoValue[]];
-  nTypeRefs = Length[Lookup[data, "TypeRefs", {}]];
-  nTermRefs = Length[Lookup[data, "TermRefs", {}]];
+  (* Use lazy property access — triggers FFI fetch when box is opened *)
+  typeExpr = obj["Type"];
+  termExpr = obj["Term"];
+  nTypeRefs = Length[obj["TypeRefs"]];
+  nTermRefs = Length[obj["TermRefs"]];
   col = Lookup[$kindColor, kind, GrayLevel[0.5]];
   icon = Graphics[{col, Disk[]}, ImageSize -> 12];
   sn = shortName[name];
@@ -495,8 +496,8 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
     {
       If[name =!= sn, BoxForm`SummaryItem[{"Full name: ", name}], Nothing],
       BoxForm`SummaryItem[{"Type: ",
-        If[typeExpr =!= None, Short[typeExpr, 1], "—"]}],
-      If[termExpr =!= LeanNoValue[],
+        If[typeExpr =!= $Failed, Short[typeExpr, 1], "—"]}],
+      If[termExpr =!= $Failed && termExpr =!= LeanNoValue[],
         BoxForm`SummaryItem[{"Term: ", Short[termExpr, 1]}],
         Nothing],
       If[nTypeRefs + nTermRefs > 0,
@@ -750,25 +751,26 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       Return[$Failed, Module]];
     (* Load via lazy pattern *)
     searchPath = tmpDir <> ":" <> leanLibDir;
-    Block[{handle, kinds, res},
+    Block[{handle, kinds, srcNames, res},
       handle = $loadEnvFn[modName, searchPath];
       If[handle === 0 || !IntegerQ[handle],
         Message[LeanLink::err, "Failed to load compiled file"];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Module]];
-      (* Extract names from source for filtering *)
+      (* Extract names from source for filtering — these are unqualified *)
       content = Import[absFile, "Text"];
-      names = StringCases[content,
+      srcNames = StringCases[content,
         RegularExpression["(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.]*)"] :> "$1"];
-      If[names === {}, names = {modName}];
-      (* Build lazy LeanTerms from known names *)
-      res = Association @ Table[
-        With[{qname = modName <> "." <> name},
-          Module[{kind = "def"},
-            Quiet @ With[{r = decodeWXF[$getConstantFn[handle, qname]]},
-              If[MatchQ[r, LeanConstant[_, k_String, __]], kind = k]];
-            qname -> LeanTerm[<|"Name" -> qname, "Kind" -> kind, "_Handle" -> handle|>]]],
-        {name, names}];
+      (* Get actual Lean names from env, filter to source-defined ones *)
+      kinds = decodeWXF[$listConstantKindsFn[handle, ""]];
+      If[!AssociationQ[kinds], Return[$Failed, Module]];
+      kinds = KeySelect[kinds,
+        !isInternalName[#] && MemberQ[srcNames, #] &];
+      (* Build lazy LeanTerms *)
+      res = Association @ KeyValueMap[
+        Function[{name, kind},
+          name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
+        kinds];
       (* Don't delete tmpDir — olean needed for lazy queries *)
       res]];
 

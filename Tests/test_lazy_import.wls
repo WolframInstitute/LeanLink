@@ -113,6 +113,26 @@ Print["First Type: ", t1, "s, Second: ", t2, "s"];
 checkTrue["Cached fetch faster (or same)", t2 <= t1 + 0.001];
 
 (* =============================== *)
+(* Standalone file import           *)
+(* =============================== *)
+
+Print["\n=== Standalone File Import ==="];
+
+exFile = PacletObject["LeanLink"]["AssetLocation", "Examples"];
+standalone = LeanImport[exFile];
+
+checkTrue["Standalone returns Association", AssociationQ[standalone]];
+checkTrue["Standalone count > 10", Length[standalone] > 10];
+checkTrue["add_zero_term in standalone", KeyExistsQ[standalone, "add_zero_term"]];
+checkTrue["modus_ponens in standalone", KeyExistsQ[standalone, "modus_ponens"]];
+checkTrue["Vec.head in standalone", KeyExistsQ[standalone, "Vec.head"]];
+
+(* Type should resolve correctly — not $Failed *)
+azTerm = standalone["add_zero_term"];
+checkTrue["Standalone Type resolves", azTerm["Type"] =!= $Failed];
+check["Standalone Type head", Head[azTerm["Type"]], LeanForall];
+
+(* =============================== *)
 (* Summary                          *)
 (* =============================== *)
 
