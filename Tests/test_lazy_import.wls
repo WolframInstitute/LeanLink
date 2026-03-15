@@ -149,6 +149,42 @@ checkTrue["Vec.head in standalone", KeyExistsQ[standalone, "Vec.head"]];
 azTerm = standalone["add_zero_term"];
 checkTrue["Standalone Type resolves", azTerm["Type"] =!= $Failed];
 check["Standalone Type head", Head[azTerm["Type"]], LeanForall];
+(* =============================== *)
+(* Phase 2: Type-checking            *)
+(* =============================== *)
+
+Print["\n=== Type-Checking ==="];
+
+expr = LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]];
+tc = LeanTypeCheck[expr, filtered];
+checkTrue["TypeCheck returns Association", AssociationQ[tc]];
+check["TypeCheck Nat.succ(42) type", Lookup[tc, "TypeForm", ""], "Nat"];
+check["TypeCheck expr tree", Lookup[tc, "Type", $Failed], LeanConst["Nat", {}]];
+
+tc2 = LeanTypeCheck[LeanConst["LeanLink.Examples.identity", {}], filtered];
+checkTrue["TypeCheck identity returns Association", AssociationQ[tc2]];
+checkTrue["TypeCheck identity TypeForm", StringContainsQ[Lookup[tc2, "TypeForm", ""], "Prop"]];
+
+(* =============================== *)
+(* Phase 3: Interactive Tactics      *)
+(* =============================== *)
+
+Print["\n=== Interactive Tactics ==="];
+
+s0 = LeanOpenGoal[filtered["LeanLink.Examples.identity"]];
+checkTrue["OpenGoal returns Association", AssociationQ[s0]];
+check["OpenGoal has 1 goal", s0["goalCount"], 1];
+checkTrue["OpenGoal target has Prop",
+  StringContainsQ[s0["goals"][[1]]["target"], "Prop"]];
+
+s1 = LeanApplyTactic[s0["stateId"], "intro P"];
+checkTrue["intro P returns Association", AssociationQ[s1]];
+checkTrue["intro P context has P",
+  Length[s1["goals"][[1]]["context"]] > 0];
+
+s2 = LeanApplyTactic[s1["stateId"], "intro h"];
+s3 = LeanApplyTactic[s2["stateId"], "exact h"];
+check["Proof complete", s3["goalCount"], 0];
 
 (* =============================== *)
 (* Summary                          *)

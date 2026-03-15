@@ -269,7 +269,7 @@ LeanTypeCheck[expr_, handle_Integer] :=
 LeanTypeCheck[expr_, env_Association] :=
   With[{terms = Values[env]},
     If[Length[terms] > 0,
-      With[{h = terms[[1]]["_Handle"]},
+      With[{h = Lookup[terms[[1]][[1]], "_Handle", None]},
         If[IntegerQ[h], LeanTypeCheck[expr, h], $Failed]],
       $Failed]];
 
