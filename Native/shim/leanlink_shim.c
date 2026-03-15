@@ -41,6 +41,7 @@ extern lean_object* leanlink_get_type_unfolded(uint64_t handle, lean_object* nam
 extern lean_object* leanlink_get_value_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
 extern lean_object* leanlink_pp_type(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
 extern lean_object* leanlink_pp_value(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* w);
+extern lean_object* leanlink_type_check(uint64_t handle, lean_object* exprWXF, lean_object* w);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -321,6 +322,32 @@ DLLEXPORT int leanlink_wl_pp_value(
 
     lean_object* io_res = leanlink_pp_value(handle, name, unfold_level, lean_io_mk_world());
     lean_dec(name);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * typeCheck(handle, exprWXF) -> MTensor (WXF result)
+ * exprWXF is an MTensor of integers (the WXF byte array)
+ */
+DLLEXPORT int leanlink_wl_type_check(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    MTensor wxf_tensor = MArgument_getMTensor(Args[1]);
+    mint* wxf_data = libData->MTensor_getIntegerData(wxf_tensor);
+    mint wxf_len = libData->MTensor_getFlattenedLength(wxf_tensor);
+
+    /* Build a Lean ByteArray from the MTensor integers */
+    lean_object* ba = lean_mk_empty_byte_array(lean_box(wxf_len));
+    for (mint i = 0; i < wxf_len; i++) {
+        ba = lean_byte_array_push(ba, (uint8_t)(wxf_data[i] & 0xFF));
+    }
+
+    lean_object* io_res = leanlink_type_check(handle, ba, lean_io_mk_world());
+    /* ba is consumed by leanlink_type_check */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 

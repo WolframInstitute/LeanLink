@@ -267,6 +267,40 @@ def ppValueExport (handle : UInt64) (constName : @& String)
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+/-- Type-check a WXF-encoded expression against an environment.
+    Returns WXF with both the inferred type (as expr tree) and pretty-printed string. -/
+@[export leanlink_type_check]
+def typeCheckExport (handle : UInt64) (exprWXF : @& ByteArray) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  -- Deserialize WXF to Lean.Expr
+  match WXF.deserializeExpr exprWXF with
+  | none => return WXF.serialize (WXF.string "ERROR: failed to deserialize expression")
+  | some expr =>
+    -- Type-check in MetaM
+    let ctx : Core.Context := {
+      fileName := "<typecheck>"
+      fileMap := { source := "", positions := #[0] }
+    }
+    let st : Core.State := { env }
+    try
+      let res ←
+        ((Meta.MetaM.run' (do
+          let ty ← Meta.inferType expr
+          let ppStr ← PrettyPrinter.ppExpr ty
+          return (ty, s!"{ppStr}")) : CoreM (Expr × String)).run ctx st).toIO'
+      match res with
+      | .ok ((ty, ppStr), _) =>
+        -- Return association with both expr tree and string
+        let tyWXF := WXF.exprToWXF ty
+        let ppWXF := WXF.string ppStr
+        return WXF.serialize (WXF.wlAssociation #[
+          (WXF.string "Type", tyWXF),
+          (WXF.string "TypeForm", ppWXF)])
+      | .error _ => return WXF.serialize (WXF.string "ERROR: type check failed")
+    catch _ =>
+      return WXF.serialize (WXF.string "ERROR: type check exception")
+
 /-- Get full constant info as WXF. -/
 @[export leanlink_get_constant]
 def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray := do

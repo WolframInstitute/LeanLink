@@ -99,6 +99,8 @@ $ppTypeFn := $ppTypeFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_pp_type", {Integer, "UTF8String", Integer}, {Integer, 1}];
 $ppValueFn := $ppValueFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_pp_value", {Integer, "UTF8String", Integer}, {Integer, 1}];
+$typeCheckFn := $typeCheckFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_type_check", {Integer, {Integer, 1}}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -233,13 +235,46 @@ fetchUnfolded[handle_Integer, name_String, "Term", level_Integer] :=
     If[isFFIError[r], $Failed,
       If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]];
 
+(* ============================================================================ *)
+(* Constructable LeanTerm — build from WL expression heads                      *)
+(* ============================================================================ *)
+
+(* Wrap a bare expression into a LeanTerm *)
+LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
+                _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj] :=
+  LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>];
+
+(* Type-check an expression against an environment *)
+LeanTypeCheck[expr_, handle_Integer] :=
+  Module[{wxfBytes, result},
+    wxfBytes = Normal[BinarySerialize[expr]];
+    result = Quiet[decodeWXF[$typeCheckFn[handle, wxfBytes]]];
+    If[AssociationQ[result], result,
+      If[StringQ[result], <|"Error" -> result|>, $Failed]]];
+
+(* Accept an env Association — extract handle from first entry *)
+LeanTypeCheck[expr_, env_Association] :=
+  With[{terms = Values[env]},
+    If[Length[terms] > 0,
+      With[{h = terms[[1]]["_Handle"]},
+        If[IntegerQ[h], LeanTypeCheck[expr, h], $Failed]],
+      $Failed]];
+
 (* Property access — lazy fetch from handle *)
 (* Second arg: integer unfold level for Type/Term/TypeForm/TermForm, or Rule opts *)
 (* Level 0 = no unfolding (default). Level N = unfold definitions N times. *)
 LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
   Module[{handle = Lookup[data, "_Handle", None], name = Lookup[data, "Name", ""],
           level = Replace[First[{args}, 0], Except[_Integer] -> 0],
-          opts = Cases[{args}, _Rule]},
+          opts = Cases[{args}, _Rule],
+          expr = Lookup[data, "_Expr", None]},
+    (* For constructed expressions, handle Type/TypeForm specially *)
+    If[expr =!= None && IntegerQ[handle] && MatchQ[prop, "Type" | "TypeForm"],
+      With[{tc = LeanTypeCheck[expr, handle]},
+        If[AssociationQ[tc],
+          If[prop === "Type", tc["Type"], tc["TypeForm"]],
+          $Failed]],
+    (* Normal property dispatch for imported terms *)
     Switch[prop,
       "Properties", {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm",
         "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
@@ -279,7 +314,8 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
         With[{term = LeanTerm[data]["Term"]},
           Replace[term, LeanNoValue[] -> LeanTerm[data]["Type"]]]],
       "CallGraph", callGraph[data, Sequence @@ opts],
-      _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]]];
+      _, If[StringStartsQ[prop, "_"], Missing["Private", prop], data[prop]]]]];
+
 
 (* ============================================================================ *)
 (* Expression Graph                                                             *)
