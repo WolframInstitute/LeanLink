@@ -1,0 +1,13 @@
+# Build artifacts
+*.paclet
+
+# OS
+.DS_Store
+
+# Wolfram
+*.mx
+*.wl.bak
+
+# AG
+.gemini/
+.agent/
