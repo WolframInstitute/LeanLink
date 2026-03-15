@@ -310,20 +310,28 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
     "Interpretable" -> Automatic]];
 
 (* ============================================================================ *)
+(* InterpretationBox helper                                                     *)
+(* ============================================================================ *)
+
+(* iBox evaluates displayBoxes FIRST, then wraps in InterpretationBox.
+   This avoids the HoldAllComplete issue where With can't substitute
+   inside raw InterpretationBox calls. *)
+iBox[expr_, displayBoxes_] :=
+  InterpretationBox[displayBoxes, expr];
+
+(* ============================================================================ *)
 (* Expression head formatting                                                   *)
 (* ============================================================================ *)
 
 LeanConst /: MakeBoxes[expr : LeanConst[name_String, levels_List], StandardForm] :=
-  With[{short = shortName[name], full = name},
-    InterpretationBox[
-      TooltipBox[
-        StyleBox[short, FontColor -> RGBColor[0.15, 0.35, 0.6], FontWeight -> Bold],
-        full],
-      expr]];
+  iBox[expr,
+    TooltipBox[
+      StyleBox[shortName[name], FontColor -> RGBColor[0.15, 0.35, 0.6], FontWeight -> Bold],
+      RowBox[{MakeBoxes[name], " ", MakeBoxes[levels, StandardForm]}]]];
 
 LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], StandardForm] :=
   With[{nm = cleanName[name]},
-    InterpretationBox[
+    iBox[expr,
       RowBox[{
         Switch[bi,
           "implicit",
@@ -341,17 +349,15 @@ LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], 
               RowBox[{"(", StyleBox[nm, FontSlant -> Italic],
                 " : ", MakeBoxes[dom, StandardForm], ")"}]]],
         StyleBox[" \[Rule] ", FontColor -> GrayLevel[0.4]],
-        MakeBoxes[body, StandardForm]}],
-      expr]];
+        MakeBoxes[body, StandardForm]}]]];
 
 LeanApp /: MakeBoxes[expr : LeanApp[fn_, arg_], StandardForm] :=
-  InterpretationBox[
-    RowBox[{MakeBoxes[fn, StandardForm], " ", MakeBoxes[arg, StandardForm]}],
-    expr];
+  iBox[expr,
+    RowBox[{MakeBoxes[fn, StandardForm], " ", MakeBoxes[arg, StandardForm]}]];
 
 LeanLam /: MakeBoxes[expr : LeanLam[name_String, type_, body_, bi_String], StandardForm] :=
   With[{nm = cleanName[name]},
-    InterpretationBox[
+    iBox[expr,
       RowBox[{
         StyleBox["fun ", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
         Switch[bi,
@@ -365,107 +371,90 @@ LeanLam /: MakeBoxes[expr : LeanLam[name_String, type_, body_, bi_String], Stand
             RowBox[{"(", StyleBox[nm, FontSlant -> Italic],
               " : ", MakeBoxes[type, StandardForm], ")"}]],
         StyleBox[" => ", FontColor -> GrayLevel[0.4]],
-        MakeBoxes[body, StandardForm]}],
-      expr]];
+        MakeBoxes[body, StandardForm]}]]];
 
-(* LeanBVar: pre-evaluate the string with With *)
 LeanBVar /: MakeBoxes[expr : LeanBVar[idx_Integer], StandardForm] :=
-  With[{label = "#" <> ToString[idx], tip = "bound var " <> ToString[idx]},
-    InterpretationBox[
-      TooltipBox[StyleBox[label, FontColor -> GrayLevel[0.5]], tip],
-      expr]];
+  iBox[expr,
+    TooltipBox[
+      StyleBox["#" <> ToString[idx], FontColor -> GrayLevel[0.5]],
+      RowBox[{"bound var ", MakeBoxes[idx]}]]];
 
 LeanSort /: MakeBoxes[expr : LeanSort[LeanLevelZero[]], StandardForm] :=
-  InterpretationBox[StyleBox["Prop", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold], expr];
+  iBox[expr, StyleBox["Prop", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold]];
 LeanSort /: MakeBoxes[expr : LeanSort[LeanLevelSucc[LeanLevelZero[]]], StandardForm] :=
-  InterpretationBox[StyleBox["Type", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold], expr];
+  iBox[expr, StyleBox["Type", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold]];
 LeanSort /: MakeBoxes[expr : LeanSort[level_], StandardForm] :=
-  InterpretationBox[
+  iBox[expr,
     RowBox[{StyleBox["Sort", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
-      " ", MakeBoxes[level, StandardForm]}],
-    expr];
+      " ", MakeBoxes[level, StandardForm]}]];
 
 LeanLitNat /: MakeBoxes[expr : LeanLitNat[n_Integer], StandardForm] :=
-  With[{s = ToString[n]},
-    InterpretationBox[StyleBox[s, FontColor -> RGBColor[0.1, 0.5, 0.1]], expr]];
+  iBox[expr, StyleBox[ToString[n], FontColor -> RGBColor[0.1, 0.5, 0.1]]];
 LeanLitStr /: MakeBoxes[expr : LeanLitStr[s_String], StandardForm] :=
-  With[{display = "\"" <> s <> "\""},
-    InterpretationBox[StyleBox[display, FontColor -> RGBColor[0.7, 0.3, 0.1]], expr]];
+  iBox[expr, StyleBox["\"" <> s <> "\"", FontColor -> RGBColor[0.7, 0.3, 0.1]]];
 
 LeanLet /: MakeBoxes[expr : LeanLet[name_String, type_, val_, body_], StandardForm] :=
   With[{nm = cleanName[name]},
-    InterpretationBox[
+    iBox[expr,
       RowBox[{StyleBox["let ", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold],
         StyleBox[nm, FontSlant -> Italic, Bold],
         " : ", MakeBoxes[type, StandardForm],
         " := ", MakeBoxes[val, StandardForm],
-        "; ", MakeBoxes[body, StandardForm]}],
-      expr]];
+        "; ", MakeBoxes[body, StandardForm]}]]];
 
 LeanNoValue /: MakeBoxes[expr : LeanNoValue[], StandardForm] :=
-  InterpretationBox[StyleBox["\[Dash]", FontColor -> GrayLevel[0.6]], expr];
+  iBox[expr, StyleBox["\[Dash]", FontColor -> GrayLevel[0.6]]];
 
 LeanTruncated /: MakeBoxes[expr : LeanTruncated[info_], StandardForm] :=
-  InterpretationBox[
+  iBox[expr,
     TooltipBox[StyleBox["\[Ellipsis]", FontColor -> GrayLevel[0.5]],
-      MakeBoxes[info, StandardForm]],
-    expr];
+      MakeBoxes[info, StandardForm]]];
 
 LeanProj /: MakeBoxes[expr : LeanProj[typeName_, idx_Integer, struct_], StandardForm] :=
-  With[{field = ToString[idx]},
-    InterpretationBox[
-      RowBox[{MakeBoxes[struct, StandardForm], ".",
-        StyleBox[field, FontColor -> GrayLevel[0.5]]}],
-      expr]];
+  iBox[expr,
+    RowBox[{MakeBoxes[struct, StandardForm], ".",
+      StyleBox[ToString[idx], FontColor -> GrayLevel[0.5]]}]];
 
 LeanFVar /: MakeBoxes[expr : LeanFVar[name_], StandardForm] :=
-  With[{display = cleanName[ToString[name]]},
-    InterpretationBox[
-      StyleBox[display, FontColor -> RGBColor[0.4, 0.4, 0.7], FontSlant -> Italic],
-      expr]];
+  iBox[expr,
+    StyleBox[cleanName[ToString[name]],
+      FontColor -> RGBColor[0.4, 0.4, 0.7], FontSlant -> Italic]];
 LeanMVar /: MakeBoxes[expr : LeanMVar[name_], StandardForm] :=
-  With[{display = "?" <> cleanName[ToString[name]]},
-    InterpretationBox[
-      StyleBox[display, FontColor -> RGBColor[0.7, 0.4, 0.4], FontSlant -> Italic],
-      expr]];
+  iBox[expr,
+    StyleBox["?" <> cleanName[ToString[name]],
+      FontColor -> RGBColor[0.7, 0.4, 0.4], FontSlant -> Italic]];
 
 (* ============================================================================ *)
 (* Level formatting                                                             *)
 (* ============================================================================ *)
 
 LeanLevelZero /: MakeBoxes[expr : LeanLevelZero[], StandardForm] :=
-  InterpretationBox[StyleBox["0", FontColor -> GrayLevel[0.5], FontSize -> 9], expr];
+  iBox[expr, StyleBox["0", FontColor -> GrayLevel[0.5], FontSize -> 9]];
 
 LeanLevelSucc /: MakeBoxes[expr : LeanLevelSucc[l_], StandardForm] :=
-  InterpretationBox[
+  iBox[expr,
     RowBox[{MakeBoxes[l, StandardForm],
-      StyleBox["+1", FontColor -> GrayLevel[0.5], FontSize -> 9]}],
-    expr];
+      StyleBox["+1", FontColor -> GrayLevel[0.5], FontSize -> 9]}]];
 
 LeanLevelMax /: MakeBoxes[expr : LeanLevelMax[a_, b_], StandardForm] :=
-  InterpretationBox[
+  iBox[expr,
     RowBox[{StyleBox["max", FontColor -> GrayLevel[0.5], FontSize -> 9],
-      "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}],
-    expr];
+      "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}]];
 
 LeanLevelIMax /: MakeBoxes[expr : LeanLevelIMax[a_, b_], StandardForm] :=
-  InterpretationBox[
+  iBox[expr,
     RowBox[{StyleBox["imax", FontColor -> GrayLevel[0.5], FontSize -> 9],
-      "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}],
-    expr];
+      "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}]];
 
 LeanLevelParam /: MakeBoxes[expr : LeanLevelParam[name_String], StandardForm] :=
-  InterpretationBox[
+  iBox[expr,
     StyleBox[name, FontColor -> RGBColor[0.4, 0.55, 0.4],
-      FontSlant -> Italic, FontSize -> 9],
-    expr];
+      FontSlant -> Italic, FontSize -> 9]];
 
 LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] :=
-  With[{display = "?" <> ToString[name]},
-    InterpretationBox[
-      StyleBox[display, FontColor -> GrayLevel[0.6],
-        FontSlant -> Italic, FontSize -> 9],
-      expr]];
+  iBox[expr,
+    StyleBox["?" <> ToString[name], FontColor -> GrayLevel[0.6],
+      FontSlant -> Italic, FontSize -> 9]];
 
 (* ============================================================================ *)
 (* Public API                                                                   *)
