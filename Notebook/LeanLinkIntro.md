@@ -14,13 +14,21 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVers
 
 ## Functions
 
-LeanLink provides three functions:
+LeanLink provides two layers of API:
 
-- `LeanExprGraph[file, name]` — expression tree of a proof term
-- `LeanCallGraph[file, name]` — dependency graph of theorem references
-- `LeanListTheorems[file]` — enumerate all definitions and theorems
+**Native API** (LibraryLink, fast):
 
-All accept a raw `.lean` file as the first argument. No lake project required.
+- `LeanImport[opts]` — one-shot import returning an Association of typed objects
+- `LeanExpr[name, opts]` — type of a constant as a symbolic expression tree
+- `LeanValue[name, opts]` — proof or definition body
+- `LeanConstantInfo[name, opts]` — full constant info
+- `LeanListConstants[opts]` — list all constants
+
+**Subprocess API** (invokes `lean` CLI):
+
+- `LeanExprGraph[name, opts]` — expression tree graph
+- `LeanCallGraph[name, opts]` — dependency graph
+- `LeanListTheorems[opts]` — enumerate theorems and definitions
 
 ## Quick Start
 
@@ -56,6 +64,85 @@ LeanExprGraph[exFile, "Vec.map"]
 LeanCallGraph[exFile, "zero_add_proof"]
 ```
 
+## Native API — LeanImport
+
+`LeanImport` loads a Lean module via LibraryLink and returns an Association of typed objects. Each object has a kind-specific head (`LeanTheorem`, `LeanDefinition`, `LeanAxiom`, `LeanInductive`, `LeanConstructor`, `LeanRecursor`) with formatted output and property access.
+
+Set up the project directory (the directory containing `lakefile.lean` and `.lake/build/lib/`):
+
+```wolfram
+nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
+```
+
+### Import a module
+
+Import all constants from `LeanLink.Examples`:
+
+```wolfram
+env = LeanImport["LeanLink", "ProjectDir" -> nativeDir, "Filter" -> "LeanLink.Examples"]
+```
+
+The result is an Association where keys are fully qualified names and values are typed Lean objects:
+
+```wolfram
+Keys[env]
+```
+
+### Typed Objects
+
+Each value has a kind-specific head:
+
+```wolfram
+env["LeanLink.Examples.identity"]
+```
+
+```wolfram
+env["LeanLink.Examples.Vec"]
+```
+
+```wolfram
+env["LeanLink.Examples.Vec.head"]
+```
+
+### Property Access
+
+Every object supports property access:
+
+```wolfram
+env["LeanLink.Examples.identity"]["Name"]
+```
+
+```wolfram
+env["LeanLink.Examples.identity"]["Kind"]
+```
+
+```wolfram
+env["LeanLink.Examples.identity"]["Type"]
+```
+
+```wolfram
+env["LeanLink.Examples.identity"]["Value"]
+```
+
+List all available properties:
+
+```wolfram
+env["LeanLink.Examples.identity"]["Properties"]
+```
+
+### Native Type Queries
+
+Get just the type of a constant:
+
+```wolfram
+LeanExpr["LeanLink.Examples.modus_ponens", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir]
+```
+
+Get the proof term:
+
+```wolfram
+LeanValue["LeanLink.Examples.contrapositive", "Imports" -> {"LeanLink"}, "ProjectDir" -> nativeDir, "Depth" -> 10]
+```
 
 ## TM {2,2} Rule 445 — Successor Proof
 
