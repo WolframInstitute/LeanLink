@@ -63,7 +63,8 @@ def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt
     nextHandle.set (handle + 1)
     envStore.modify fun m => m.insert handle env
     return handle
-  catch _ =>
+  catch e =>
+    IO.eprintln s!"[LeanLink] loadEnv error: {e}"
     return 0
 
 /-- Free a previously loaded environment. -/

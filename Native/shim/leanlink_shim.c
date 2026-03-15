@@ -80,7 +80,7 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
 
     g_libData = libData;
 
-    /* Initialize Lean runtime + Init module + task manager */
+    /* Initialize Lean runtime + Init module */
     lean_initialize();
 
     /* Initialize our LeanLink module (builtin=1: Init already done above) */

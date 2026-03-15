@@ -66,6 +66,9 @@ $ShimLib := $ShimLib = Module[{loc},
       "Native", ".lake", "build", "lib", "libLeanLinkShim.dylib"}];
     If[FileExistsQ[loc], loc, $Failed]]];
 
+(* Cache paclet root dir at load time (before $InputFileName becomes unset) *)
+$PacletRoot = DirectoryName[DirectoryName[$InputFileName]];
+
 LeanLink::nolib = "Shim library not found. Run 'lake build' in the Native/ directory first.";
 LeanLink::err = "Lean error: `1`";
 LeanLink::abort = "Native call aborted: `1`";
@@ -486,28 +489,64 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
   !StringContainsQ[module, "/" | "\\"] && !StringEndsQ[module, ".lean"] :=
   LeanImport["Imports" -> {module}, opts];
 
-(* LeanImport[file, opts] -- .lean file: compile and import *)
+(* LeanImport[file, opts] -- standalone .lean file: compile via lean CLI *)
 LeanImport[file_String, opts : OptionsPattern[]] /;
   FileExistsQ[file] && StringEndsQ[file, ".lean"] :=
-  Module[{absFile, projDir, searchPath, modName},
+  Module[{absFile, projDir, modName, tmpDir, oleanFile, result, searchPath,
+          nativeDir, tcFile, tcName, leanBin, leanLibDir, content, names},
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
-    (* If projDir is explicit, derive module name relative to it *)
-    If[projDir =!= Automatic && StringStartsQ[absFile, projDir],
+    (* If within a lake project, delegate to module-based import *)
+    If[projDir =!= Automatic && StringStartsQ[absFile, ExpandFileName[projDir]],
       modName = StringReplace[
-        StringTrim[StringDrop[absFile, StringLength[projDir]], "/" | "\\"],
+        StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"],
         {".lean" -> "", "/" -> ".", "\\" -> "."}];
       Return[LeanImport["Imports" -> {modName},
         "ProjectDir" -> projDir,
         "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
-        opts]]];
-    (* Fallback: just use basename as module *)
+        opts], Module]];
+    (* Resolve the correct lean binary from the LeanLink project toolchain *)
+    nativeDir = FileNameJoin[{$PacletRoot, "Native"}];
+    tcFile = FileNameJoin[{nativeDir, "lean-toolchain"}];
+    If[FileExistsQ[tcFile],
+      tcName = StringTrim[Import[tcFile, "Text"]];
+      tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
+      leanBin = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", tcName, "bin", "lean"}];
+      leanLibDir = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", tcName, "lib", "lean"}],
+      leanBin = "lean";
+      leanLibDir = StringTrim[RunProcess[{"lean", "--print-libdir"}, "StandardOutput"]]];
+    (* Standalone file: compile via lean CLI subprocess *)
     modName = FileBaseName[absFile];
-    If[projDir === Automatic, projDir = DirectoryName[absFile]];
-    LeanImport["Imports" -> {modName},
-      "ProjectDir" -> projDir,
-      "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
-      opts]];
+    tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory,
+      "leanlink_" <> modName <> "_" <> ToString[$SessionID]}]];
+    oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
+    result = RunProcess[{leanBin, "-o", oleanFile, "-R", DirectoryName[absFile], absFile}];
+    If[result["ExitCode"] =!= 0,
+      Message[LeanLink::err, "lean compilation failed: " <> result["StandardError"]];
+      DeleteDirectory[tmpDir, DeleteContents -> True];
+      Return[$Failed, Module]];
+    (* Extract definition names from source file *)
+    content = Import[absFile, "Text"];
+    names = StringCases[content,
+      RegularExpression["(?m)^(?:def|theorem|lemma|inductive|structure|class|instance|abbrev|noncomputable def|noncomputable theorem)\\s+(\\S+)"] :> "$1"];
+    If[names === {}, names = {modName}];
+    (* Import the olean via existing loadEnv mechanism *)
+    searchPath = tmpDir <> ":" <> leanLibDir;
+    Block[{handle, raw, res},
+      handle = $loadEnvFn[modName, searchPath];
+      If[handle === 0 || !IntegerQ[handle],
+        Message[LeanLink::err, "Failed to load compiled file"];
+        DeleteDirectory[tmpDir, DeleteContents -> True];
+        Return[$Failed, Module]];
+      (* Query each name individually *)
+      raw = Association[];
+      Do[
+        res = Quiet[decodeWXF[$getConstantFn[handle, name]]];
+        If[!StringQ[res] || !StringStartsQ[res, "ERROR"],
+          AssociateTo[raw, name -> res]],
+        {name, names}];
+      DeleteDirectory[tmpDir, DeleteContents -> True];
+      toLeanObject /@ raw]];
 
 (* LeanImport[opts] -- base form *)
 LeanImport[opts : OptionsPattern[]] := Module[{raw},
