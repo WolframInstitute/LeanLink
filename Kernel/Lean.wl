@@ -219,7 +219,8 @@ fetchField[handle_Integer, name_String, "TermRefs"] :=
 LeanTerm /: LeanTerm[data_Association][prop_String, opts___Rule] :=
   Module[{handle = Lookup[data, "_Handle", None], name = Lookup[data, "Name", ""]},
     Switch[prop,
-      "Properties", {"Name", "Kind", "Type", "Term", "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
+      "Properties", {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm",
+        "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
       "Name", data["Name"],
       "Kind", data["Kind"],
       "Type",
@@ -228,6 +229,8 @@ LeanTerm /: LeanTerm[data_Association][prop_String, opts___Rule] :=
       "Term",
         If[KeyExistsQ[data, "Term"], data["Term"],
           If[IntegerQ[handle], fetchField[handle, name, "Term"], Missing["NoHandle"]]],
+      "TypeForm", leanPP[LeanTerm[data]["Type"]],
+      "TermForm", leanPP[LeanTerm[data]["Term"]],
       "TypeRefs",
         If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"],
           If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]],
@@ -517,6 +520,109 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
    inside raw InterpretationBox calls. *)
 iBox[expr_, displayBoxes_] :=
   InterpretationBox[displayBoxes, expr];
+
+(* ============================================================================ *)
+(* Lean-style pretty-printer (string form)                                      *)
+(* ============================================================================ *)
+
+(* leanPP[expr] — convert expression tree to Lean-like source string *)
+(* leanPP[expr, depth] — with depth limit *)
+
+leanPP[expr_] := leanPP[expr, 6];
+leanPP[_, 0] := "\[Ellipsis]";
+
+(* Constants — use short name *)
+leanPP[LeanConst[name_String, _List], _Integer] := shortName[name];
+
+(* Sort levels *)
+leanPP[LeanSort[LeanLevelZero[]], _] := "Prop";
+leanPP[LeanSort[LeanLevelSucc[LeanLevelZero[]]], _] := "Type";
+leanPP[LeanSort[LeanLevelSucc[l_]], d_Integer] := "Type " <> leanPPLevel[l];
+leanPP[LeanSort[l_], _] := "Sort " <> leanPPLevel[l];
+
+(* Universe levels *)
+leanPPLevel[LeanLevelZero[]] := "0";
+leanPPLevel[LeanLevelSucc[l_]] := ToString[levelToNat[l] + 1];
+leanPPLevel[LeanLevelParam[name_String]] := name;
+leanPPLevel[LeanLevelMax[a_, b_]] := "max " <> leanPPLevel[a] <> " " <> leanPPLevel[b];
+leanPPLevel[LeanLevelIMax[a_, b_]] := "imax " <> leanPPLevel[a] <> " " <> leanPPLevel[b];
+leanPPLevel[_] := "?";
+
+levelToNat[LeanLevelZero[]] := 0;
+levelToNat[LeanLevelSucc[l_]] := levelToNat[l] + 1;
+levelToNat[_] := 0;
+
+(* Bound variables *)
+leanPP[LeanBVar[n_Integer], _] := "#" <> ToString[n];
+
+(* Free/meta variables *)
+leanPP[LeanFVar[id_], _] := "_fvar";
+leanPP[LeanMVar[id_], _] := "?_";
+
+(* Literals *)
+leanPP[LeanLitNat[n_Integer], _] := ToString[n];
+leanPP[LeanLitStr[s_String], _] := "\"" <> s <> "\"";
+
+(* Forall / Pi — collect consecutive binders *)
+leanPP[e : LeanForall[_, _, _, _], d_Integer] := Module[
+  {binders = {}, body = e, name, dom, bi, nm},
+  While[MatchQ[body, LeanForall[_, _, _, _]] && d - Length[binders] > 0,
+    {name, dom, body, bi} = List @@ body;
+    nm = cleanName[name];
+    AppendTo[binders,
+      Switch[bi,
+        "implicit", "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}",
+        "strictImplicit", "\[LeftDoubleBracket]" <> nm <> " : " <> leanPP[dom, d - 1] <> "\[RightDoubleBracket]",
+        "instImplicit", "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]",
+        _,
+          If[nm === "" || StringMatchQ[nm, "_" ~~ ___],
+            leanPP[dom, d - 1],
+            "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"]]]];
+  (* Check if all binders are unnamed arrows (simple function types) *)
+  If[AllTrue[binders, !StringStartsQ[#, "("] && !StringStartsQ[#, "{"] && !StringStartsQ[#, "["] && !StringStartsQ[#, "\[LeftDoubleBracket]"] &],
+    StringRiffle[Append[binders, leanPP[body, d - 1]], " \[RightArrow] "],
+    "\[ForAll] " <> StringRiffle[binders, " "] <> ", " <> leanPP[body, d - 1]]];
+
+(* Lambda — collect consecutive binders *)
+leanPP[e : LeanLam[_, _, _, _], d_Integer] := Module[
+  {binders = {}, body = e, name, dom, bi, nm},
+  While[MatchQ[body, LeanLam[_, _, _, _]] && d - Length[binders] > 0,
+    {name, dom, body, bi} = List @@ body;
+    nm = cleanName[name];
+    AppendTo[binders,
+      Switch[bi,
+        "implicit", "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}",
+        "instImplicit", "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]",
+        _,
+          "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"]]];
+  "fun " <> StringRiffle[binders, " "] <> " => " <> leanPP[body, d - 1]];
+
+(* Let *)
+leanPP[LeanLet[name_String, type_, val_, body_], d_Integer] :=
+  "let " <> cleanName[name] <> " : " <> leanPP[type, d - 1] <>
+  " := " <> leanPP[val, d - 1] <> "; " <> leanPP[body, d - 1];
+
+(* Application — uncurry into f a b c *)
+leanPP[e_LeanApp, d_Integer] := Module[
+  {fn = e, args = {}, a},
+  While[MatchQ[fn, LeanApp[_, _]],
+    a = fn[[2]]; fn = fn[[1]];
+    PrependTo[args, leanPP[a, d - 1]]];
+  leanPP[fn, d - 1] <> " " <> StringRiffle[args, " "]];
+
+(* Projection *)
+leanPP[LeanProj[struct_String, idx_Integer, expr_], d_Integer] :=
+  leanPP[expr, d - 1] <> "." <> ToString[idx];
+
+(* MData — ignore metadata wrapper *)
+leanPP[LeanMData[_, expr_], d_Integer] := leanPP[expr, d];
+
+(* No value *)
+leanPP[LeanNoValue[], _] := "(no value)";
+
+(* Fallback *)
+leanPP[$Failed, _] := "(failed)";
+leanPP[other_, _] := ToString[Short[other, 1]];
 
 (* ============================================================================ *)
 (* Expression head formatting                                                   *)

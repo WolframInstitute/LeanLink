@@ -54,7 +54,8 @@ check["Name", mp["Name"], "LeanLink.Examples.modus_ponens"];
 check["Type head", Head[mp["Type"]], LeanForall];
 check["Term head", Head[mp["Term"]], LeanLam];
 check["Properties list", mp["Properties"],
-  {"Name", "Kind", "Type", "Term", "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"}];
+  {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm",
+    "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"}];
 
 (* Vec.head has richer refs *)
 vh = filtered["LeanLink.Examples.Vec.head"];
@@ -111,6 +112,23 @@ Print["\n=== Cache (second fetch faster) ==="];
 {t2, r2} = AbsoluteTiming[mp["Type"]];
 Print["First Type: ", t1, "s, Second: ", t2, "s"];
 checkTrue["Cached fetch faster (or same)", t2 <= t1 + 0.001];
+
+(* =============================== *)
+(* TypeForm / TermForm              *)
+(* =============================== *)
+
+Print["\n=== TypeForm / TermForm ==="];
+
+checkTrue["TypeForm is String", StringQ[mp["TypeForm"]]];
+checkTrue["TermForm is String", StringQ[mp["TermForm"]]];
+checkTrue["TypeForm contains Prop", StringContainsQ[mp["TypeForm"], "Prop"]];
+checkTrue["TermForm contains fun", StringContainsQ[mp["TermForm"], "fun"]];
+checkTrue["Vec.head TypeForm has Nat", StringContainsQ[vh["TypeForm"], "Nat"]];
+check["identity TypeForm",
+  filtered["LeanLink.Examples.identity"]["TypeForm"],
+  "\[ForAll] (P : Prop) (a : #0), #1"];
+checkTrue["Properties includes TypeForm",
+  MemberQ[mp["Properties"], "TypeForm"]];
 
 (* =============================== *)
 (* Standalone file import           *)
