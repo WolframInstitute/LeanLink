@@ -124,17 +124,12 @@ getOrLoadEnv[projDir_String, imports_List] := Module[{key, searchPath, handle},
     Message[LeanLink::err, "Failed to load environment"]; Return[$Failed]];
   $envCache[key] = handle; handle];
 
-(* Abort-safe native call *)
 callNative[fn_, args_List, projDir_, imports_] := Module[{handle, result},
   If[$ShimLib === $Failed, Message[LeanLink::nolib]; Return[$Failed]];
   handle = getOrLoadEnv[projDir, imports];
   If[handle === $Failed, Return[$Failed]];
-  Check[
-    result = fn @@ Prepend[args, handle];
-    decodeWXF[result],
-    (* on any message/abort *)
-    Message[LeanLink::abort, "native function call failed"];
-    $Failed]];
+  result = fn @@ Prepend[args, handle];
+  decodeWXF[result]];
 
 resolveProjDir[pd_] := Replace[pd, Automatic -> Directory[]];
 
@@ -189,8 +184,8 @@ exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, lbls = <||>, cols 
     myId = ++id;
     {label, col, children} = exprNodeInfo[e];
     AppendTo[verts, myId];
-    lbls[myId] = label;
-    cols[myId] = col;
+    AssociateTo[lbls, myId -> label];
+    AssociateTo[cols, myId -> col];
     Do[Module[{childId = walk[child]},
       AppendTo[edges, DirectedEdge[myId, childId]]],
       {child, children}];
@@ -198,15 +193,17 @@ exprToGraph[expr_] := Module[{id = 0, verts = {}, edges = {}, lbls = <||>, cols 
   walk[expr];
   If[Length[verts] == 0, Return[Graph[{}]]];
   Graph[verts, edges,
-    VertexShapeFunction -> Function[{pos, v, size},
-      Inset[Framed[
-        Style[Tooltip[Lookup[lbls, v, ""], v], "Text", FontSize -> 7,
-          If[ColorDistance[Lookup[cols, v, Gray], White] > 0.4, White, Black],
-          Bold],
-        Background -> LightDarkSwitched[Lookup[cols, v, Gray]],
-        RoundingRadius -> 3,
-        FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
-        FrameMargins -> {{3, 3}, {1, 1}}], pos, Center, size]],
+    VertexShapeFunction -> Map[
+      With[{bg = cols[#], lbl = lbls[#]},
+        # -> Function[
+          Inset[Framed[
+            Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
+              If[ColorDistance[bg, White] > 0.4, White, Black], Bold],
+            Background -> LightDarkSwitched[bg],
+            RoundingRadius -> 3,
+            FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
+            FrameMargins -> {{3, 3}, {1, 1}}], #1, Center, #3]]
+      ] &, verts],
     GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
     VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
     EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]],
@@ -243,27 +240,28 @@ exprNodeInfo[other_] := {ToString[Short[other]], GrayLevel[0.6], {}};
 
 collectConsts[e_] := Union[Cases[e, LeanConst[n_String, _] :> n, Infinity]];
 
-callGraph[data_Association] := Module[{name, typeExpr, termExpr, refs, edges, verts, rootShort},
+callGraph[data_Association] := Module[{name, typeExpr, termExpr, refs, edges, verts, rootShort, rootCol},
   name = data["Name"];
   typeExpr = Lookup[data, "Type", LeanNoValue[]];
   termExpr = Lookup[data, "Term", LeanNoValue[]];
   refs = Union[collectConsts[typeExpr], collectConsts[termExpr]];
   refs = DeleteCases[refs, name];
   rootShort = shortName[name];
+  rootCol = Lookup[$kindColor, Lookup[data, "Kind", "def"], GrayLevel[0.5]];
   verts = Union[Prepend[shortName /@ refs, rootShort]];
   edges = DirectedEdge[rootShort, shortName[#]] & /@ refs;
   Graph[verts, edges,
-    VertexShapeFunction -> Function[{pos, v, size},
-      With[{bg = If[v === rootShort,
-          Lookup[$kindColor, Lookup[data, "Kind", "def"], GrayLevel[0.5]],
-          GrayLevel[0.55]]},
-        Inset[Framed[
-          Style[v, "Text", FontSize -> 7,
-            If[ColorDistance[bg, White] > 0.4, White, Black], Bold],
-          Background -> LightDarkSwitched[bg],
-          RoundingRadius -> 3,
-          FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
-          FrameMargins -> {{3, 3}, {1, 1}}], pos, Center, size]]],
+    VertexShapeFunction -> Map[
+      With[{bg = If[# === rootShort, rootCol, GrayLevel[0.55]], lbl = #},
+        # -> Function[
+          Inset[Framed[
+            Style[Tooltip[lbl, #2], "Text", FontSize -> 7,
+              If[ColorDistance[bg, White] > 0.4, White, Black], Bold],
+            Background -> LightDarkSwitched[bg],
+            RoundingRadius -> 3,
+            FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
+            FrameMargins -> {{3, 3}, {1, 1}}], #1, Center, #3]]
+      ] &, verts],
     GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Left},
     VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
     EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]],
@@ -473,23 +471,42 @@ LeanFreeEnvironment[handle_Integer] := ($freeEnvFn[handle]; Null);
 
 Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> ""};
 
+(* Internal name patterns to filter out *)
+$internalPatterns = "_cstage1" | "_cstage2" | "_rarg" | "_sunfold" |
+  "_unsafe_rec" | ".match_" | ".rec" | ".recOn" | ".casesOn" |
+  ".brecOn" | ".binductionOn" | ".below" | ".ibelow" |
+  ".noConfusion" | ".noConfusionType" | "._sizeOf" | ".sizeOf_spec" |
+  ".inj" | ".injEq";
+
+isInternalName[name_String] :=
+  StringContainsQ[name, $internalPatterns];
+
 (* LeanImport[module, opts] -- shorthand for Imports -> {module} *)
 LeanImport[module_String, opts : OptionsPattern[]] /;
   !StringContainsQ[module, "/" | "\\"] && !StringEndsQ[module, ".lean"] :=
   LeanImport["Imports" -> {module}, opts];
 
-(* LeanImport[file, opts] -- file path to .lean file: derive project + module *)
+(* LeanImport[file, opts] -- .lean file: compile and import *)
 LeanImport[file_String, opts : OptionsPattern[]] /;
   FileExistsQ[file] && StringEndsQ[file, ".lean"] :=
-  Module[{dir, projDir, modName},
-    dir = DirectoryName[ExpandFileName[file]];
+  Module[{absFile, projDir, searchPath, modName},
+    absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
-    If[projDir === Automatic, projDir = dir];
-    (* Try to determine module from filename *)
-    modName = StringReplace[FileBaseName[file], "/" -> "."];
+    (* If projDir is explicit, derive module name relative to it *)
+    If[projDir =!= Automatic && StringStartsQ[absFile, projDir],
+      modName = StringReplace[
+        StringTrim[StringDrop[absFile, StringLength[projDir]], "/" | "\\"],
+        {".lean" -> "", "/" -> ".", "\\" -> "."}];
+      Return[LeanImport["Imports" -> {modName},
+        "ProjectDir" -> projDir,
+        "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
+        opts]]];
+    (* Fallback: just use basename as module *)
+    modName = FileBaseName[absFile];
+    If[projDir === Automatic, projDir = DirectoryName[absFile]];
     LeanImport["Imports" -> {modName},
       "ProjectDir" -> projDir,
-      "Filter" -> OptionValue["Filter"],
+      "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
       opts]];
 
 (* LeanImport[opts] -- base form *)
@@ -499,6 +516,8 @@ LeanImport[opts : OptionsPattern[]] := Module[{raw},
     resolveProjDir[OptionValue["ProjectDir"]],
     OptionValue["Imports"]];
   If[!AssociationQ[raw], Return[$Failed]];
+  (* Filter out internal/generated names *)
+  raw = KeySelect[raw, !isInternalName[#] &];
   toLeanObject /@ raw];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)

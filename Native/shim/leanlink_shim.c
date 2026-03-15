@@ -36,8 +36,10 @@ extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint3
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name, lean_object* w);
 
 static int g_initialized = 0;
+static WolframLibraryData g_libData = NULL;
 
-/* Extract ByteArray from an IO result and copy into an MTensor */
+/* Extract ByteArray from an IO result and copy into an MTensor.
+   Checks AbortQ() periodically during the byte copy loop. */
 static int io_bytearray_to_mtensor(WolframLibraryData libData, lean_object* io_res, MArgument* Res) {
     if (!lean_io_result_is_ok(io_res)) {
         lean_dec_ref(io_res);
@@ -55,6 +57,12 @@ static int io_bytearray_to_mtensor(WolframLibraryData libData, lean_object* io_r
     mint* buf = libData->MTensor_getIntegerData(out);
     for (size_t i = 0; i < n; i++) {
         buf[i] = (mint)data[i];
+        /* Check for user abort every 64K bytes */
+        if ((i & 0xFFFF) == 0 && i > 0 && libData->AbortQ()) {
+            lean_dec_ref(io_res);
+            libData->MTensor_free(out);
+            return LIBRARY_FUNCTION_ERROR;
+        }
     }
     lean_dec_ref(io_res);
     MArgument_setMTensor(*Res, out);
@@ -69,6 +77,8 @@ DLLEXPORT mint WolframLibrary_getVersion(void) { return WolframLibraryVersion; }
 
 DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     if (g_initialized) return LIBRARY_NO_ERROR;
+
+    g_libData = libData;
 
     /* Initialize Lean runtime + Init module + task manager */
     lean_initialize();
@@ -100,6 +110,10 @@ DLLEXPORT int leanlink_wl_load_env(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
     ensure_thread();
+
+    /* Check abort before expensive operation */
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
     const char* imports_cstr = MArgument_getUTF8String(Args[0]);
     const char* path_cstr = MArgument_getUTF8String(Args[1]);
 
@@ -142,6 +156,8 @@ DLLEXPORT int leanlink_wl_list_theorems(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
     ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* filter_cstr = MArgument_getUTF8String(Args[1]);
     lean_object* filter = lean_mk_string(filter_cstr);
@@ -158,6 +174,8 @@ DLLEXPORT int leanlink_wl_get_type(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
     ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* name_cstr = MArgument_getUTF8String(Args[1]);
     uint32_t depth = (uint32_t)MArgument_getInteger(Args[2]);
@@ -175,6 +193,8 @@ DLLEXPORT int leanlink_wl_get_value(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
     ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* name_cstr = MArgument_getUTF8String(Args[1]);
     uint32_t depth = (uint32_t)MArgument_getInteger(Args[2]);
@@ -192,6 +212,8 @@ DLLEXPORT int leanlink_wl_get_constant(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {
     ensure_thread();
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
     uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
     const char* name_cstr = MArgument_getUTF8String(Args[1]);
     lean_object* name = lean_mk_string(name_cstr);
