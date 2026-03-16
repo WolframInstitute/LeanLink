@@ -11,3 +11,4 @@ lean_lib LeanLink where
 lean_exe leanlink where
   root := `Main
   srcDir := "app"
+

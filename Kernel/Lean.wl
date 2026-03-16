@@ -115,6 +115,8 @@ $openGoalFn := $openGoalFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_open_goal", {Integer, "UTF8String"}, {Integer, 1}];
 $applyTacticFn := $applyTacticFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_apply_tactic", {Integer, "UTF8String"}, {Integer, 1}];
+$openGoalExprFn := $openGoalExprFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_open_goal_expr", {Integer, {Integer, 1}}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -134,8 +136,20 @@ shortName[s_String] := StringReplace[s, {
 (* Environment management                                                       *)
 (* ============================================================================ *)
 
-resolveSearchPath[projDir_String] := Module[{buildLib, leanLib, paths},
-  buildLib = FileNameJoin[{projDir, ".lake", "build", "lib"}];
+resolveSearchPath[projDir_String] := Module[{buildLib, leanLib, pkgDirs, paths},
+  (* Lake v5 puts oleans under .lake/build/lib/lean/ ; Lake v4 uses .lake/build/lib/ *)
+  buildLib = With[{v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
+                   v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]},
+    If[DirectoryQ[v5], v5, v4]];
+  (* Discover lake package build directories — prefer lib/lean/ (v5), fallback lib/ (v4) *)
+  pkgDirs = Module[{pkgsRoot = FileNameJoin[{projDir, ".lake", "packages"}]},
+    If[DirectoryQ[pkgsRoot],
+      Select[
+        (With[{v5 = FileNameJoin[{#, ".lake", "build", "lib", "lean"}],
+               v4 = FileNameJoin[{#, ".lake", "build", "lib"}]},
+          If[DirectoryQ[v5], v5, v4]] & /@ FileNames["*", pkgsRoot]),
+        DirectoryQ],
+      {}]];
   leanLib = Module[{dir = projDir, tc, version, toolchainDir},
     While[StringLength[dir] > 1,
       tc = FileNameJoin[{dir, "lean-toolchain"}];
@@ -146,7 +160,7 @@ resolveSearchPath[projDir_String] := Module[{buildLib, leanLib, paths},
           toolchainDir, "lib", "lean"}], Module]];
       dir = DirectoryName[dir]];
     Nothing];
-  paths = Select[{buildLib, leanLib}, StringQ[#] && DirectoryQ[#] &];
+  paths = Select[Join[{buildLib}, pkgDirs, {leanLib}], StringQ[#] && DirectoryQ[#] &];
   StringRiffle[paths, ":"]];
 
 $envCache = <||>;
@@ -167,7 +181,10 @@ callNative[fn_, args_List, projDir_, imports_] := Module[{handle, result},
   result = fn @@ Prepend[args, handle];
   decodeWXF[result]];
 
-resolveProjDir[pd_] := Replace[pd, Automatic -> Directory[]];
+resolveProjDir[pd_] := Replace[pd, {
+  Automatic -> Directory[],
+  s_String /; StringStartsQ[s, "~/"] :> FileNameJoin[{$HomeDirectory, StringDrop[s, 2]}]
+}];
 
 (* ============================================================================ *)
 (* LeanTerm                                                                     *)
@@ -258,6 +275,8 @@ LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
                 _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj] :=
   LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>];
 
+
+
 (* Constructor with env — binds handle for type-checking *)
 LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
                 _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj,
@@ -277,12 +296,8 @@ LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
       LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]]];
 
 (* Extract handle from a LeanEnvironment *)
-extractHandle[env_LeanEnvironment] :=
-  With[{terms = Values[env[[1]]]},
-    If[Length[terms] > 0, Lookup[terms[[1]][[1]], "_Handle", None], None]];
-extractHandle[env_Association] :=
-  With[{terms = Values[env]},
-    If[Length[terms] > 0, Lookup[terms[[1]][[1]], "_Handle", None], None]];
+extractHandle[env_LeanEnvironment] := Lookup[env[[1]], "_Handle", None];
+extractHandle[env_Association] := Lookup[env, "_Handle", None];
 
 (* Internal type-check helper *)
 typeCheck[expr_, handle_Integer] :=
@@ -290,6 +305,22 @@ typeCheck[expr_, handle_Integer] :=
     wxfBytes = Normal[BinarySerialize[expr]];
     result = Quiet[decodeWXF[$typeCheckFn[handle, wxfBytes]]];
     If[AssociationQ[result], result, $Failed]];
+
+(* Peel nested LeanForall chain into parameter list *)
+binderKindName["default"] = "explicit";
+binderKindName["implicit"] = "implicit";
+binderKindName["strictImplicit"] = "implicit";
+binderKindName["instImplicit"] = "instance";
+binderKindName[_] = "explicit";
+
+peelForalls[expr_] := peelForalls[expr, "Params"];
+peelForalls[LeanForall[name_, type_, body_, binder_], "Params"] :=
+  Prepend[peelForalls[body, "Params"],
+    <|"Name" -> name, "Type" -> type, "TypeForm" -> leanPP[type],
+      "Binder" -> binderKindName[binder]|>];
+peelForalls[_, "Params"] := {};
+peelForalls[LeanForall[_, _, body_, _], "Body"] := peelForalls[body, "Body"];
+peelForalls[body_, "Body"] := body;
 
 (* Property access — lazy fetch from handle *)
 (* Second arg: integer unfold level for Type/Term/TypeForm/TermForm, or Rule opts *)
@@ -308,7 +339,9 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
     (* Normal property dispatch for imported terms *)
     Switch[prop,
       "Properties", {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm",
-        "TypeRefs", "TermRefs", "ExprGraph", "CallGraph"},
+        "TypeRefs", "TermRefs", "ExprGraph", "CallGraph", "Parameters", "Body"},
+      "Parameters", peelForalls[LeanTerm[data]["Type"]],
+      "Body", peelForalls[LeanTerm[data]["Type"], "Body"],
       "Name", data["Name"],
       "Kind", data["Kind"],
       "Type",
@@ -814,6 +847,9 @@ LeanExport[file_String, env_LeanEnvironment] :=
 leanSource[expr_] := leanSource[expr, 20];
 leanSource[e_, 0] := "_";
 
+(* Sugar: LeanConst["name"] ↔ LeanConst["name", {}] *)
+LeanConst[name_String] := LeanConst[name, {}];
+
 leanSource[LeanConst[name_String, _List], _Integer] := name;
 
 leanSource[LeanSort[LeanLevelZero[]], _] := "Prop";
@@ -1065,7 +1101,10 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
   Module[{projDir, buildLib, srcDir, oleans, subModules, results = <||>, filter,
           srcFiles, allNames, grouped},
     projDir = resolveProjDir[OptionValue["ProjectDir"]];
-    buildLib = FileNameJoin[{projDir, ".lake", "build", "lib"}];
+    (* Lake v5 puts oleans in lib/lean/, v4 uses lib/ *)
+    buildLib = With[{v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
+                     v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]},
+      If[DirectoryQ[v5], v5, v4]];
     filter = OptionValue["Filter"];
     (* Check if module is a directory of sub-modules *)
     If[DirectoryQ[buildLib] &&
@@ -1203,18 +1242,15 @@ LeanListConstants[opts : OptionsPattern[]] :=
 (* LeanEnvironment — typed collection of LeanTerms                              *)
 (* ============================================================================ *)
 
-(* Property/key access — internal _-prefixed keys are hidden *)
-(* Use env["key"] for term access, Information[env, "Properties"] for property list *)
+(* Property/key access — env[key] returns LeanTerm with env handle injected *)
 LeanEnvironment /: LeanEnvironment[data_Association][key_String] :=
-  Switch[key,
-    "Properties", {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"},
-    "Constants", Select[Keys[data], !StringStartsQ[#, "_"] &],
-    "Kinds", Counts[Lookup[#[[1]], "Kind", "?"] & /@ Select[Values[data], Head[#] === LeanTerm &]],
-    "Handle", Lookup[data, "_Handle", None],
-    "Source", Lookup[data, "_Source", None],
-    "DeclOrder", Lookup[data, "_DeclOrder", None],
-    "Preamble", Lookup[data, "_Preamble", None],
-    _, data[key]];
+  Module[{val = data[key], handle},
+    If[Head[val] === LeanTerm,
+      handle = Lookup[data, "_Handle", None];
+      If[IntegerQ[handle],
+        LeanTerm[Append[val[[1]], "_Handle" -> handle]],
+        val],
+      val]];
 LeanEnvironment /: Keys[LeanEnvironment[data_Association]] :=
   Select[Keys[data], !StringStartsQ[#, "_"] &];
 LeanEnvironment /: Values[LeanEnvironment[data_Association]] :=
@@ -1223,6 +1259,23 @@ LeanEnvironment /: Length[LeanEnvironment[data_Association]] :=
   Length[Select[Keys[data], !StringStartsQ[#, "_"] &]];
 LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key];
 LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
+
+(* Information protocol — no collision with term names *)
+$leanEnvProperties = {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"};
+
+LeanEnvironment /: Information[env : LeanEnvironment[data_Association], "Properties"] :=
+  $leanEnvProperties;
+
+LeanEnvironment /: Information[env : LeanEnvironment[data_Association], prop_String] :=
+  Switch[prop,
+    "Constants", Select[Keys[data], !StringStartsQ[#, "_"] &],
+    "Kinds", Counts[Lookup[#[[1]], "Kind", "?"] & /@ Select[Values[data], Head[#] === LeanTerm &]],
+    "Handle", Lookup[data, "_Handle", None],
+    "Source", Lookup[data, "_Source", None],
+    "DeclOrder", Lookup[data, "_DeclOrder", None],
+    "Preamble", Lookup[data, "_Preamble", None],
+    _, Missing["UnknownProperty", prop]];
+
 
 (* MakeBoxes for LeanEnvironment — summary box *)
 LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardForm] :=
@@ -1259,17 +1312,55 @@ LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardFo
 
 (* Constructor: LeanState[term_LeanTerm] opens a proof goal *)
 LeanState[term_LeanTerm] :=
-  Module[{data = term[[1]], handle, name, result},
+  Module[{data = term[[1]], handle, name, result, state, tactic, typeExpr},
     handle = Lookup[data, "_Handle", None];
     name = Lookup[data, "Name", ""];
-    If[!IntegerQ[handle], Return[$Failed]];
-    result = Quiet[decodeWXF[$openGoalFn[handle, name]]];
-    If[!AssociationQ[result], $Failed,
-      LeanState[<|
+    If[IntegerQ[handle],
+      (* Native path: use Lean runtime *)
+      result = Quiet[decodeWXF[$openGoalFn[handle, name]]];
+      If[!AssociationQ[result], Return[$Failed]];
+      state = LeanState[<|
         "stateId" -> result["stateId"],
         "goals" -> (LeanGoal /@ result["goals"]),
         "goalCount" -> result["goalCount"],
-        "_Handle" -> handle|>]]];
+        "_Handle" -> handle|>];
+      (* Auto-apply existing tactic if term has one *)
+      tactic = Lookup[data, "_Tactic", None];
+      If[Head[tactic] === LeanTactic,
+        state = tactic[state]];
+      state,
+      (* Pure symbolic path: build state from _TypeExpr *)
+      typeExpr = Lookup[data, "_TypeExpr", None];
+      tactic = Lookup[data, "_Tactic", None];
+      If[typeExpr === None, Return[$Failed]];
+      state = LeanState[<|
+        "stateId" -> 0,
+        "goals" -> {LeanGoal[<|"target" -> leanSource[typeExpr], "context" -> {}|>]},
+        "goalCount" -> 1,
+        "_Symbolic" -> True|>];
+      (* If tactic exists, the proof is known — mark complete *)
+      If[Head[tactic] === LeanTactic,
+        state = LeanState[<|
+          "stateId" -> 0,
+          "goals" -> {},
+          "goalCount" -> 0,
+          "_Symbolic" -> True,
+          "_Tactic" -> tactic|>]];
+      state]];
+
+(* Constructor: LeanState[env, name] opens a proof goal from env by name *)
+LeanState[env_LeanEnvironment, name_String] :=
+  Module[{data = env[[1]], handle, compiled, src, term},
+    handle = Lookup[data, "_Handle", None];
+    If[!IntegerQ[handle],
+      (* Uncompiled env: auto-compile via string roundtrip *)
+      src = Lookup[data, "_Source", None];
+      If[!StringQ[src], src = LeanExportString[env]];
+      compiled = Quiet[LeanImportString[src]];
+      If[Head[compiled] =!= LeanEnvironment, Return[$Failed]];
+      handle = compiled[[1]]["_Handle"]];
+    term = <|"_Handle" -> handle, "Name" -> name|>;
+    LeanState[LeanTerm[term]]];
 
 (* LeanState property access *)
 LeanState /: LeanState[data_Association][prop_String] :=
@@ -1338,16 +1429,19 @@ tacticSource[LeanTactic["exact", term_]] := "  exact " <> leanSource[term];
 tacticSource[LeanTactic["have", name_String, term_]] := "  have " <> name <> " := " <> leanSource[term];
 tacticSource[LeanTactic["rw", rules_List]] := "  rw [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
 tacticSource[LeanTactic["rw", rules_List, hyp_String]] := "  rw [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "] at " <> hyp;
+tacticSource[LeanTactic["simp", rules_List, None]] := "  simp only [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
 tacticSource[LeanTactic["simp", rules_List, hyp_String]] := "  simp only [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "] at " <> hyp;
 tacticSource[LeanTactic["nth_rewrite", n_Integer, rules_List, hyp_String]] :=
   "  nth_rewrite " <> ToString[n] <> " [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
 tacticSource[LeanTactic["conv", hyp_String, path_List, subtac_]] :=
   "  conv at " <> hyp <> " => " <> StringRiffle[path, "; "] <> "; " <> tacticSourceInline[subtac];
 tacticSource[LeanTactic["intro", names_List]] := "  intro " <> StringRiffle[names, " "];
+tacticSource[LeanTactic["symm", hyp_String]] := "  symm at " <> hyp;
 tacticSource[LeanTactic["sorry"]] := "  sorry";
 
 (* Inline tactic (no leading whitespace, for conv body) *)
 tacticSourceInline[LeanTactic["rw", rules_List]] := "rw [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
+tacticSourceInline[LeanTactic["simp", rules_List]] := "simp only [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
 tacticSourceInline[t_LeanTactic] := StringTrim[tacticSource[t]];
 
 (* Rewrite rule source — detect Eq.symm wrapping and emit ← *)
@@ -1381,12 +1475,17 @@ LeanTactic /: LeanTactic[tactics_List][state_LeanState] :=
     tactics];
 
 (* Internal: apply a single tactic (string or structured) to state *)
+$LeanTacticTimeout = 30;  (* seconds; override to Infinity to disable *)
 applyTacticStr[tac_String, state_LeanState] :=
   Module[{data = state[[1]], stateId, handle, result},
     stateId = Lookup[data, "stateId", None];
     handle = Lookup[data, "_Handle", None];
     If[!IntegerQ[stateId], Return[$Failed]];
-    result = Quiet[decodeWXF[$applyTacticFn[stateId, tac]]];
+    result = TimeConstrained[
+      Quiet[decodeWXF[$applyTacticFn[stateId, tac]]],
+      $LeanTacticTimeout, $Aborted];
+    If[result === $Aborted,
+      Message[LeanLink::abort, "Tactic timed out: " <> tac]; Return[$Failed]];
     If[!AssociationQ[result], $Failed,
       LeanState[<|
         "stateId" -> result["stateId"],

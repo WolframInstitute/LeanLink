@@ -6,12 +6,14 @@
 
 # Wolfram
 *.mx
-*.nb
 *.wl.bak
 
 # AG
 .gemini/
 .agent/
+
+# Lean build
+Native/.lake/
 
 # Native shim
 Native/shim/build/

@@ -1,5 +1,0 @@
-{"log":
- [{"message":
-   ".> LEAN_PATH=././.lake/build/lib DYLD_LIBRARY_PATH= /Users/swish/.elan/toolchains/leanprover--lean4---v4.15.0/bin/lean -DautoImplicit=false ./././lib/LeanLink/Examples.lean -R ./././lib -o ././.lake/build/lib/LeanLink/Examples.olean -i ././.lake/build/lib/LeanLink/Examples.ilean -c ././.lake/build/ir/LeanLink/Examples.c --json",
-   "level": "trace"}],
- "depHash": "2912085787583641308"}

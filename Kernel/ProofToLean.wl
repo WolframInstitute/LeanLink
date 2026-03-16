@@ -46,8 +46,7 @@ ptlWrapForall[vars_List, body_] :=
   Fold[LeanForall[#2, LeanConst["U", {}], #1, "default"] &,
     body, Reverse[vars]];
 
-(* ====== STRING CONVERTERS (for tactic generation only) ====== *)
-(* These still produce strings because tactic scripts are textual *)
+(* ====== STRING CONVERTERS (for comparison and debug output) ====== *)
 
 Clear[ptlToStr];
 ptlToStr[CenterDot[a_, b_]] := StringTemplate["(`1` `2` `3`)"][ptlToStr[a], $ptl$cdot, ptlToStr[b]];
@@ -76,8 +75,10 @@ ptlAbbrev[tag_, n_] := Module[{s = ToString[tag]},
 ptlLeanRef[tag_[n_Integer]] := ptlAbbrev[tag, n];
 ptlLeanRef[x_] := ToString[x];
 
-ptlKeyToStr[Verbatim[Pattern][s_, Verbatim[Blank][]]] := ToString[s];
-ptlKeyToStr[s_Symbol] := ToString[s];
+ptlKeyToStr[Verbatim[Pattern][s_, Verbatim[Blank][]]] := Module[{cleaned},
+  cleaned = ptlCleanExpr[s]; ToString[cleaned]];
+ptlKeyToStr[s_Symbol] := Module[{cleaned},
+  cleaned = ptlCleanExpr[s]; ToString[cleaned]];
 ptlKeyToStr[x_] := ToString[x];
 
 ptlAssocToStr[a_Association] :=
@@ -91,8 +92,8 @@ ptlPosToConv[pos_List] := Module[{first, restStr},
   If[restStr === "", first, StringTemplate["`1`; `2`"][first, restStr]]];
 
 (* ====== BUILD ARGS (string, for tactic construction) ====== *)
-(* lemmaVars is a DownValues function: lemmaVars[name] -> vars list *)
-ptlLVLookup[lv_, name_] := Module[{r = lv[name]},
+(* st is the state symbol; vars stored as st["lv", name] SubValues *)
+ptlLVLookup[st_, name_] := Module[{r = st["lv", name]},
   If[ListQ[r], r, {}]];
 
 ptlBuildArgs[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
@@ -115,15 +116,24 @@ ptlBuildArgs[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
 
 (* Expression tree version: builds LeanApp chain for lemma+args *)
 ptlBuildSrcExpr[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
-  {vars, argExprs = {}, k, v, targetVars, keys},
+  {vars, argExprs = {}, k, v, targetVars, keys, usedKeys},
   vars = ptlLVLookup[lemmaVars, name];
   targetVars = ptlLVLookup[lemmaVars, targetTag];
   If[Length[vars] == 0,
-    keys = Sort[Keys[assoc]];
-    If[Length[keys] > 0,
-      Do[AppendTo[argExprs, ptlToExprI[ptlCleanExpr[assoc[k]]]], {k, keys}],
-      (* No vars, no assoc: use target vars as default args *)
-      argExprs = LeanConst[#, {}] & /@ targetVars],
+    (* Unknown lemma vars: use target vars as base, substitute from assoc,
+       then append any extra assoc entries not yet used *)
+    usedKeys = {};
+    If[Length[targetVars] > 0,
+      Do[
+        v = Null;
+        KeyValueMap[
+          If[ptlKeyToStr[#1] == tv, v = ptlToExprI[ptlCleanExpr[#2]]; AppendTo[usedKeys, #1]] &,
+          assoc];
+        AppendTo[argExprs, If[v === Null, LeanConst[tv, {}], v]];
+      , {tv, targetVars}]];
+    (* Add remaining assoc entries not matched by target vars *)
+    keys = Select[Sort[Keys[assoc]], !MemberQ[usedKeys, #] &];
+    Do[AppendTo[argExprs, ptlToExprI[ptlCleanExpr[assoc[k]]]], {k, keys}],
     Do[
       k = vars[[i]];
       v = Null;
@@ -259,42 +269,77 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
 
   (* Build tactic as structured LeanTactic *)
   tactic = If[st["pendingSource"] =!= None,
-    (* Build srcExpr: lemma applied to args as expression tree *)
+    (* Build srcExpr: lemma applied to args *)
     srcExpr = ptlBuildSrcExpr[
-      st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lv"]];
-    If[st["pendingSource"]["reversed"],
+      st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st];
+    srcReversed = TrueQ[st["pendingSource"]["reversed"]];
+
+    (* Enrich bare-const srcExpr with target vars for universally-quantified proofs *)
+    If[Head[srcExpr] === LeanConst && Length[vars] > 0,
+      srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}] & /@ vars]];
+
+    (* Wrap reversed source with .symm *)
+    If[srcReversed,
       srcExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srcExpr]];
 
     (* Build rewrite rule expression *)
     {rwRuleExpr, tacSteps} = If[st["currentSR"] =!= None,
-      Module[{name, rev, assoc, srcVars, srExpr},
+      Module[{name, rev, assoc, srcVars, srExpr, assocKeys, allCovered},
         name = st["currentSR"]["name"];
         rev = st["currentSR"]["reversed"];
         assoc = st["currentSR"]["assoc"];
-        srcVars = ptlLVLookup[st["lv"], name];
+        srcVars = ptlLVLookup[st, name];
+        (* Check if ALL source vars are explicitly mapped in the assoc *)
         assocKeys = ptlKeyToStr /@ Keys[assoc];
         allCovered = Length[srcVars] > 0 && ContainsAll[assocKeys, srcVars];
-        nonTrivial = AnyTrue[Normal[assoc], (ptlKeyToStr[#[[1]]] =!= ptlToStr[ptlCleanExpr[#[[2]]]]) &];
-        If[allCovered && nonTrivial,
-          srExpr = ptlBuildSrcExpr[name, assoc, tag, st["lv"]];
-          If[rev, srExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srExpr]];
-          {LeanConst["sr", {}], {LeanTactic["have", "sr", srExpr]}},
+        If[allCovered,
+          (* All vars covered: instantiate via have sr, but validate scope *)
+          srExpr = ptlBuildSrcExpr[name, assoc, tag, st];
+          (* Check all assoc values reference in-scope vars only *)
+          Module[{assocVals, inScope = True},
+            assocVals = ptlToStr[ptlCleanExpr[#]] & /@ Values[assoc];
+            inScope = AllTrue[assocVals, (StringLength[#] <= 1 && MemberQ[vars, #]) ||
+                                          StringLength[#] > 1 &];
+            If[!inScope,
+              (* Out-of-scope var in assoc: bare name + simp only *)
+              {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]],
+                       LeanConst[name, {}]], {}},
+              If[rev, srExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srExpr]];
+              {LeanConst["sr", {}], {LeanTactic["have", "sr", srExpr]}}]],
+          (* Partial/empty assoc: bare name for simp only *)
           {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]],
                    LeanConst[name, {}]], {}}]],
       {None, {}}];
 
-    (* Enrich bare-const srcExpr with target vars for intro-based proofs *)
-    If[Head[srcExpr] === LeanConst && Length[vars] > 0,
-      srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}] & /@ vars]];
-
-    (* Build body tactic — include intro for universally-quantified variables *)
-    Module[{bodyTac},
-      bodyTac = If[rwRuleExpr =!= None,
-        Join[tacSteps, {
-          LeanTactic["have", "h", srcExpr],
-          LeanTactic["simp", {rwRuleExpr}, "h"],
-          LeanTactic["exact", LeanConst["h", {}]]}],
-        {LeanTactic["exact", srcExpr]}];
+    (* Build body tactic:
+       case 1: pos + rwRule → conv at h => nav; simp only [name]
+       case 2: no pos + preamble → rw [sr] at h
+       case 3: no pos + bare     → nth_rewrite 1 [rwRule] at h
+       case 4: no rwRule → exact srcExpr *)
+    Module[{bodyTac, srName},
+      bodyTac = If[rwRuleExpr =!= None && st["pendingPos"] =!= None,
+        (* Case 1: conv + simp only with bare name for positional rewrite *)
+        srName = st["currentSR"]["name"];
+        Module[{convNav = ptlPosToConvList[st["pendingPos"]],
+                nameExpr = If[st["currentSR"]["reversed"],
+                  LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[srName, {}]],
+                  LeanConst[srName, {}]]},
+          {LeanTactic["have", "h", srcExpr],
+           LeanTactic["conv", "h", convNav, LeanTactic["simp", {nameExpr}]],
+           LeanTactic["exact", LeanConst["h", {}]]}],
+        If[rwRuleExpr =!= None,
+          If[Length[tacSteps] > 0,
+            (* Case 2: preamble, no position → rw [sr] at h *)
+            Join[tacSteps, {
+              LeanTactic["have", "h", srcExpr],
+              LeanTactic["rw", {rwRuleExpr}, "h"],
+              LeanTactic["exact", LeanConst["h", {}]]}],
+            (* Case 3: bare, no position → nth_rewrite 1 [rwRule] at h *)
+            {LeanTactic["have", "h", srcExpr],
+             LeanTactic["nth_rewrite", 1, {rwRuleExpr}, "h"],
+             LeanTactic["exact", LeanConst["h", {}]]}],
+          (* Case 4: no rwRule → exact srcExpr *)
+          {LeanTactic["exact", srcExpr]}]];
       If[Length[vars] > 0,
         bodyTac = Prepend[bodyTac, LeanTactic["intro", vars]]];
       LeanTactic[bodyTac]],
@@ -410,13 +455,13 @@ ProofToLean[proof_] := Module[
     "SharedConstants" -> Sort[st["sharedConstants"]]|>;
   envData["_DeclOrder"] = st["decls"];
 
-  (* Generate source via LeanExportString, then compile *)
+  (* Generate source and compile *)
   env = LeanEnvironment[envData];
   src = LeanExportString[env];
-  
-  (* Compile to verify, then return tree-based env with source *)
-  Quiet[LeanImportString[src]];
-  LeanEnvironment[Append[envData, "_Source" -> src]]];
+  envData["_Source"] = src;
+  (* Source is stored — native compilation deferred to LeanState on demand *)
+
+  LeanEnvironment[envData]];
 
 End[];
 EndPackage[];

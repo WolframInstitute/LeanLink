@@ -1,0 +1,913 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Wolfram 15.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       154,          7]
+NotebookDataLength[     39293,        904]
+NotebookOptionsPosition[     28231,        777]
+NotebookOutlinePosition[     28551,        791]
+CellTagsIndexPosition[     28508,        788]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell["LeanLink \[LongDash] Exploring Mathlib", "Title",ExpressionUUID->"0f43cb65-ccd8-4408-a00b-f08215e81e90"],
+
+Cell["Prerequisites: Installing Mathlib", "Chapter",ExpressionUUID->"a623f558-563d-4c69-bb50-b6fea737b6d2"],
+
+Cell["\<\
+Install elan (Lean version manager) if not already installed:\
+\>", "Text",ExpressionUUID->"d02a92e9-cc9c-4079-acf2-5aaa425bb19b"],
+
+Cell["\<\
+(* Terminal: curl https://elan.lean-lang.org/install.sh | sh *)\
+\>", "Program",ExpressionUUID->"941672f0-0f7c-4657-8b8a-a1e0eea8680c"],
+
+Cell["\<\
+Create a Lean project with Mathlib as a dependency and build the modules used \
+in this notebook:\
+\>", "Text",ExpressionUUID->"f506388d-6633-430e-905a-a1146bcc63fd"],
+
+Cell["\<\
+(* Terminal:
+   mkdir -p ~/src/mathlib4 && cd ~/src/mathlib4
+   lake init MathlibTest math
+   lake exe cache get
+   lake build Mathlib.Tactic.Ring
+   lake build Mathlib.Algebra.Group.Basic
+   lake build Mathlib.Logic.Basic
+   lake build Mathlib.FieldTheory.IsAlgClosed.Basic
+*)\
+\>", "Program",ExpressionUUID->"ea4df0b9-2b6a-4edf-86a7-fdaee5b9ffb2"],
+
+Cell["Setup", "Chapter",ExpressionUUID->"014cf318-a8a7-4ce7-b41d-e36f8132b3c0"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"PacletDirectoryLoad", "[", 
+   RowBox[{
+    RowBox[{"NotebookDirectory", "[", "]"}], " ", "//", " ", 
+    "ParentDirectory"}], "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"Get", "[", "\"\<LeanLink`\>\"", "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"mathlibDir", " ", "=", " ", 
+   RowBox[{"FileNameJoin", "[", 
+    RowBox[{"{", 
+     RowBox[{
+     "$HomeDirectory", ",", " ", "\"\<src\>\"", ",", 
+      " ", "\"\<mathlib4\>\""}], "}"}], "]"}]}], ";"}]}], "Input",ExpressionUU\
+ID->"abf832cc-9b62-426d-9975-af682bc60e08"],
+
+Cell["Part 1: Types and Propositions", "Chapter",ExpressionUUID->"89dc3b23-c615-44d0-967d-7d965b2b2e23"],
+
+Cell[TextData[{
+ "In Lean 4 (and Mathlib), every expression has a ",
+ StyleBox["type",
+  FontSlant->Italic],
+ ". Propositions live in ",
+ Cell["Prop", "InlineCode",ExpressionUUID->
+  "da8097c5-1554-441d-ad6c-fbeb660befc5"],
+ ", data types live in ",
+ Cell["Type u", "InlineCode",ExpressionUUID->
+  "ed6bb8e6-49f2-4a35-8036-418a913426de"],
+ ". LeanLink lets us inspect these directly."
+}], "Text",ExpressionUUID->"b02f208f-8f9a-43a5-a66a-a32cb03393b8"],
+
+Cell["Loading an environment", "Section",ExpressionUUID->"24904a30-6675-4f47-a528-0fd2700d3954"],
+
+Cell[BoxData[
+ RowBox[{"algEnv", " ", "=", " ", 
+  RowBox[{"LeanImport", "[", 
+   RowBox[{"\"\<Mathlib.Algebra.Group.Basic\>\"", ",", "\n", "  ", 
+    RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "mathlibDir"}], ",", "\n", 
+    "  ", 
+    RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+     RowBox[{"{", "\"\<Mathlib.Algebra.Group.Basic\>\"", "}"}]}]}], 
+   "]"}]}]], "Input",ExpressionUUID->"4e6a098f-33ba-42e6-bb03-b2e73fd902ba"],
+
+Cell[BoxData[
+ RowBox[{"Length", "[", "algEnv", "]"}]], "Input",ExpressionUUID->"6ac4ae2c-5510-4ed8-b2d3-93418da7755f"],
+
+Cell["Reading a theorem's type", "Section",ExpressionUUID->"7872d727-05b7-4cce-8fd4-fb065e759b00"],
+
+Cell[TextData[{
+ Cell["mul_comm", "InlineCode",ExpressionUUID->
+  "6bca4dd3-40bb-4f13-88e4-ca9fa4a74528"],
+ " states that multiplication is commutative. Its ",
+ StyleBox["type",
+  FontSlant->Italic],
+ " is the proposition it proves:"
+}], "Text",ExpressionUUID->"bcf66af5-4cdf-475d-b3cd-33b5fc944b85"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"algEnv", "[", "\"\<mul_comm\>\"", "]"}], "[", "\"\<TypeForm\>\"", 
+  "]"}]], "Input",ExpressionUUID->"45a9577e-98c4-49de-96b2-d317a8fd0e1e"],
+
+Cell[TextData[{
+ "Compare with ",
+ Cell["add_zero", "InlineCode",ExpressionUUID->
+  "e3cd9536-a021-4cde-8b49-65e4711ffb31"],
+ " \[LongDash] adding zero on the right:"
+}], "Text",ExpressionUUID->"e0429940-5c3d-4434-916d-31359e8b34d1"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"algEnv", "[", "\"\<add_zero\>\"", "]"}], "[", "\"\<TypeForm\>\"", 
+  "]"}]], "Input",ExpressionUUID->"4921f85a-c963-4a81-971b-88fa647e9fa4"],
+
+Cell[TextData[{
+ "And ",
+ Cell["one_mul", "InlineCode",ExpressionUUID->
+  "4116c2c8-6104-4265-bac1-e874e2b02400"],
+ " \[LongDash] multiplying by one on the left:"
+}], "Text",ExpressionUUID->"057e04bb-e8f8-47c8-851a-944abca3caa8"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"algEnv", "[", "\"\<one_mul\>\"", "]"}], "[", "\"\<TypeForm\>\"", 
+  "]"}]], "Input",ExpressionUUID->"524b2e02-a7dd-4761-ace2-ef46d0239654"],
+
+Cell["The expression tree", "Section",ExpressionUUID->"79fb175b-f8b9-4e27-aef1-72a96b44a97a"],
+
+Cell[TextData[{
+ "Behind the pretty-printed string is a symbolic expression tree. ",
+ Cell["\"Type\"", "InlineCode",ExpressionUUID->
+  "0c635810-4fe8-455a-adff-0334e2f28ec4"],
+ " returns it:"
+}], "Text",ExpressionUUID->"728604a6-86ac-4d85-b910-8d7eb5391f5b"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"algEnv", "[", "\"\<mul_comm\>\"", "]"}], "[", "\"\<Type\>\"", 
+  "]"}]], "Input",ExpressionUUID->"ac58ce99-8db0-4a70-a532-697079c67858"],
+
+Cell[TextData[{
+ "Every Lean expression is built from a small set of constructors: ",
+ Cell["LeanConst", "InlineCode",ExpressionUUID->
+  "5c6f0f2d-15a8-47c5-9d12-9dde440de4d0"],
+ " (named constant), ",
+ Cell["LeanApp", "InlineCode",ExpressionUUID->
+  "cb9f9d47-8e8e-490e-8318-0acd833ceda4"],
+ " (function application), ",
+ Cell["LeanForall", "InlineCode",ExpressionUUID->
+  "47443841-13c5-40ef-b24a-c002289f0c97"],
+ " (universal quantifier / function type), ",
+ Cell["LeanBVar", "InlineCode",ExpressionUUID->
+  "b5adcac2-1301-44e7-bd5e-aecfd52e4ba6"],
+ " (bound variable), ",
+ Cell["LeanLambda", "InlineCode",ExpressionUUID->
+  "fffafa23-19b1-4c11-9abf-9f10d0458ddd"],
+ ", and ",
+ Cell["LeanSort", "InlineCode",ExpressionUUID->
+  "406239ce-fa5f-449d-a6f5-cbc18811d9b6"],
+ "."
+}], "Text",ExpressionUUID->"f436b435-534e-4518-abdf-a17d52997943"],
+
+Cell["Part 2: Understanding Binder Annotations", "Chapter",ExpressionUUID->"52134814-c679-43fa-b85a-87a42c2668c1"],
+
+Cell["Lean uses three kinds of argument brackets:", "Text",ExpressionUUID->"ea104c19-ab1d-404f-b53d-bf6896670f78"],
+
+Cell[TextData[{
+ Cell["(x : T)", "InlineCode",ExpressionUUID->
+  "60485c2a-f232-4be0-89ec-7883fabb22fd"],
+ " \[LongDash] ",
+ StyleBox["explicit",
+  FontWeight->Bold],
+ ": the caller must provide this"
+}], "Item",ExpressionUUID->"7c7c329f-ec51-4ba1-839d-badef3664cf9"],
+
+Cell[TextData[{
+ Cell["{x : T}", "InlineCode",ExpressionUUID->
+  "abdb79ae-5685-416b-8aa6-be5dc74d5400"],
+ " \[LongDash] ",
+ StyleBox["implicit",
+  FontWeight->Bold],
+ ": Lean infers this from context"
+}], "Item",ExpressionUUID->"d9c6205a-57e1-40a4-b1c2-9824ff712ff4"],
+
+Cell[TextData[{
+ Cell["[inst : T]", "InlineCode",ExpressionUUID->
+  "783fcc57-2424-4377-a40a-395c1bf5afd2"],
+ " \[LongDash] ",
+ StyleBox["instance",
+  FontWeight->Bold],
+ ": Lean finds this via typeclass search"
+}], "Item",ExpressionUUID->"682aaba1-8632-4805-a1ea-4f353533775f"],
+
+Cell[TextData[{
+ "The new ",
+ Cell["\"Parameters\"", "InlineCode",ExpressionUUID->
+  "b5ce7910-d980-4198-a485-ef1686120ec0"],
+ " property peels apart the forall chain and shows each argument:"
+}], "Text",ExpressionUUID->"b7e44ce2-3f5b-4124-a1a6-edd1c5c87bce"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"algEnv", "[", "\"\<mul_comm\>\"", "]"}], "[", "\"\<Parameters\>\"",
+    "]"}], " ", "//", " ", "Dataset"}]], "Input",ExpressionUUID->"d90fa44a-\
+5040-410d-8e3a-de64a6732b01"],
+
+Cell[TextData[{
+ "The output tells us: to use ",
+ Cell["mul_comm", "InlineCode",ExpressionUUID->
+  "5836b6ef-fae4-44c8-9ec1-4d256772ca02"],
+ ", we provide two explicit values ",
+ Cell["a", "InlineCode",ExpressionUUID->
+  "8e17d756-cd80-4d6c-a13d-e7bde05ad98a"],
+ " and ",
+ Cell["b", "InlineCode",ExpressionUUID->
+  "f1fc5695-8551-432d-9ba4-d14346d5682b"],
+ ", and Lean auto-resolves the type ",
+ Cell["G", "InlineCode",ExpressionUUID->
+  "d4276b5a-a26e-4150-90fe-6cba2fbc5940"],
+ " (implicit) and the ",
+ Cell["CommMagma", "InlineCode",ExpressionUUID->
+  "f68259aa-120a-4fd1-a1ca-97585d0616aa"],
+ " instance."
+}], "Text",ExpressionUUID->"3ca882b9-2020-4e43-a75f-12fab89da918"],
+
+Cell["Comparing parameter structures", "Section",ExpressionUUID->"52ea245b-2f48-4e0c-86b5-6d6330e38080"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"algEnv", "[", "\"\<add_zero\>\"", "]"}], "[", "\"\<Parameters\>\"",
+    "]"}], " ", "//", " ", "Dataset"}]], "Input",ExpressionUUID->"217fe4e1-\
+c723-4925-a612-120424ca99d3"],
+
+Cell[TextData[{
+ Cell["add_zero", "InlineCode",ExpressionUUID->
+  "aa97cffd-3f1c-4c9b-9b0b-d4b76d57f748"],
+ " needs an ",
+ Cell["AddZeroClass", "InlineCode",ExpressionUUID->
+  "1d5db7ce-d5a9-4be3-a225-2915222f4061"],
+ " instance \[LongDash] Lean will find this automatically for types like ",
+ Cell["Nat", "InlineCode",ExpressionUUID->
+  "245d249b-ab3c-46a1-9c30-fd0943da5f09"],
+ ", ",
+ Cell["Int", "InlineCode",ExpressionUUID->
+  "d3baa069-2a13-4394-a560-5faf72b52e06"],
+ ", ",
+ Cell["Real", "InlineCode",ExpressionUUID->
+  "d0a94ce6-a87a-4209-9920-efb44cdb2f26"],
+ "."
+}], "Text",ExpressionUUID->"1b06d53a-c5bc-4b09-80fa-9eb6073e9381"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"algEnv", "[", "\"\<neg_add_cancel\>\"", "]"}], 
+   "[", "\"\<Parameters\>\"", "]"}], " ", "//", " ", "Dataset"}]], "Input",Exp\
+ressionUUID->"2b18caca-45c4-4e90-8371-72014897d3e4"],
+
+Cell[TextData[{
+ Cell["neg_add_cancel", "InlineCode",ExpressionUUID->
+  "91be71a6-30a1-4854-991d-a7ab7d3b39d2"],
+ " requires an ",
+ Cell["AddGroup", "InlineCode",ExpressionUUID->
+  "937cb25f-6de4-49e1-b4be-c4a655f5220e"],
+ " \[LongDash] a monoid with additive inverses."
+}], "Text",ExpressionUUID->"e138beda-cdb1-4831-8774-7c2eef5b6da0"],
+
+Cell["Part 3: Typeclasses", "Chapter",ExpressionUUID->"1a243aa0-afdd-4bcc-8767-541010694b67"],
+
+Cell[TextData[{
+ "Typeclasses are Lean's way of expressing algebraic structure. When you see ",
+ Cell["[inst : Field k]", "InlineCode",ExpressionUUID->
+  "8c0bd36c-a7e3-4722-8d04-dfa9f1a1c0c0"],
+ ", Lean automatically searches for a proof that ",
+ Cell["k", "InlineCode",ExpressionUUID->
+  "9e47e46a-5cd5-49a0-878b-bc615bb75ebf"],
+ " is a field."
+}], "Text",ExpressionUUID->"e9323159-5208-4e83-8a9a-18302a29f3ad"],
+
+Cell[TextData[{
+ "What typeclasses does ",
+ Cell[BoxData[
+ Cell["mul_comm", "InlineCode",ExpressionUUID->
+   "96ba95b6-f2a9-4eb6-a3a2-ea99586b1c2e"]],ExpressionUUID->
+  "b0009288-3f56-41cc-bbf5-c1fd73db223b"],
+ " need?"
+}], "Section",ExpressionUUID->"6a6b65ed-8fa7-4ee9-b2f7-17e144aaa0bf"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"Select", "[", 
+   RowBox[{
+    RowBox[{
+     RowBox[{"algEnv", "[", "\"\<mul_comm\>\"", "]"}], 
+     "[", "\"\<Parameters\>\"", "]"}], ",", " ", 
+    RowBox[{
+     RowBox[{"#Binder", " ", "==", " ", "\"\<instance\>\""}], " ", "&"}]}], 
+   "]"}], " ", "//", " ", "Dataset"}]], "Input",ExpressionUUID->"6bc57ebd-\
+d22e-458a-8acb-b7993cf3a309"],
+
+Cell[TextData[{
+ "What typeclasses does ",
+ Cell[BoxData[
+ Cell["sub_eq_add_neg", "InlineCode",ExpressionUUID->
+   "af0c4c75-dde2-4d79-9c3b-98f8ecbab1b4"]],ExpressionUUID->
+  "1b47a073-a305-42da-b206-732231661e9b"],
+ " need?"
+}], "Section",ExpressionUUID->"6edde825-1d07-4cb5-9bc0-6b7d3506319a"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"algEnv", "[", "\"\<sub_eq_add_neg\>\"", "]"}], 
+   "[", "\"\<Parameters\>\"", "]"}], " ", "//", " ", "Dataset"}]], "Input",Exp\
+ressionUUID->"84777eb1-2775-4e20-882b-8f64c50357b2"],
+
+Cell["Building a typeclass hierarchy", "Section",ExpressionUUID->"6c46148f-6e43-4842-9b66-f47953abe22d"],
+
+Cell[TextData[{
+ "Each typeclass extends others. An ",
+ Cell["AddGroup", "InlineCode",ExpressionUUID->
+  "b900beee-6652-4be4-b392-8a1b8c02752e"],
+ " extends ",
+ Cell["AddMonoid", "InlineCode",ExpressionUUID->
+  "03bc32a7-8de2-4f7f-b4d9-02bdf4574227"],
+ " extends ",
+ Cell["AddZeroClass", "InlineCode",ExpressionUUID->
+  "aa6bca31-ec05-4e80-95af-ed809518970f"],
+ ". We can see this by inspecting the type of the typeclass itself:"
+}], "Text",ExpressionUUID->"61f0e562-5439-4eb0-9cdd-91b920caa17c"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"algEnv", "[", "\"\<AddGroup\>\"", "]"}], "[", "\"\<TypeForm\>\"", 
+  "]"}]], "Input",ExpressionUUID->"2f61ace2-19bd-478c-b47c-b5bd1400b812"],
+
+Cell["Part 4: Propositional Logic", "Chapter",ExpressionUUID->"b328c105-1a04-446e-84e0-52beafbf73aa"],
+
+Cell[BoxData[
+ RowBox[{"logicEnv", " ", "=", " ", 
+  RowBox[{"LeanImport", "[", 
+   RowBox[{"\"\<Mathlib.Logic.Basic\>\"", ",", "\n", "  ", 
+    RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "mathlibDir"}], ",", "\n", 
+    "  ", 
+    RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+     RowBox[{"{", "\"\<Mathlib.Logic.Basic\>\"", "}"}]}]}], "]"}]}]], "Input",\
+ExpressionUUID->"5a41161b-3034-4a86-bdfa-99a76a58b432"],
+
+Cell["The law of excluded middle", "Section",ExpressionUUID->"4da953c1-2920-463e-a1b4-2cda4ca12455"],
+
+Cell["Every proposition is either true or false:", "Text",ExpressionUUID->"a6b751c5-cd02-40f0-a145-2eab55d87cdd"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"logicEnv", "[", "\"\<Classical.em\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"92607f31-5a92-\
+49da-986c-eb9ef56cba53"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"logicEnv", "[", "\"\<Classical.em\>\"", "]"}], 
+   "[", "\"\<Parameters\>\"", "]"}], " ", "//", " ", "Dataset"}]], "Input",Exp\
+ressionUUID->"a1223b48-b36c-4c52-b21a-4f48789dbb46"],
+
+Cell[TextData[{
+ "One explicit argument: the proposition ",
+ Cell["p", "InlineCode",ExpressionUUID->
+  "e78dba73-5417-4c03-94fd-cf6138309bae"],
+ ". No typeclasses needed \[LongDash] this is pure logic."
+}], "Text",ExpressionUUID->"ea2df7f2-e8ce-46a5-8604-00d939d15e9f"],
+
+Cell["Commutativity of connectives", "Section",ExpressionUUID->"68e4bc47-716a-4f74-95d9-2e7952711c97"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"logicEnv", "[", "\"\<And.comm\>\"", "]"}], "[", "\"\<TypeForm\>\"",
+   "]"}]], "Input",ExpressionUUID->"4b2dbbec-b138-4b97-94cb-bdfe455c41e0"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"logicEnv", "[", "\"\<Or.comm\>\"", "]"}], "[", "\"\<TypeForm\>\"", 
+  "]"}]], "Input",ExpressionUUID->"886356be-ad9b-4fa4-bdfb-b4f846be2648"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"logicEnv", "[", "\"\<Iff.comm\>\"", "]"}], "[", "\"\<TypeForm\>\"",
+   "]"}]], "Input",ExpressionUUID->"49283d1f-e609-4ec2-9d82-a69e933818df"],
+
+Cell["Double negation", "Section",ExpressionUUID->"d6de049e-ba52-468c-9782-533c513dc145"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"logicEnv", "[", "\"\<not_not_not\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"5adec5a2-e3eb-\
+49f7-8efb-094efc5abcd0"],
+
+Cell["Part 5: Interactive Proofs", "Chapter",ExpressionUUID->"148880a4-82e9-4a0f-b47f-7e946724cf71"],
+
+Cell["\<\
+LeanLink can open any theorem as a proof goal and let you step through it \
+with tactics.\
+\>", "Text",ExpressionUUID->"10ab791a-0c05-4332-ad01-c4967734b726"],
+
+Cell["Opening a proof goal", "Section",ExpressionUUID->"9507e2aa-b191-4af7-a140-7dfad90be1fc"],
+
+Cell[BoxData[
+ RowBox[{"s0", " ", "=", " ", 
+  RowBox[{"LeanState", "[", 
+   RowBox[{"algEnv", ",", " ", "\"\<add_zero\>\""}], "]"}]}]], "Input",Express\
+ionUUID->"bf10bf7c-a05a-4730-8752-0f89b63a2f9c"],
+
+Cell[BoxData[
+ RowBox[{"s0", "[", "\"\<GoalCount\>\"", "]"}]], "Input",ExpressionUUID->"71b67538-41b0-48fd-88b4-7e25b5ae4c22"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"s0", "[", "\"\<Goals\>\"", "]"}], "[", 
+   RowBox[{"[", "1", "]"}], "]"}], "[", "\"\<Target\>\"", "]"}]], "Input",Expr\
+essionUUID->"407714d6-f72b-43f5-8429-2046906e5b6e"],
+
+Cell["Applying tactics", "Section",ExpressionUUID->"9980bad6-c257-4059-9e21-a11b7d17c607"],
+
+Cell["Introduce the universally quantified variables:", "Text",ExpressionUUID->"2f2561cb-236a-46d4-9df3-a4afe47aa538"],
+
+Cell[BoxData[
+ RowBox[{"s1", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"LeanTactic", "[", 
+    RowBox[{"\"\<intro\>\"", ",", " ", 
+     RowBox[{"{", 
+      RowBox[{"\"\<M\>\"", ",", " ", "\"\<inst\>\"", ",", " ", "\"\<a\>\""}], 
+      "}"}]}], "]"}], "[", "s0", "]"}]}]], "Input",ExpressionUUID->"513fe24a-\
+b1d7-4098-8f26-57bf50b67721"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"s1", "[", "\"\<Goals\>\"", "]"}], "[", 
+   RowBox[{"[", "1", "]"}], "]"}], "[", "\"\<Target\>\"", "]"}]], "Input",Expr\
+essionUUID->"629396c6-98f5-423d-894b-a07ec8bc0218"],
+
+Cell["Part 6: The Fundamental Theorem of Algebra", "Chapter",ExpressionUUID->"fd96bb3b-c6ff-40f1-a1df-b45f9acaeabc"],
+
+Cell[TextData[{
+ "The FTA states that ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["C",
+     FontSlant->"Plain"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "acd55902-a6c3-4e43-b030-f7f216021ad1"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->
+  "ceae0bbc-8a0e-40bf-b2cb-57af8b8265c4"],
+ " is algebraically closed: every non-constant polynomial over ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["C",
+     FontSlant->"Plain"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "4f294c91-8007-440a-969e-1407fba55f32"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->
+  "dec9e917-a66e-433f-8e8e-17a5d90ba044"],
+ " has a root. In Mathlib, this is captured by the ",
+ Cell["IsAlgClosed", "InlineCode",ExpressionUUID->
+  "9110d181-4cf9-4de9-a1fb-d01790f2deb1"],
+ " typeclass."
+}], "Text",ExpressionUUID->"93c36061-4c7d-4787-9081-78414b374d94"],
+
+Cell[BoxData[
+ RowBox[{"ftaEnv", " ", "=", " ", 
+  RowBox[{"LeanImport", "[", 
+   RowBox[{"\"\<Mathlib.FieldTheory.IsAlgClosed.Basic\>\"", ",", "\n", "  ", 
+    RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "mathlibDir"}], ",", "\n", 
+    "  ", 
+    RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+     RowBox[{"{", "\"\<Mathlib.FieldTheory.IsAlgClosed.Basic\>\"", "}"}]}], ",",
+     "\n", "  ", 
+    RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<IsAlgClosed\>\""}]}], 
+   "]"}]}]], "Input",ExpressionUUID->"ef501a4b-0db6-4fe6-b80a-8ebe36e1dd55"],
+
+Cell[BoxData[
+ RowBox[{"Length", "[", "ftaEnv", "]"}]], "Input",ExpressionUUID->"9cf12778-37aa-46a2-bbb5-f445e899b340"],
+
+Cell["All IsAlgClosed theorems", "Section",ExpressionUUID->"896476f9-5d0c-4e7b-8a00-6478bd0cdfde"],
+
+Cell[BoxData[
+ RowBox[{"Keys", "[", "ftaEnv", "]"}]], "Input",ExpressionUUID->"586570c5-5849-4af7-9501-4bcd2ba3fd7f"],
+
+Cell["The core theorem: existence of roots", "Section",ExpressionUUID->"30db2eda-0962-436f-b5de-7e1fbc23b74a"],
+
+Cell[TextData[{
+ Cell["IsAlgClosed.exists_aeval_eq_zero", "InlineCode",ExpressionUUID->
+  "a95eb012-7b65-4319-b938-b42c4f67acf9"],
+ " says: for any polynomial of non-zero degree over an algebraically closed \
+field, there exists a root:"
+}], "Text",ExpressionUUID->"0926a3ab-b2e5-455f-bc97-be9437f4d1e2"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.exists_aeval_eq_zero\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"e7177e11-97a2-\
+4fef-aebc-c80dcb687ec7"],
+
+Cell["Dissecting the FTA parameters", "Section",ExpressionUUID->"51e76804-004a-42a8-86b7-351429d49023"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.exists_aeval_eq_zero\>\"", "]"}], 
+   "[", "\"\<Parameters\>\"", "]"}], " ", "//", " ", "Dataset"}]], "Input",Exp\
+ressionUUID->"7fe3a138-deb2-4d14-8c51-bc79dacbd150"],
+
+Cell["Reading the parameter table:", "Text",ExpressionUUID->"6f195bf3-4ab4-4840-b8cf-6a3454e259f9"],
+
+Cell[TextData[{
+ Cell["k : Type u", "InlineCode",ExpressionUUID->
+  "518f078f-1940-4a13-9b32-8e9f43c78636"],
+ " (explicit) \[LongDash] the algebraically closed field, e.g. ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["C",
+     FontSlant->"Plain"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "f8bf1be6-3a90-4ff3-a35e-55ef29ebb616"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->"812516ba-c643-40d9-b6ee-be79cd1d6ab5"]
+}], "Item",ExpressionUUID->"fb00e6d9-0250-4317-86aa-6bdcaafaea18"],
+
+Cell[TextData[{
+ Cell["[Field k]", "InlineCode",ExpressionUUID->
+  "ad03c107-eb18-4d6b-a099-302bb1c490c7"],
+ " (instance) \[LongDash] ",
+ Cell["k", "InlineCode",ExpressionUUID->
+  "e4973e11-5209-41c9-9496-93bf9bdcff0f"],
+ " must be a field"
+}], "Item",ExpressionUUID->"0a95545e-97f6-4ed1-9c72-35a016987845"],
+
+Cell[TextData[{
+ Cell["{R : Type}", "InlineCode",ExpressionUUID->
+  "54efc741-245a-4196-9246-f7c40145ce9c"],
+ " (implicit) \[LongDash] the coefficient ring"
+}], "Item",ExpressionUUID->"3986580d-493c-47c0-976b-c6c62b1faa72"],
+
+Cell[TextData[{
+ Cell["[CommSemiring R]", "InlineCode",ExpressionUUID->
+  "756a2a8a-d8fe-4983-bb7a-a73d2e6aa59c"],
+ " (instance) \[LongDash] ",
+ Cell["R", "InlineCode",ExpressionUUID->
+  "00ccd4ea-7c14-448a-be65-68cd80cd9da5"],
+ " must be a commutative semiring"
+}], "Item",ExpressionUUID->"6d7fa9ab-a44c-41dd-a0a7-7435fc6832c1"],
+
+Cell[TextData[{
+ Cell["[IsAlgClosed k]", "InlineCode",ExpressionUUID->
+  "235b18ce-f2e5-40c5-a397-2e46d1a3d87d"],
+ " (instance) \[LongDash] the key assumption: ",
+ Cell["k", "InlineCode",ExpressionUUID->
+  "32b56a56-deeb-468a-9ca0-3b94ed302058"],
+ " is algebraically closed"
+}], "Item",ExpressionUUID->"520757a2-7fc0-4133-80a8-07a089a37c03"],
+
+Cell[TextData[{
+ Cell["[Algebra R k]", "InlineCode",ExpressionUUID->
+  "25420d2a-b615-4289-9d8d-cd703f705715"],
+ " (instance) \[LongDash] there's an algebra map ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    RowBox[{
+     StyleBox["R", "TI"], "\[Rule]", 
+     StyleBox["k", "TI"]}], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "b3fa9a12-f35e-4523-a218-d291968be7f9"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->"840634ab-9fc1-41ab-9add-7341e926d53c"]
+}], "Item",ExpressionUUID->"10bcffe1-52b3-4084-b9e8-3da4216962d4"],
+
+Cell[TextData[{
+ Cell["[FaithfulSMul R k]", "InlineCode",ExpressionUUID->
+  "a1c69fc0-cc96-4fbc-8cd0-90d38a5a0199"],
+ " (instance) \[LongDash] the algebra map is injective"
+}], "Item",ExpressionUUID->"f6a06d4c-ca70-4512-b809-147b2c4da8a8"],
+
+Cell[TextData[{
+ Cell["p : Polynomial R", "InlineCode",ExpressionUUID->
+  "a3f065f4-2d2c-42ac-826b-c1d6f0dedfc0"],
+ " (explicit) \[LongDash] the polynomial"
+}], "Item",ExpressionUUID->"98266ef3-4365-4ac4-9cdd-4b4c43212fba"],
+
+Cell["The conclusion", "Section",ExpressionUUID->"b062faa9-aae5-4eef-9742-ab6df8fafe72"],
+
+Cell["\<\
+After all the parameters, the return type (the thing being proved) is:\
+\>", "Text",ExpressionUUID->"97785508-3f27-4825-8a33-23b2a01f661a"],
+
+Cell[TextData[{
+ Cell[BoxData[
+  FormBox[
+   RowBox[{
+    StyleBox["p", "TI"], 
+    RowBox[{
+     RowBox[{".", "degree"}], "\[NotEqual]", 
+     RowBox[{"0", "\[DoubleLongRightArrow]", "\[Exists]"}]}], 
+    StyleBox["x", "TI"], 
+    RowBox[{",", " ", "aeval"}], 
+    RowBox[{"(", 
+     StyleBox["x", "TI"], ")"}], 
+    RowBox[{"(", 
+     StyleBox["p", "TI"], ")"}], 
+    RowBox[{"\[LongEqual]", "0"}]}], TraditionalForm]], "InlineFormula",
+  ExpressionUUID->"623317d4-5a61-47be-a68f-0e386f0eedbd"],
+ "  "
+}], "DisplayFormula",ExpressionUUID->"fb42bc14-639c-484c-bd60-dfb400a2d579"],
+
+Cell[TextData[{
+ "\"If the polynomial has non-zero degree, then there exists an element ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["x", "TI"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "0b4a27c8-6106-450d-93b5-e734fc439d8b"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->
+  "cd44abd4-3172-49fa-b98b-43d793b2903e"],
+ " in ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["k", "TI"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "bc4c2014-bcdb-49fb-b35c-a885aea75450"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->
+  "a35f4376-1da0-4c34-82e2-1c35a14582f0"],
+ " such that evaluating ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["p", "TI"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "693153fd-9273-4ba5-8795-e3e797b7c657"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->
+  "56646f11-b11f-4c9e-a66d-ada3374d2d8f"],
+ " at ",
+ Cell[TextData[{
+  Cell[BoxData[
+   FormBox[
+    StyleBox["x", "TI"], TraditionalForm]], "InlineFormula",ExpressionUUID->
+   "4a2c7740-1eb5-4445-9f28-8c6deb1e7fa6"],
+  "  "
+ }], "DisplayFormula",ExpressionUUID->
+  "ce9bcada-7688-4c12-9ce0-ed8be37add68"],
+ " gives zero.\""
+}], "Text",ExpressionUUID->"2697e475-fee2-4def-a550-7000584c681c"],
+
+Cell["Every polynomial splits", "Section",ExpressionUUID->"73109e0c-20f7-4c12-9e8d-6564aa554567"],
+
+Cell["\<\
+A stronger form: every polynomial factors completely over an algebraically \
+closed field:\
+\>", "Text",ExpressionUUID->"e8987c14-7ff4-4e59-a6df-f13fa5b40a42"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.splits_codomain\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"f4cfb8dd-f155-\
+47be-bc71-1be5bdcaf09f"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.splits_codomain\>\"", "]"}], 
+   "[", "\"\<Parameters\>\"", "]"}], " ", "//", " ", "Dataset"}]], "Input",Exp\
+ressionUUID->"57e7c273-552a-458a-a842-f63498e872e8"],
+
+Cell["Consequences", "Section",ExpressionUUID->"88ce8def-7d4e-4739-9f0e-194a7d2f2b2a"],
+
+Cell["N-th roots exist in algebraically closed fields:", "Text",ExpressionUUID->"0f4a083b-5490-4f88-9a86-8c1b2beb0c8e"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.exists_pow_nat_eq\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"a0fdc452-762d-\
+42ae-99fc-1dfa8bfdd912"],
+
+Cell["Square roots exist:", "Text",ExpressionUUID->"9c7b1a3b-c1a7-4953-969b-637bcceaf4b0"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.exists_eq_mul_self\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"58a1aede-afc8-\
+4c2c-bdb2-8a863dbc359f"],
+
+Cell["Algebraically closed fields are necessarily infinite:", "Text",ExpressionUUID->"9d736a22-a002-46ee-b55b-57cc4ddaa3c2"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.instInfinite\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"3331a9e9-92f7-\
+47cd-8fa1-8dbbf12cc7db"],
+
+Cell["The construction of the typeclass", "Section",ExpressionUUID->"f2b28b02-f69e-4399-bda4-084f2adb7690"],
+
+Cell[TextData[{
+ "The ",
+ Cell["IsAlgClosed", "InlineCode",ExpressionUUID->
+  "ad4ac0b0-4daf-4b82-9e8d-3899f5715ba0"],
+ " typeclass is built from a single axiom: all polynomials split:"
+}], "Text",ExpressionUUID->"02589e56-9554-43ce-948c-0654b5bcc8ba"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.mk\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"c7aed43e-b035-\
+404a-9da8-819bc75cc802"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.mk\>\"", "]"}], 
+   "[", "\"\<Parameters\>\"", "]"}], " ", "//", " ", "Dataset"}]], "Input",Exp\
+ressionUUID->"1005228f-456e-4ce7-8e2a-df5f32d4b0e2"],
+
+Cell["Expression tree of the FTA", "Section",ExpressionUUID->"a2ec3cd8-4225-47ba-9fcc-d8fb8aaba5e6"],
+
+Cell[TextData[{
+ "Visualize the full type of ",
+ Cell["exists_aeval_eq_zero", "InlineCode",ExpressionUUID->
+  "040fc564-0eea-4036-9564-5a15eb197b2a"],
+ " as a graph:"
+}], "Text",ExpressionUUID->"af073c7c-068d-405f-b10f-dbc4a2fc3558"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"ftaEnv", "[", "\"\<IsAlgClosed.exists_aeval_eq_zero\>\"", "]"}], 
+  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",ExpressionUUID->"25bed355-27f5-\
+4c04-a758-345cbcb0919f"],
+
+Cell["A simple proof: commutativity", "Section",ExpressionUUID->"d615dc2a-3e5b-472f-b25e-4e3db1f40e16"],
+
+Cell["\<\
+To see LeanLink's tactic engine in action, let's prove something simple from \
+the algebra environment:\
+\>", "Text",ExpressionUUID->"48cad0e0-5ba3-46df-ab9c-784f0dc67a27"],
+
+Cell[BoxData[
+ RowBox[{"s0", " ", "=", " ", 
+  RowBox[{"LeanState", "[", 
+   RowBox[{"algEnv", ",", " ", "\"\<mul_one\>\""}], "]"}]}]], "Input",Expressi\
+onUUID->"647b0df5-6407-4284-bee3-e5dcc63efdde"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"s0", "[", "\"\<Goals\>\"", "]"}], "[", 
+   RowBox[{"[", "1", "]"}], "]"}], "[", "\"\<Target\>\"", "]"}]], "Input",Expr\
+essionUUID->"918f1b8c-a543-4288-be0c-b18da081bcd3"],
+
+Cell[BoxData[
+ RowBox[{"s0", "[", "\"\<Complete\>\"", "]"}]], "Input",ExpressionUUID->"9129ccd4-ef1c-49db-ba25-969709b5ffea"]
+},
+FrontEndVersion->"15.0 for Mac OS X ARM (64-bit) (January 5, 2026)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"e1db7125-560f-4681-98ec-1a89961b27a5"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[554, 20, 110, 0, 70, "Title",ExpressionUUID->"0f43cb65-ccd8-4408-a00b-f08215e81e90"],
+Cell[667, 22, 107, 0, 70, "Chapter",ExpressionUUID->"a623f558-563d-4c69-bb50-b6fea737b6d2"],
+Cell[777, 24, 140, 2, 70, "Text",ExpressionUUID->"d02a92e9-cc9c-4079-acf2-5aaa425bb19b"],
+Cell[920, 28, 145, 2, 70, "Program",ExpressionUUID->"941672f0-0f7c-4657-8b8a-a1e0eea8680c"],
+Cell[1068, 32, 176, 3, 70, "Text",ExpressionUUID->"f506388d-6633-430e-905a-a1146bcc63fd"],
+Cell[1247, 37, 359, 10, 70, "Program",ExpressionUUID->"ea4df0b9-2b6a-4edf-86a7-fdaee5b9ffb2"],
+Cell[1609, 49, 79, 0, 70, "Chapter",ExpressionUUID->"014cf318-a8a7-4ce7-b41d-e36f8132b3c0"],
+Cell[1691, 51, 550, 15, 70, "Input",ExpressionUUID->"abf832cc-9b62-426d-9975-af682bc60e08"],
+Cell[2244, 68, 104, 0, 70, "Chapter",ExpressionUUID->"89dc3b23-c615-44d0-967d-7d965b2b2e23"],
+Cell[2351, 70, 451, 11, 70, "Text",ExpressionUUID->"b02f208f-8f9a-43a5-a66a-a32cb03393b8"],
+Cell[2805, 83, 96, 0, 70, "Section",ExpressionUUID->"24904a30-6675-4f47-a528-0fd2700d3954"],
+Cell[2904, 85, 429, 8, 70, "Input",ExpressionUUID->"4e6a098f-33ba-42e6-bb03-b2e73fd902ba"],
+Cell[3336, 95, 119, 1, 70, "Input",ExpressionUUID->"6ac4ae2c-5510-4ed8-b2d3-93418da7755f"],
+Cell[3458, 98, 98, 0, 70, "Section",ExpressionUUID->"7872d727-05b7-4cce-8fd4-fb065e759b00"],
+Cell[3559, 100, 300, 7, 70, "Text",ExpressionUUID->"bcf66af5-4cdf-475d-b3cd-33b5fc944b85"],
+Cell[3862, 109, 175, 3, 70, "Input",ExpressionUUID->"45a9577e-98c4-49de-96b2-d317a8fd0e1e"],
+Cell[4040, 114, 233, 5, 70, "Text",ExpressionUUID->"e0429940-5c3d-4434-916d-31359e8b34d1"],
+Cell[4276, 121, 175, 3, 70, "Input",ExpressionUUID->"4921f85a-c963-4a81-971b-88fa647e9fa4"],
+Cell[4454, 126, 229, 5, 70, "Text",ExpressionUUID->"057e04bb-e8f8-47c8-851a-944abca3caa8"],
+Cell[4686, 133, 174, 3, 70, "Input",ExpressionUUID->"524b2e02-a7dd-4761-ace2-ef46d0239654"],
+Cell[4863, 138, 93, 0, 70, "Section",ExpressionUUID->"79fb175b-f8b9-4e27-aef1-72a96b44a97a"],
+Cell[4959, 140, 258, 5, 70, "Text",ExpressionUUID->"728604a6-86ac-4d85-b910-8d7eb5391f5b"],
+Cell[5220, 147, 171, 3, 70, "Input",ExpressionUUID->"ac58ce99-8db0-4a70-a532-697079c67858"],
+Cell[5394, 152, 842, 20, 70, "Text",ExpressionUUID->"f436b435-534e-4518-abdf-a17d52997943"],
+Cell[6239, 174, 114, 0, 70, "Chapter",ExpressionUUID->"52134814-c679-43fa-b85a-87a42c2668c1"],
+Cell[6356, 176, 114, 0, 70, "Text",ExpressionUUID->"ea104c19-ab1d-404f-b53d-bf6896670f78"],
+Cell[6473, 178, 267, 7, 70, "Item",ExpressionUUID->"7c7c329f-ec51-4ba1-839d-badef3664cf9"],
+Cell[6743, 187, 268, 7, 70, "Item",ExpressionUUID->"d9c6205a-57e1-40a4-b1c2-9824ff712ff4"],
+Cell[7014, 196, 278, 7, 70, "Item",ExpressionUUID->"682aaba1-8632-4805-a1ea-4f353533775f"],
+Cell[7295, 205, 259, 5, 70, "Text",ExpressionUUID->"b7e44ce2-3f5b-4124-a1a6-edd1c5c87bce"],
+Cell[7557, 212, 221, 5, 70, "Input",ExpressionUUID->"d90fa44a-5040-410d-8e3a-de64a6732b01"],
+Cell[7781, 219, 676, 17, 70, "Text",ExpressionUUID->"3ca882b9-2020-4e43-a75f-12fab89da918"],
+Cell[8460, 238, 104, 0, 70, "Section",ExpressionUUID->"52ea245b-2f48-4e0c-86b5-6d6330e38080"],
+Cell[8567, 240, 221, 5, 70, "Input",ExpressionUUID->"217fe4e1-c723-4925-a612-120424ca99d3"],
+Cell[8791, 247, 637, 16, 70, "Text",ExpressionUUID->"1b06d53a-c5bc-4b09-80fa-9eb6073e9381"],
+Cell[9431, 265, 227, 5, 70, "Input",ExpressionUUID->"2b18caca-45c4-4e90-8371-72014897d3e4"],
+Cell[9661, 272, 337, 7, 70, "Text",ExpressionUUID->"e138beda-cdb1-4831-8774-7c2eef5b6da0"],
+Cell[10001, 281, 93, 0, 70, "Chapter",ExpressionUUID->"1a243aa0-afdd-4bcc-8767-541010694b67"],
+Cell[10097, 283, 413, 8, 70, "Text",ExpressionUUID->"e9323159-5208-4e83-8a9a-18302a29f3ad"],
+Cell[10513, 293, 289, 7, 70, "Section",ExpressionUUID->"6a6b65ed-8fa7-4ee9-b2f7-17e144aaa0bf"],
+Cell[10805, 302, 376, 10, 70, "Input",ExpressionUUID->"6bc57ebd-d22e-458a-8acb-b7993cf3a309"],
+Cell[11184, 314, 295, 7, 70, "Section",ExpressionUUID->"6edde825-1d07-4cb5-9bc0-6b7d3506319a"],
+Cell[11482, 323, 227, 5, 70, "Input",ExpressionUUID->"84777eb1-2775-4e20-882b-8f64c50357b2"],
+Cell[11712, 330, 104, 0, 70, "Section",ExpressionUUID->"6c46148f-6e43-4842-9b66-f47953abe22d"],
+Cell[11819, 332, 496, 11, 70, "Text",ExpressionUUID->"61f0e562-5439-4eb0-9cdd-91b920caa17c"],
+Cell[12318, 345, 175, 3, 70, "Input",ExpressionUUID->"2f61ace2-19bd-478c-b47c-b5bd1400b812"],
+Cell[12496, 350, 101, 0, 70, "Chapter",ExpressionUUID->"b328c105-1a04-446e-84e0-52beafbf73aa"],
+Cell[12600, 352, 413, 8, 70, "Input",ExpressionUUID->"5a41161b-3034-4a86-bdfa-99a76a58b432"],
+Cell[13016, 362, 100, 0, 70, "Section",ExpressionUUID->"4da953c1-2920-463e-a1b4-2cda4ca12455"],
+Cell[13119, 364, 113, 0, 70, "Text",ExpressionUUID->"a6b751c5-cd02-40f0-a145-2eab55d87cdd"],
+Cell[13235, 366, 183, 4, 70, "Input",ExpressionUUID->"92607f31-5a92-49da-986c-eb9ef56cba53"],
+Cell[13421, 372, 227, 5, 70, "Input",ExpressionUUID->"a1223b48-b36c-4c52-b21a-4f48789dbb46"],
+Cell[13651, 379, 269, 5, 70, "Text",ExpressionUUID->"ea2df7f2-e8ce-46a5-8604-00d939d15e9f"],
+Cell[13923, 386, 102, 0, 70, "Section",ExpressionUUID->"68e4bc47-716a-4f74-95d9-2e7952711c97"],
+Cell[14028, 388, 177, 3, 70, "Input",ExpressionUUID->"4b2dbbec-b138-4b97-94cb-bdfe455c41e0"],
+Cell[14208, 393, 176, 3, 70, "Input",ExpressionUUID->"886356be-ad9b-4fa4-bdfb-b4f846be2648"],
+Cell[14387, 398, 177, 3, 70, "Input",ExpressionUUID->"49283d1f-e609-4ec2-9d82-a69e933818df"],
+Cell[14567, 403, 89, 0, 70, "Section",ExpressionUUID->"d6de049e-ba52-468c-9782-533c513dc145"],
+Cell[14659, 405, 182, 4, 70, "Input",ExpressionUUID->"5adec5a2-e3eb-49f7-8efb-094efc5abcd0"],
+Cell[14844, 411, 100, 0, 70, "Chapter",ExpressionUUID->"148880a4-82e9-4a0f-b47f-7e946724cf71"],
+Cell[14947, 413, 168, 3, 70, "Text",ExpressionUUID->"10ab791a-0c05-4332-ad01-c4967734b726"],
+Cell[15118, 418, 94, 0, 70, "Section",ExpressionUUID->"9507e2aa-b191-4af7-a140-7dfad90be1fc"],
+Cell[15215, 420, 202, 4, 70, "Input",ExpressionUUID->"bf10bf7c-a05a-4730-8752-0f89b63a2f9c"],
+Cell[15420, 426, 126, 1, 70, "Input",ExpressionUUID->"71b67538-41b0-48fd-88b4-7e25b5ae4c22"],
+Cell[15549, 429, 218, 5, 70, "Input",ExpressionUUID->"407714d6-f72b-43f5-8429-2046906e5b6e"],
+Cell[15770, 436, 90, 0, 70, "Section",ExpressionUUID->"9980bad6-c257-4059-9e21-a11b7d17c607"],
+Cell[15863, 438, 118, 0, 70, "Text",ExpressionUUID->"2f2561cb-236a-46d4-9df3-a4afe47aa538"],
+Cell[15984, 440, 333, 8, 70, "Input",ExpressionUUID->"513fe24a-b1d7-4098-8f26-57bf50b67721"],
+Cell[16320, 450, 218, 5, 70, "Input",ExpressionUUID->"629396c6-98f5-423d-894b-a07ec8bc0218"],
+Cell[16541, 457, 116, 0, 70, "Chapter",ExpressionUUID->"fd96bb3b-c6ff-40f1-a1df-b45f9acaeabc"],
+Cell[16660, 459, 884, 25, 70, "Text",ExpressionUUID->"93c36061-4c7d-4787-9081-78414b374d94"],
+Cell[17547, 486, 543, 10, 70, "Input",ExpressionUUID->"ef501a4b-0db6-4fe6-b80a-8ebe36e1dd55"],
+Cell[18093, 498, 119, 1, 70, "Input",ExpressionUUID->"9cf12778-37aa-46a2-bbb5-f445e899b340"],
+Cell[18215, 501, 98, 0, 70, "Section",ExpressionUUID->"896476f9-5d0c-4e7b-8a00-6478bd0cdfde"],
+Cell[18316, 503, 117, 1, 70, "Input",ExpressionUUID->"586570c5-5849-4af7-9501-4bcd2ba3fd7f"],
+Cell[18436, 506, 110, 0, 70, "Section",ExpressionUUID->"30db2eda-0962-436f-b5de-7e1fbc23b74a"],
+Cell[18549, 508, 304, 5, 70, "Text",ExpressionUUID->"0926a3ab-b2e5-455f-bc97-be9437f4d1e2"],
+Cell[18856, 515, 201, 4, 70, "Input",ExpressionUUID->"e7177e11-97a2-4fef-aebc-c80dcb687ec7"],
+Cell[19060, 521, 103, 0, 70, "Section",ExpressionUUID->"51e76804-004a-42a8-86b7-351429d49023"],
+Cell[19166, 523, 245, 5, 70, "Input",ExpressionUUID->"7fe3a138-deb2-4d14-8c51-bc79dacbd150"],
+Cell[19414, 530, 99, 0, 70, "Text",ExpressionUUID->"6f195bf3-4ab4-4840-b8cf-6a3454e259f9"],
+Cell[19516, 532, 511, 12, 70, "Item",ExpressionUUID->"fb00e6d9-0250-4317-86aa-6bdcaafaea18"],
+Cell[20030, 546, 307, 7, 70, "Item",ExpressionUUID->"0a95545e-97f6-4ed1-9c72-35a016987845"],
+Cell[20340, 555, 223, 4, 70, "Item",ExpressionUUID->"3986580d-493c-47c0-976b-c6c62b1faa72"],
+Cell[20566, 561, 329, 7, 70, "Item",ExpressionUUID->"6d7fa9ab-a44c-41dd-a0a7-7435fc6832c1"],
+Cell[20898, 570, 341, 7, 70, "Item",ExpressionUUID->"520757a2-7fc0-4133-80a8-07a089a37c03"],
+Cell[21242, 579, 535, 13, 70, "Item",ExpressionUUID->"10bcffe1-52b3-4084-b9e8-3da4216962d4"],
+Cell[21780, 594, 239, 4, 70, "Item",ExpressionUUID->"f6a06d4c-ca70-4512-b809-147b2c4da8a8"],
+Cell[22022, 600, 223, 4, 70, "Item",ExpressionUUID->"98266ef3-4365-4ac4-9cdd-4b4c43212fba"],
+Cell[22248, 606, 88, 0, 70, "Section",ExpressionUUID->"b062faa9-aae5-4eef-9742-ab6df8fafe72"],
+Cell[22339, 608, 149, 2, 70, "Text",ExpressionUUID->"97785508-3f27-4825-8a33-23b2a01f661a"],
+Cell[22491, 612, 580, 17, 70, "DisplayFormula",ExpressionUUID->"fb42bc14-639c-484c-bd60-dfb400a2d579"],
+Cell[23074, 631, 1240, 38, 70, "Text",ExpressionUUID->"2697e475-fee2-4def-a550-7000584c681c"],
+Cell[24317, 671, 97, 0, 70, "Section",ExpressionUUID->"73109e0c-20f7-4c12-9e8d-6564aa554567"],
+Cell[24417, 673, 169, 3, 70, "Text",ExpressionUUID->"e8987c14-7ff4-4e59-a6df-f13fa5b40a42"],
+Cell[24589, 678, 196, 4, 70, "Input",ExpressionUUID->"f4cfb8dd-f155-47be-bc71-1be5bdcaf09f"],
+Cell[24788, 684, 240, 5, 70, "Input",ExpressionUUID->"57e7c273-552a-458a-a842-f63498e872e8"],
+Cell[25031, 691, 86, 0, 70, "Section",ExpressionUUID->"88ce8def-7d4e-4739-9f0e-194a7d2f2b2a"],
+Cell[25120, 693, 119, 0, 70, "Text",ExpressionUUID->"0f4a083b-5490-4f88-9a86-8c1b2beb0c8e"],
+Cell[25242, 695, 198, 4, 70, "Input",ExpressionUUID->"a0fdc452-762d-42ae-99fc-1dfa8bfdd912"],
+Cell[25443, 701, 90, 0, 70, "Text",ExpressionUUID->"9c7b1a3b-c1a7-4953-969b-637bcceaf4b0"],
+Cell[25536, 703, 199, 4, 70, "Input",ExpressionUUID->"58a1aede-afc8-4c2c-bdb2-8a863dbc359f"],
+Cell[25738, 709, 124, 0, 70, "Text",ExpressionUUID->"9d736a22-a002-46ee-b55b-57cc4ddaa3c2"],
+Cell[25865, 711, 193, 4, 70, "Input",ExpressionUUID->"3331a9e9-92f7-47cd-8fa1-8dbbf12cc7db"],
+Cell[26061, 717, 107, 0, 70, "Section",ExpressionUUID->"f2b28b02-f69e-4399-bda4-084f2adb7690"],
+Cell[26171, 719, 252, 5, 70, "Text",ExpressionUUID->"02589e56-9554-43ce-948c-0654b5bcc8ba"],
+Cell[26426, 726, 183, 4, 70, "Input",ExpressionUUID->"c7aed43e-b035-404a-9da8-819bc75cc802"],
+Cell[26612, 732, 227, 5, 70, "Input",ExpressionUUID->"1005228f-456e-4ce7-8e2a-df5f32d4b0e2"],
+Cell[26842, 739, 100, 0, 70, "Section",ExpressionUUID->"a2ec3cd8-4225-47ba-9fcc-d8fb8aaba5e6"],
+Cell[26945, 741, 233, 5, 70, "Text",ExpressionUUID->"af073c7c-068d-405f-b10f-dbc4a2fc3558"],
+Cell[27181, 748, 202, 4, 70, "Input",ExpressionUUID->"25bed355-27f5-4c04-a758-345cbcb0919f"],
+Cell[27386, 754, 103, 0, 70, "Section",ExpressionUUID->"d615dc2a-3e5b-472f-b25e-4e3db1f40e16"],
+Cell[27492, 756, 182, 3, 70, "Text",ExpressionUUID->"48cad0e0-5ba3-46df-ab9c-784f0dc67a27"],
+Cell[27677, 761, 201, 4, 70, "Input",ExpressionUUID->"647b0df5-6407-4284-bee3-e5dcc63efdde"],
+Cell[27881, 767, 218, 5, 70, "Input",ExpressionUUID->"918f1b8c-a543-4288-be0c-b18da081bcd3"],
+Cell[28102, 774, 125, 1, 70, "Input",ExpressionUUID->"9129ccd4-ef1c-49db-ba25-969709b5ffea"]
+}
+]
+*)
+
+(* End of internal cache information *)

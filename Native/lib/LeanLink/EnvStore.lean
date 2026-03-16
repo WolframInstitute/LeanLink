@@ -28,14 +28,11 @@ private initialize nextHandle : IO.Ref UInt64 ← IO.mkRef 1
 def loadEnv (imports : Array String) (searchPath : String) : IO Environment := do
   -- Build search path from user-provided paths
   let userPaths : List System.FilePath := (searchPath.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
-  -- Try to add lean stdlib path from env vars
-  let sysroot ← IO.getEnv "LEAN_SYSROOT"
+  -- Also check environment variables for additional paths
   let leanPath ← IO.getEnv "LEAN_PATH"
-  let libPaths : List System.FilePath := match sysroot with
-    | some sr => [⟨sr ++ "/lib/lean/library"⟩, ⟨sr ++ "/lib/lean"⟩]
-    | none => match leanPath with
-      | some lp => (lp.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
-      | none => []
+  let libPaths : List System.FilePath := match leanPath with
+    | some lp => (lp.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
+    | none => []
   Lean.searchPathRef.set (userPaths ++ libPaths)
   -- Import modules
   let modules : Array Import := imports.map fun m => { module := m.toName }
@@ -216,21 +213,21 @@ def getValueUnfoldedExport (handle : UInt64) (constName : @& String)
 /-- Pretty-print an expression using Lean's built-in pretty-printer.
     Uses the environment's notations, so infix ops, implicit elision, etc. work. -/
 def ppExprInEnv (env : Environment) (e : Expr) : IO String := do
-  let ctx : Core.Context := {
-    fileName := "<pp>"
-    fileMap := { source := "", positions := #[0] }
-  }
-  let st : Core.State := { env }
   try
+    let ctx : Core.Context := {
+      fileName := "<pp>"
+      fileMap := { source := "", positions := #[0] }
+    }
+    let st : Core.State := { env }
     let res ←
       ((Meta.MetaM.run' (do
         let fmt ← PrettyPrinter.ppExpr e
         return s!"{fmt}") : CoreM String).run ctx st).toIO'
     match res with
     | .ok (s, _) => return s
-    | .error _ => return "<pp error>"
+    | .error _ => return s!"{e.dbgToString}"
   catch _ =>
-    return "<pp error>"
+    return s!"{e.dbgToString}"
 
 /-- Get pretty-printed type string. Optionally unfolds N levels first. -/
 @[export leanlink_pp_type]
@@ -330,7 +327,7 @@ def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteAr
     let allUsed := ci.getUsedConstantsAsSet
     let typeSet : Lean.NameHashSet := typeNames.foldl (fun s n => s.insert n) {}
     let valueSet : Lean.NameHashSet := valueNames.foldl (fun s n => s.insert n) {}
-    let structConsts := allUsed.fold (init := #[]) fun acc n =>
+    let structConsts := allUsed.toArray.foldl (init := #[]) fun acc n =>
       if typeSet.contains n || valueSet.contains n then acc
       else acc.push (WXF.string n.toString)
     let result := WXF.wlAssociation #[
@@ -435,18 +432,88 @@ def applyTacticExport (stateId : UInt64) (tacticStr : @& String) : IO ByteArray 
     fileName := "<tactic>"
     fileMap := { source := "", positions := #[0] }
   }
-  -- Parse the tactic
-  let tacticStx ← match Parser.runParserCategory ps.env `tactic tacticStr "<input>" with
-    | .ok stx => pure stx
-    | .error msg => return WXF.serialize (WXF.string s!"ERROR: parse error: {msg}")
-  -- Run the tactic: TacticM → TermElabM → MetaM → CoreM → IO
+  -- Direct MetaM-based tactic dispatch (bypasses parser extensions which aren't
+  -- available in olean-loaded environments)
+  let tacticParts := tacticStr.trim.splitOn " " |>.filter (· ≠ "")
+  let tacticName := tacticParts.head!
+  -- Strip parentheses from args (tacticSource may wrap apps in parens)
+  let stripParens (s : String) : String :=
+    s.replace "(" "" |>.replace ")" ""
+  let tacticArgs := tacticParts.tail!.map stripParens |>.filter (· ≠ "")
+  -- Run the tactic via MetaM
   let goalId := ps.goals.head!
   let res ←
-    ((do
-      let newGoals ← Elab.Tactic.run goalId (Elab.Tactic.evalTactic tacticStx)
+    ((goalId.withContext do
+      let newGoals : List MVarId ← match tacticName with
+        | "intro" =>
+          if tacticArgs.isEmpty then
+            let (_, g) ← goalId.intro1
+            pure [g]
+          else
+            let mut g := goalId
+            for name in tacticArgs do
+              let (_, g') ← g.intro name.toName
+              g := g'
+            pure [g]
+        | "intros" =>
+          let (_, g) ← goalId.intros
+          pure [g]
+        | "exact" =>
+          -- Resolve each token (hypothesis or constant), fold into application
+          let resolveToken (tok : String) : MetaM Expr := do
+            let name := tok.toName
+            let lctx ← getLCtx
+            match lctx.findFromUserName? name with
+            | some ldecl => pure ldecl.toExpr
+            | none =>
+              match ps.env.find? name with
+              | some ci => pure (Lean.mkConst name (ci.levelParams.map Level.param))
+              | none => throwError s!"unknown term: {tok}"
+          if tacticArgs.isEmpty then throwError "exact requires an argument"
+          let head ← resolveToken tacticArgs.head!
+          let mut term := head
+          for arg in tacticArgs.tail! do
+            let argExpr ← resolveToken arg
+            term := Lean.mkApp term argExpr
+          goalId.assign term
+          pure []
+        | "apply" =>
+          let termStr := " ".intercalate tacticArgs
+          let name := termStr.toName
+          let lctx ← getLCtx
+          let e ← match lctx.findFromUserName? name with
+            | some ldecl => pure ldecl.toExpr
+            | none =>
+              match ps.env.find? name with
+              | some ci => pure (Lean.mkConst name (ci.levelParams.map Level.param))
+              | none => throwError s!"unknown identifier: {termStr}"
+          goalId.apply e
+        | "assumption" =>
+          goalId.assumption
+          pure []
+        | "rfl" =>
+          goalId.refl
+          pure []
+        | "constructor" =>
+          -- Manual constructor: find target inductive, apply first ctor
+          let target ← goalId.getType
+          let target ← Meta.whnf target
+          let fn := Expr.getAppFn target
+          let some indName := fn.constName?
+            | throwError "constructor: target is not an inductive application"
+          let some (.inductInfo val) := ps.env.find? indName
+            | throwError s!"constructor: {indName} is not an inductive type"
+          if val.ctors.isEmpty then throwError s!"constructor: {indName} has no constructors"
+          let ctorName := val.ctors.head!
+          let ctorExpr := Lean.mkConst ctorName (val.levelParams.map Level.param)
+          goalId.apply ctorExpr
+        | "trivial" =>
+          try goalId.refl; pure []
+          catch _ => do goalId.assumption; pure []
+        | _ => throwError s!"unsupported tactic: {tacticName}"
       let mstate ← getThe Meta.State
-      return (newGoals, mstate)
-    : Elab.TermElabM (List MVarId × Meta.State)).run' (ctx := {}) |>.run' (s := ps.metaState) |>.run ctx ps.coreState).toIO'
+      pure (newGoals, mstate)
+    : MetaM (List MVarId × Meta.State)).run' (s := ps.metaState) |>.run ctx ps.coreState).toIO'
   match res with
   | .error e =>
     let errMsg ← e.toMessageData.toString

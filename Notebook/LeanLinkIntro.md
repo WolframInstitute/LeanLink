@@ -46,11 +46,17 @@ env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
 Build a Lean expression and bind it to an environment for type-checking:
 
 ```wolfram
-LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]], env]
+LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]
 ```
 
 ```wolfram
 %["TypeForm"]
+```
+
+Type-check a forall expression:
+
+```wolfram
+LeanTerm[LeanForall["n", LeanConst["Nat"], LeanConst["Nat"], "default"], env]["Type"]
 ```
 
 ## Interactive Tactic Proofs
@@ -83,6 +89,16 @@ s0 = LeanState[env["LeanLink.Examples.modus_ponens"]]
 LeanTactic[{"intro P Q hP hPQ", "exact hPQ hP"}][s0]
 ```
 
+### Contrapositive: $(P \to Q) \to (\neg Q \to \neg P)$
+
+```wolfram
+s0 = LeanState[env["LeanLink.Examples.contrapositive"]]
+```
+
+```wolfram
+LeanTactic[{"intro P Q hPQ hnQ hP", "apply hnQ", "exact hPQ hP"}][s0]
+```
+
 ### And Commutativity: $P \land Q \to Q \land P$
 
 ```wolfram
@@ -90,7 +106,11 @@ s0 = LeanState[env["LeanLink.Examples.and_comm"]]
 ```
 
 ```wolfram
-LeanTactic[{"intro P Q h", "exact And.intro h.2 h.1"}][s0]
+s1 = LeanTactic["intro P Q h"][s0]
+```
+
+```wolfram
+s2 = LeanTactic["constructor"][s1]
 ```
 
 ### Accessing Goal Properties
@@ -126,6 +146,10 @@ Length[env]
 
 ```wolfram
 env["LeanLink.Examples.identity"]
+```
+
+```wolfram
+Information[env, "Kinds"]
 ```
 
 ## Exporting to Source
@@ -168,11 +192,11 @@ Keys[leanEnv]
 ```
 
 ```wolfram
-leanEnv[[1]]["FinalGoal"][[1]]["_TypeExpr"]
+leanEnv["FinalGoal"]["Type"]
 ```
 
 ```wolfram
-leanEnv[[1]]["FinalGoal"][[1]]["_Tactic"]
+leanEnv["FinalGoal"]["TypeForm"]
 ```
 
 ### Generated Lean source
@@ -189,18 +213,41 @@ roundtrip = LeanImportString[src];
 Keys[roundtrip]
 ```
 
+### Auto-completing proofs with LeanState
+
+```wolfram
+goal = leanEnv["FinalGoal"];
+state = LeanState@goal;
+state["Complete"]
+```
+
+## Importing from Mathlib
+
+LeanLink can import theorems from any Lean project. Point `"ProjectDir"` at a mathlib4 checkout where `lake exe cache get && lake build Mathlib.Tactic.Ring` has been run:
+
+```wolfram
+mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
+If[DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+  mathEnv = LeanImport["Mathlib.Tactic.Ring",
+    "ProjectDir" -> mathlibDir,
+    "Imports" -> {"Mathlib.Tactic.Ring"},
+    "Filter" -> "Ring"];
+  Keys[mathEnv],
+  "Mathlib not built — run in mathlib4/: lake exe cache get && lake build Mathlib.Tactic.Ring"]
+```
+
 ## Structured Tactics
 
 Tactics are symbolic objects with Lean-native names:
 
 ```wolfram
-LeanTactic["exact", LeanConst["h", {}]]
+LeanTactic["exact", LeanConst["h"]]
 ```
 
 ```wolfram
 LeanTactic[{
   LeanTactic["intro", {"P", "h"}],
-  LeanTactic["exact", LeanConst["h", {}]]
+  LeanTactic["exact", LeanConst["h"]]
 }]
 ```
 
@@ -210,6 +257,6 @@ Apply structured tactics to proof states:
 s0 = LeanState[env["LeanLink.Examples.identity"]];
 s1 = LeanTactic["intro", {"P"}][s0];
 s2 = LeanTactic["intro", {"h"}][s1];
-s3 = LeanTactic["exact", LeanConst["h", {}]][s2];
+s3 = LeanTactic["exact", LeanConst["h"]][s2];
 s3["Complete"]
 ```
