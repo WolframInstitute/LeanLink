@@ -1204,7 +1204,17 @@ LeanListConstants[opts : OptionsPattern[]] :=
 (* ============================================================================ *)
 
 (* Property/key access — internal _-prefixed keys are hidden *)
-LeanEnvironment /: LeanEnvironment[data_Association][key_String] := data[key];
+(* Use env["key"] for term access, Information[env, "Properties"] for property list *)
+LeanEnvironment /: LeanEnvironment[data_Association][key_String] :=
+  Switch[key,
+    "Properties", {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"},
+    "Constants", Select[Keys[data], !StringStartsQ[#, "_"] &],
+    "Kinds", Counts[Lookup[#[[1]], "Kind", "?"] & /@ Select[Values[data], Head[#] === LeanTerm &]],
+    "Handle", Lookup[data, "_Handle", None],
+    "Source", Lookup[data, "_Source", None],
+    "DeclOrder", Lookup[data, "_DeclOrder", None],
+    "Preamble", Lookup[data, "_Preamble", None],
+    _, data[key]];
 LeanEnvironment /: Keys[LeanEnvironment[data_Association]] :=
   Select[Keys[data], !StringStartsQ[#, "_"] &];
 LeanEnvironment /: Values[LeanEnvironment[data_Association]] :=
@@ -1213,10 +1223,6 @@ LeanEnvironment /: Length[LeanEnvironment[data_Association]] :=
   Length[Select[Keys[data], !StringStartsQ[#, "_"] &]];
 LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key];
 LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
-
-
-(* LeanEnvironment["Source"] property for source string storage *)
-LeanEnvironment /: LeanEnvironment[data_Association]["Source"] := Lookup[data, "_Source", None];
 
 (* MakeBoxes for LeanEnvironment — summary box *)
 LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardForm] :=
@@ -1330,9 +1336,9 @@ LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] :=
 
 tacticSource[LeanTactic["exact", term_]] := "  exact " <> leanSource[term];
 tacticSource[LeanTactic["have", name_String, term_]] := "  have " <> name <> " := " <> leanSource[term];
-tacticSource[LeanTactic["rw", rules_List]] := "  rw [" <> StringRiffle[leanSource /@ rules, ", "] <> "]";
-tacticSource[LeanTactic["rw", rules_List, hyp_String]] := "  rw [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
-tacticSource[LeanTactic["simp", rules_List, hyp_String]] := "  simp only [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
+tacticSource[LeanTactic["rw", rules_List]] := "  rw [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
+tacticSource[LeanTactic["rw", rules_List, hyp_String]] := "  rw [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "] at " <> hyp;
+tacticSource[LeanTactic["simp", rules_List, hyp_String]] := "  simp only [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "] at " <> hyp;
 tacticSource[LeanTactic["nth_rewrite", n_Integer, rules_List, hyp_String]] :=
   "  nth_rewrite " <> ToString[n] <> " [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
 tacticSource[LeanTactic["conv", hyp_String, path_List, subtac_]] :=
@@ -1341,8 +1347,12 @@ tacticSource[LeanTactic["intro", names_List]] := "  intro " <> StringRiffle[name
 tacticSource[LeanTactic["sorry"]] := "  sorry";
 
 (* Inline tactic (no leading whitespace, for conv body) *)
-tacticSourceInline[LeanTactic["rw", rules_List]] := "rw [" <> StringRiffle[leanSource /@ rules, ", "] <> "]";
+tacticSourceInline[LeanTactic["rw", rules_List]] := "rw [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
 tacticSourceInline[t_LeanTactic] := StringTrim[tacticSource[t]];
+
+(* Rewrite rule source — detect Eq.symm wrapping and emit ← *)
+rwRuleSource[LeanApp[LeanConst["Eq.symm", _], rule_]] := "\[LeftArrow] " <> leanSource[rule];
+rwRuleSource[rule_] := leanSource[rule];
 
 (* Sequence of tactics *)
 tacticSource[LeanTactic[tactics_List]] := StringRiffle[tacticSource /@ tactics, "\n"];
@@ -1391,15 +1401,17 @@ applyTacticLT[tac_String, state_LeanState] :=
 
 (* ---- MakeBoxes ---- *)
 LeanTactic /: MakeBoxes[LeanTactic[tac_String], StandardForm] :=
-  With[{display = Style["tactic: " <> tac, "Input", Italic]},
+  With[{display = Style[tac, "Input"]},
     ToBoxes[Interpretation[display, LeanTactic[tac]]]];
 
 LeanTactic /: MakeBoxes[t:LeanTactic[tag_String, ___], StandardForm] :=
-  With[{display = Style["tactic: " <> StringTrim[tacticSource[t]], "Input", Italic]},
+  With[{display = Style[StringTrim[tacticSource[t]], "Input"]},
     ToBoxes[Interpretation[display, t]]];
 
 LeanTactic /: MakeBoxes[t:LeanTactic[tactics_List], StandardForm] :=
-  With[{display = Style["tactic[" <> ToString[Length[tactics]] <> " steps]", "Input", Italic]},
+  With[{display = Column[
+    Style[StringTrim[#], "Input"] & /@ (tacticSource /@ tactics),
+    Spacings -> 0.2]},
     ToBoxes[Interpretation[display, t]]];
 
 End[];

@@ -460,4 +460,41 @@ VerificationTest[
   TestID -> "ProofToLean-Roundtrip-Succeeds"
 ]
 
+(* ================================================================ *)
+(* LeanEnvironment Properties                                         *)
+(* ================================================================ *)
+
+VerificationTest[
+  $ptlEnv["Properties"],
+  {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"},
+  TestID -> "LeanEnvironment-Properties-List"
+]
+
+VerificationTest[
+  $ptlEnv["Constants"],
+  Keys[$ptlEnv],
+  TestID -> "LeanEnvironment-Constants-EqualsKeys"
+]
+
+VerificationTest[
+  AssociationQ[$ptlEnv["Kinds"]],
+  True,
+  TestID -> "LeanEnvironment-Kinds-IsAssociation"
+]
+
+(* ================================================================ *)
+(* BooleanAxioms roundtrip                                            *)
+(* ================================================================ *)
+
+VerificationTest[
+  Module[{proof, env, src},
+    proof = FindEquationalProof["Absorption", "BooleanAxioms"];
+    env = ProofToLean[proof];
+    src = LeanExportString[env];
+    StringQ[src] && StringContainsQ[src, "theorem FinalGoal"] &&
+      StringContainsQ[src, "axiom CirclePlus"]],
+  True,
+  TestID -> "BooleanAxioms-Absorption-Source"
+]
+
 EndTestSection[]

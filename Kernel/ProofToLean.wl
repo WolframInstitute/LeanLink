@@ -262,9 +262,6 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
     (* Build srcExpr: lemma applied to args as expression tree *)
     srcExpr = ptlBuildSrcExpr[
       st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lv"]];
-    (* Enrich bare consts with target vars for universe resolution *)
-    If[Head[srcExpr] === LeanConst && Length[vars] > 0,
-      srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}] & /@ vars]];
     If[st["pendingSource"]["reversed"],
       srcExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srcExpr]];
 
@@ -280,24 +277,24 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
         nonTrivial = AnyTrue[Normal[assoc], (ptlKeyToStr[#[[1]]] =!= ptlToStr[ptlCleanExpr[#[[2]]]]) &];
         If[allCovered && nonTrivial,
           srExpr = ptlBuildSrcExpr[name, assoc, tag, st["lv"]];
-          If[Head[srExpr] === LeanConst && Length[vars] > 0,
-            srExpr = Fold[LeanApp, srExpr, LeanConst[#, {}] & /@ vars]];
           If[rev, srExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srExpr]];
           {LeanConst["sr", {}], {LeanTactic["have", "sr", srExpr]}},
           {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]],
                    LeanConst[name, {}]], {}}]],
       {None, {}}];
 
-    (* Build body tactic *)
+    (* Enrich bare-const srcExpr with target vars for intro-based proofs *)
+    If[Head[srcExpr] === LeanConst && Length[vars] > 0,
+      srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}] & /@ vars]];
+
+    (* Build body tactic — include intro for universally-quantified variables *)
     Module[{bodyTac},
       bodyTac = If[rwRuleExpr =!= None,
         Join[tacSteps, {
           LeanTactic["have", "h", srcExpr],
           LeanTactic["simp", {rwRuleExpr}, "h"],
           LeanTactic["exact", LeanConst["h", {}]]}],
-        (* No rewrite: direct exact — wrap in list for Seq *)
         {LeanTactic["exact", srcExpr]}];
-      (* Prepend intro if there are universally-quantified variables *)
       If[Length[vars] > 0,
         bodyTac = Prepend[bodyTac, LeanTactic["intro", vars]]];
       LeanTactic[bodyTac]],
@@ -354,17 +351,23 @@ ProofToLean[proof_] := Module[
   (* Check if UnformalizeSymbols is available *)
   $ptlHasUnformalize = Quiet@Check[ResourceFunction["UnformalizeSymbols"]; True, False];
 
-  (* Detect operators *)
+  (* Detect operators — any applied symbol that's not a Lean/WL builtin *)
   opArities = Association[];
   hasCenterDot = Length[Cases[pf, _CenterDot, Infinity]] > 0;
-  Cases[pf, Inactive[Equal][lhs_, rhs_] :> 
-    Cases[{lhs, rhs}, f_Symbol[args___] /; Context[f] === "Global`" && StringLength[ToString[f]] > 1 :> (opArities[ToString[f]] = Length[{args}]), Infinity], 
-  Infinity];
+  With[{excluded = {"Blank", "Pattern", "Inactive", "Equal", "ReplaceAll", "Rule",
+                     "Module", "Set", "CompoundExpression", "List", "Condition",
+                     "HoldComplete", "Hold", "Alternatives", "Optional", "Repeated"}},
+    Cases[pf, Inactive[Equal][lhs_, rhs_] :> 
+      Cases[{lhs, rhs}, f_Symbol[args___] /; !MemberQ[excluded, ToString[f]] && StringLength[ToString[f]] > 1 :> (opArities[ToString[f]] = Length[{args}]), Infinity], 
+    Infinity]];
 
   (* Shared constants *)
   allConstants = Association[];
   Cases[pf, Inactive[Equal][lhs_, rhs_] :>
-    Cases[{lhs, rhs}, s_Symbol /; Context[s] === "Global`" && !KeyExistsQ[opArities, ToString[s]] :>
+    Cases[{lhs, rhs}, s_Symbol /; !MemberQ[{"Blank", "Pattern", "Inactive", "Equal",
+      "ReplaceAll", "Rule", "Module", "Set", "CompoundExpression", "List",
+      "Condition", "HoldComplete", "Hold", "Alternatives", "Optional", "Repeated",
+      "True", "False", "Null"}, ToString[s]] && !KeyExistsQ[opArities, ToString[s]] :>
       (allConstants[ToString[s]] = True), Infinity],
   Infinity];
 
