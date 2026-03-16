@@ -408,4 +408,56 @@ VerificationTest[
   TestID -> "LeanImportString-CompileAndImport"
 ]
 
+(* ================================================================ *)
+(* ProofToLean — roundtrip tests                                      *)
+(* ================================================================ *)
+
+VerificationTest[
+  $proof = FindEquationalProof[a == c, {a == b, b == c}];
+  $ptlEnv = ProofToLean[$proof];
+  Head[$ptlEnv] === LeanEnvironment && Length[$ptlEnv] > 0,
+  True,
+  TestID -> "ProofToLean-Returns-LeanEnvironment"
+]
+
+VerificationTest[
+  MemberQ[Keys[$ptlEnv], "FinalGoal"],
+  True,
+  TestID -> "ProofToLean-Has-FinalGoal"
+]
+
+VerificationTest[
+  Head[$ptlEnv["FinalGoal"][[1]]["_TypeExpr"]],
+  LeanForall,
+  TestID -> "ProofToLean-TypeExpr-Is-LeanForall"
+]
+
+VerificationTest[
+  With[{tac = $ptlEnv["FinalGoal"][[1]]["_Tactic"]},
+    Head[tac] === LeanTactic && ListQ[tac[[1]]]],
+  True,
+  TestID -> "ProofToLean-Tactic-Is-Structured"
+]
+
+VerificationTest[
+  StringQ[$ptlEnv["FinalGoal"]["TypeForm"]],
+  True,
+  TestID -> "ProofToLean-TypeForm-Fallback"
+]
+
+VerificationTest[
+  $ptlSrc = LeanExportString[$ptlEnv];
+  StringQ[$ptlSrc] && StringContainsQ[$ptlSrc, "theorem FinalGoal"],
+  True,
+  TestID -> "ProofToLean-ExportString-Valid"
+]
+
+VerificationTest[
+  $roundtrip = LeanImportString[$ptlSrc];
+  Head[$roundtrip] === LeanEnvironment &&
+    KeyExistsQ[$roundtrip, "FinalGoal"],
+  True,
+  TestID -> "ProofToLean-Roundtrip-Succeeds"
+]
+
 EndTestSection[]

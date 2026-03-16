@@ -120,7 +120,10 @@ ptlBuildSrcExpr[name_, assoc_Association, targetTag_String, lemmaVars_] := Modul
   targetVars = ptlLVLookup[lemmaVars, targetTag];
   If[Length[vars] == 0,
     keys = Sort[Keys[assoc]];
-    Do[AppendTo[argExprs, ptlToExprI[ptlCleanExpr[assoc[k]]]], {k, keys}],
+    If[Length[keys] > 0,
+      Do[AppendTo[argExprs, ptlToExprI[ptlCleanExpr[assoc[k]]]], {k, keys}],
+      (* No vars, no assoc: use target vars as default args *)
+      argExprs = LeanConst[#, {}] & /@ targetVars],
     Do[
       k = vars[[i]];
       v = Null;
@@ -259,6 +262,9 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
     (* Build srcExpr: lemma applied to args as expression tree *)
     srcExpr = ptlBuildSrcExpr[
       st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lv"]];
+    (* Enrich bare consts with target vars for universe resolution *)
+    If[Head[srcExpr] === LeanConst && Length[vars] > 0,
+      srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}] & /@ vars]];
     If[st["pendingSource"]["reversed"],
       srcExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srcExpr]];
 
@@ -274,24 +280,27 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
         nonTrivial = AnyTrue[Normal[assoc], (ptlKeyToStr[#[[1]]] =!= ptlToStr[ptlCleanExpr[#[[2]]]]) &];
         If[allCovered && nonTrivial,
           srExpr = ptlBuildSrcExpr[name, assoc, tag, st["lv"]];
+          If[Head[srExpr] === LeanConst && Length[vars] > 0,
+            srExpr = Fold[LeanApp, srExpr, LeanConst[#, {}] & /@ vars]];
           If[rev, srExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srExpr]];
           {LeanConst["sr", {}], {LeanTactic["have", "sr", srExpr]}},
           {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]],
                    LeanConst[name, {}]], {}}]],
       {None, {}}];
 
-    If[rwRuleExpr =!= None && st["pendingPos"] =!= None,
-      convNav = ptlPosToConvList[st["pendingPos"]];
-      LeanTactic[Join[tacSteps, {
-        LeanTactic["have", "h", srcExpr],
-        LeanTactic["conv", "h", convNav, LeanTactic["rw", {rwRuleExpr}]],
-        LeanTactic["exact", LeanConst["h", {}]]}]],
-      If[rwRuleExpr =!= None,
-        LeanTactic[Join[tacSteps, {
+    (* Build body tactic *)
+    Module[{bodyTac},
+      bodyTac = If[rwRuleExpr =!= None,
+        Join[tacSteps, {
           LeanTactic["have", "h", srcExpr],
-          LeanTactic["nth_rewrite", 1, {rwRuleExpr}, "h"],
-          LeanTactic["exact", LeanConst["h", {}]]}]],
-        LeanTactic["exact", srcExpr]]],
+          LeanTactic["simp", {rwRuleExpr}, "h"],
+          LeanTactic["exact", LeanConst["h", {}]]}],
+        (* No rewrite: direct exact — wrap in list for Seq *)
+        {LeanTactic["exact", srcExpr]}];
+      (* Prepend intro if there are universally-quantified variables *)
+      If[Length[vars] > 0,
+        bodyTac = Prepend[bodyTac, LeanTactic["intro", vars]]];
+      LeanTactic[bodyTac]],
     LeanTactic["sorry"]];
 
   If[StringStartsQ[tag, "Concl"],
@@ -376,9 +385,12 @@ ProofToLean[proof_] := Module[
   st["term", "FinalGoal"] = <|
     "Name" -> "FinalGoal", "Kind" -> "theorem",
     "_TypeExpr" -> finalGoalType,
-    "_Tactic" -> LeanTactic["exact",
-      Fold[LeanApp, LeanConst[st["finalLemma"], {}],
-        LeanConst[#, {}] & /@ st["finalLemmaVars"]]]|>;
+    "_Tactic" -> With[{exactTac = LeanTactic["exact",
+        Fold[LeanApp, LeanConst[st["finalLemma"], {}],
+          LeanConst[#, {}] & /@ st["finalLemmaVars"]]]},
+      If[Length[st["finalLemmaVars"]] > 0,
+        LeanTactic[{LeanTactic["intro", st["finalLemmaVars"]], exactTac}],
+        LeanTactic[{exactTac}]]]|>;
 
   (* Build LeanEnvironment with expression tree types *)
   envData = <||>;
@@ -388,7 +400,7 @@ ProofToLean[proof_] := Module[
 
   (* Store metadata *)
   envData["_Preamble"] = <|
-    "Imports" -> {"Mathlib.Tactic"},
+    "Imports" -> {},
     "TypeAxiom" -> "U",
     "Operators" -> opArities,
     "CenterDot" -> hasCenterDot,
