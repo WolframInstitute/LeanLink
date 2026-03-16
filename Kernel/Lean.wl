@@ -768,9 +768,13 @@ LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] :=
             "axiom",
               AppendTo[lines, "axiom " <> name <> " : " <> leanSource[typeExpr]],
             _,
-              If[StringQ[tactic],
-                AppendTo[lines, "theorem " <> name <> " : " <> leanSource[typeExpr] <> " := by\n" <> tactic <> "\n"],
-                AppendTo[lines, "theorem " <> name <> " : " <> leanSource[typeExpr] <> " := sorry\n"]]]]],
+              With[{tacStr = Which[
+                  Head[tactic] === LeanTactic, tacticSource[tactic],
+                  StringQ[tactic], tactic,
+                  True, None]},
+                If[StringQ[tacStr],
+                  AppendTo[lines, "theorem " <> name <> " : " <> leanSource[typeExpr] <> " := by\n" <> tacStr <> "\n"],
+                  AppendTo[lines, "theorem " <> name <> " : " <> leanSource[typeExpr] <> " := sorry\n"]]]]]],
       {name, decls}];
     StringRiffle[lines, "\n"]];
 
@@ -1293,11 +1297,55 @@ LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] :=
       ToBoxes[Interpretation[display, LeanGoal[data]]]]];
 
 (* ============================================================================ *)
-(* LeanTactic — tactic objects                                                   *)
+(* LeanTactic — structured tactic objects                                        *)
 (* ============================================================================ *)
 
-(* Apply tactic to a state: LeanTactic[tac][state] -> LeanState *)
+(* ---- tacticSource: serialize structured LeanTactic → string ---- *)
+
+tacticSource[LeanTactic["exact", term_]] := "  exact " <> leanSource[term];
+tacticSource[LeanTactic["have", name_String, term_]] := "  have " <> name <> " := " <> leanSource[term];
+tacticSource[LeanTactic["rw", rules_List]] := "  rw [" <> StringRiffle[leanSource /@ rules, ", "] <> "]";
+tacticSource[LeanTactic["rw", rules_List, hyp_String]] := "  rw [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
+tacticSource[LeanTactic["simp", rules_List, hyp_String]] := "  simp only [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
+tacticSource[LeanTactic["nth_rewrite", n_Integer, rules_List, hyp_String]] :=
+  "  nth_rewrite " <> ToString[n] <> " [" <> StringRiffle[leanSource /@ rules, ", "] <> "] at " <> hyp;
+tacticSource[LeanTactic["conv", hyp_String, path_List, subtac_]] :=
+  "  conv at " <> hyp <> " => " <> StringRiffle[path, "; "] <> "; " <> tacticSourceInline[subtac];
+tacticSource[LeanTactic["intro", names_List]] := "  intro " <> StringRiffle[names, " "];
+tacticSource[LeanTactic["sorry"]] := "  sorry";
+
+(* Inline tactic (no leading whitespace, for conv body) *)
+tacticSourceInline[LeanTactic["rw", rules_List]] := "rw [" <> StringRiffle[leanSource /@ rules, ", "] <> "]";
+tacticSourceInline[t_LeanTactic] := StringTrim[tacticSource[t]];
+
+(* Sequence of tactics *)
+tacticSource[LeanTactic[tactics_List]] := StringRiffle[tacticSource /@ tactics, "\n"];
+
+(* Fallback: bare string *)
+tacticSource[LeanTactic[s_String]] := "  " <> s;
+tacticSource[s_String] := "  " <> s;
+
+(* ---- LeanExportString for structured tactics ---- *)
+LeanExportString[tac_LeanTactic] := tacticSource[tac];
+
+(* ---- Apply tactic to state ---- *)
+(* String form: LeanTactic["intro P"][state] *)
 LeanTactic /: LeanTactic[tac_String][state_LeanState] :=
+  applyTacticStr[tac, state];
+
+(* Structured form: LeanTactic["exact", term][state] — serialize first *)
+LeanTactic /: LeanTactic[tag_String, args___][state_LeanState] :=
+  applyTacticStr[StringTrim[tacticSource[LeanTactic[tag, args]]], state];
+
+(* Sequence form: LeanTactic[{t1, t2, ...}][state] *)
+LeanTactic /: LeanTactic[tactics_List][state_LeanState] :=
+  Fold[
+    If[MatchQ[#1, _LeanState], applyTacticLT[#2, #1], #1] &,
+    state,
+    tactics];
+
+(* Internal: apply a single tactic (string or structured) to state *)
+applyTacticStr[tac_String, state_LeanState] :=
   Module[{data = state[[1]], stateId, handle, result},
     stateId = Lookup[data, "stateId", None];
     handle = Lookup[data, "_Handle", None];
@@ -1310,17 +1358,23 @@ LeanTactic /: LeanTactic[tac_String][state_LeanState] :=
         "goalCount" -> result["goalCount"],
         "_Handle" -> handle|>]]];
 
-(* Pipe multiple tactics: LeanTactic[{t1, t2, ...}][state] *)
-LeanTactic /: LeanTactic[tactics_List][state_LeanState] :=
-  Fold[
-    If[MatchQ[#1, _LeanState], LeanTactic[#2][#1], #1] &,
-    state,
-    tactics];
+applyTacticLT[tac_LeanTactic, state_LeanState] :=
+  applyTacticStr[StringTrim[tacticSource[tac]], state];
+applyTacticLT[tac_String, state_LeanState] :=
+  applyTacticStr[tac, state];
 
-(* MakeBoxes for LeanTactic *)
+(* ---- MakeBoxes ---- *)
 LeanTactic /: MakeBoxes[LeanTactic[tac_String], StandardForm] :=
   With[{display = Style["tactic: " <> tac, "Input", Italic]},
     ToBoxes[Interpretation[display, LeanTactic[tac]]]];
+
+LeanTactic /: MakeBoxes[t:LeanTactic[tag_String, ___], StandardForm] :=
+  With[{display = Style["tactic: " <> StringTrim[tacticSource[t]], "Input", Italic]},
+    ToBoxes[Interpretation[display, t]]];
+
+LeanTactic /: MakeBoxes[t:LeanTactic[tactics_List], StandardForm] :=
+  With[{display = Style["tactic[" <> ToString[Length[tactics]] <> " steps]", "Input", Italic]},
+    ToBoxes[Interpretation[display, t]]];
 
 End[];
 EndPackage[];

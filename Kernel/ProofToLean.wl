@@ -113,6 +113,32 @@ ptlBuildArgs[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
     , {i, 1, Length[vars]}]];
   StringTemplate[" `1`"][StringRiffle[vals, " "]]];
 
+(* Expression tree version: builds LeanApp chain for lemma+args *)
+ptlBuildSrcExpr[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
+  {vars, argExprs = {}, k, v, targetVars, keys},
+  vars = ptlLVLookup[lemmaVars, name];
+  targetVars = ptlLVLookup[lemmaVars, targetTag];
+  If[Length[vars] == 0,
+    keys = Sort[Keys[assoc]];
+    Do[AppendTo[argExprs, ptlToExprI[ptlCleanExpr[assoc[k]]]], {k, keys}],
+    Do[
+      k = vars[[i]];
+      v = Null;
+      KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToExprI[ptlCleanExpr[#2]]] &, assoc];
+      If[v === Null,
+        If[MemberQ[targetVars, k], v = LeanConst[k, {}],
+          v = LeanConst[If[Length[targetVars] > 0, targetVars[[1]], "_"], {}]]];
+      AppendTo[argExprs, v];
+    , {i, 1, Length[vars]}]];
+  Fold[LeanApp, LeanConst[name, {}], argExprs]];
+
+(* Conv path as list of strings *)
+ptlPosToConvList[{}] := {};
+ptlPosToConvList[pos_List] := Module[{first, rest},
+  first = If[Length[pos] > 0 && pos[[1]] == 1, "lhs", "rhs"];
+  rest = Map[StringTemplate["arg `1`"], Rest[pos]];
+  Prepend[rest, first]];
+
 (* ====== STEP PROCESSOR ====== *)
 Clear[ptlProcessStep];
 
@@ -217,10 +243,10 @@ ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[ReplaceAt[src_, rule_, pos_
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> assoc|>;
   Nothing);
 
-(* ConfirmAssert: EMIT THEOREM with expression tree type + tactic string *)
+(* ConfirmAssert: EMIT THEOREM with expression tree type + structured tactic *)
 ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], st_] := Module[
-  {tag, vars, tactic, srcCall, rwRule, rwPreamble, convNav, nonTrivial, assocKeys, allCovered,
-   typeExpr},
+  {tag, vars, tactic, srcExpr, rwRuleExpr, tacSteps, convNav,
+   nonTrivial, assocKeys, allCovered, typeExpr},
   tag = ptlAbbrev[Head[lhs], lhs[[1]]];
   vars = ptlGetVarsFromEq[eq, st["sharedConstants"]];
   st["lv", tag] = vars;
@@ -228,14 +254,17 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
   (* Build type as expression tree *)
   typeExpr = ptlWrapForall[vars, ptlEqToExpr[eq]];
 
-  (* Build tactic as string *)
+  (* Build tactic as structured LeanTactic *)
   tactic = If[st["pendingSource"] =!= None,
-    srcCall = StringTemplate["`1``2`"][st["pendingSource"]["name"],
-      ptlBuildArgs[st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lv"]]];
-    If[st["pendingSource"]["reversed"], srcCall = StringTemplate["(`1`).symm"][srcCall]];
+    (* Build srcExpr: lemma applied to args as expression tree *)
+    srcExpr = ptlBuildSrcExpr[
+      st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lv"]];
+    If[st["pendingSource"]["reversed"],
+      srcExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srcExpr]];
 
-    {rwRule, rwPreamble} = If[st["currentSR"] =!= None,
-      Module[{name, rev, assoc, srcVars, srArgs, preamble = ""},
+    (* Build rewrite rule expression *)
+    {rwRuleExpr, tacSteps} = If[st["currentSR"] =!= None,
+      Module[{name, rev, assoc, srcVars, srExpr},
         name = st["currentSR"]["name"];
         rev = st["currentSR"]["reversed"];
         assoc = st["currentSR"]["assoc"];
@@ -244,25 +273,26 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
         allCovered = Length[srcVars] > 0 && ContainsAll[assocKeys, srcVars];
         nonTrivial = AnyTrue[Normal[assoc], (ptlKeyToStr[#[[1]]] =!= ptlToStr[ptlCleanExpr[#[[2]]]]) &];
         If[allCovered && nonTrivial,
-          srArgs = ptlBuildArgs[name, assoc, tag, st["lv"]];
-          preamble = If[rev,
-            StringTemplate["  have sr := (`1``2`).symm\n"][name, srArgs],
-            StringTemplate["  have sr := `1``2`\n"][name, srArgs]];
-          {"sr", preamble},
-          {If[rev, StringTemplate["`1` `2`"][$ptl$larr, name], name], ""}]],
-      {None, ""}];
+          srExpr = ptlBuildSrcExpr[name, assoc, tag, st["lv"]];
+          If[rev, srExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srExpr]];
+          {LeanConst["sr", {}], {LeanTactic["have", "sr", srExpr]}},
+          {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]],
+                   LeanConst[name, {}]], {}}]],
+      {None, {}}];
 
-    If[rwRule =!= None && st["pendingPos"] =!= None,
-      convNav = ptlPosToConv[st["pendingPos"]];
-      If[rwPreamble =!= "",
-        StringTemplate["`4`  have h := `1`\n  conv at h => `2`; rw [`3`]\n  exact h"][srcCall, convNav, rwRule, rwPreamble],
-        StringTemplate["  have h := `1`\n  conv at h => `2`; rw [`3`]\n  exact h"][srcCall, convNav, rwRule]],
-      If[rwRule =!= None,
-        If[rwPreamble =!= "",
-          StringTemplate["`3`  have h := `1`\n  simp only [`2`] at h\n  exact h"][srcCall, rwRule, rwPreamble],
-          StringTemplate["  have h := `1`\n  nth_rewrite 1 [`2`] at h\n  exact h"][srcCall, rwRule]],
-        StringTemplate["  exact `1`"][srcCall]]],
-    "    sorry"];
+    If[rwRuleExpr =!= None && st["pendingPos"] =!= None,
+      convNav = ptlPosToConvList[st["pendingPos"]];
+      LeanTactic[Join[tacSteps, {
+        LeanTactic["have", "h", srcExpr],
+        LeanTactic["conv", "h", convNav, LeanTactic["rw", {rwRuleExpr}]],
+        LeanTactic["exact", LeanConst["h", {}]]}]],
+      If[rwRuleExpr =!= None,
+        LeanTactic[Join[tacSteps, {
+          LeanTactic["have", "h", srcExpr],
+          LeanTactic["nth_rewrite", 1, {rwRuleExpr}, "h"],
+          LeanTactic["exact", LeanConst["h", {}]]}]],
+        LeanTactic["exact", srcExpr]]],
+    LeanTactic["sorry"]];
 
   If[StringStartsQ[tag, "Concl"],
     st["currentSR"] = None; st["pendingSource"] = None; st["pendingPos"] = None;
@@ -346,10 +376,9 @@ ProofToLean[proof_] := Module[
   st["term", "FinalGoal"] = <|
     "Name" -> "FinalGoal", "Kind" -> "theorem",
     "_TypeExpr" -> finalGoalType,
-    "_Tactic" -> StringTemplate["  exact `1``2`"][
-      st["finalLemma"],
-      If[Length[st["finalLemmaVars"]] > 0,
-        " " <> StringRiffle[st["finalLemmaVars"], " "], ""]]|>;
+    "_Tactic" -> LeanTactic["exact",
+      Fold[LeanApp, LeanConst[st["finalLemma"], {}],
+        LeanConst[#, {}] & /@ st["finalLemmaVars"]]]|>;
 
   (* Build LeanEnvironment with expression tree types *)
   envData = <||>;
