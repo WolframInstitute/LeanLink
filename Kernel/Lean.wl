@@ -42,9 +42,8 @@ represents a Lean constant. Access properties via term[\"prop\"]. \
 Properties: \"Name\", \"Kind\", \"Type\", \"Term\", \"ExprGraph\", \"CallGraph\".";
 
 (* Public API *)
-LeanImport::usage = "LeanImport[module, opts] imports constants from a Lean module. \
-Returns \[LeftAssociation]name \[Rule] LeanTerm[...], ...\[RightAssociation]. \
-Options: \"ProjectDir\", \"Imports\", \"Filter\".";
+LeanEnvironment::usage = "LeanEnvironment[<|name \[Rule] LeanTerm[...], ...|>] holds a collection of Lean constants.";
+LeanImport::usage = "LeanImport[module, opts] imports constants from a Lean module. Returns LeanEnvironment[...].";
 LeanExpr::usage = "LeanExpr[name, opts] returns the type of a Lean constant as a symbolic expression tree.";
 LeanValue::usage = "LeanValue[name, opts] returns the proof/definition body of a Lean constant.";
 LeanConstantInfo::usage = "LeanConstantInfo[name, opts] returns full constant info as LeanConstant[name, kind, type, term].";
@@ -56,6 +55,12 @@ LeanFreeEnvironment::usage = "LeanFreeEnvironment[handle] frees a loaded Lean en
 LeanState::usage = "LeanState[term] opens a proof goal. LeanState[<|...|>] holds proof state. Properties: \"Goals\", \"Complete\", \"GoalCount\".";
 LeanTactic::usage = "LeanTactic[tacStr] represents a tactic. Apply via LeanTactic[tac][state] \[Rule] new LeanState.";
 LeanGoal::usage = "LeanGoal[<|...|>] represents a single proof goal with target and context.";
+
+(* Source conversion *)
+LeanExportString::usage = "LeanExportString[env] converts a LeanEnvironment to a Lean 4 source code string.";
+LeanExport::usage = "LeanExport[file, env] exports a LeanEnvironment to a .lean file.";
+LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...].";
+ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment.";
 
 Begin["`Private`"];
 
@@ -256,11 +261,28 @@ LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
 (* Constructor with env — binds handle for type-checking *)
 LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
                 _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj,
+          env_LeanEnvironment] :=
+  With[{h = extractHandle[env]},
+    If[IntegerQ[h],
+      LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>],
+      LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]]];
+
+(* Also accept bare Association for backward compat *)
+LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
+                _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj,
           env_Association] :=
   With[{h = Lookup[Values[env][[1]][[1]], "_Handle", None]},
     If[IntegerQ[h],
       LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>],
       LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]]];
+
+(* Extract handle from a LeanEnvironment *)
+extractHandle[env_LeanEnvironment] :=
+  With[{terms = Values[env[[1]]]},
+    If[Length[terms] > 0, Lookup[terms[[1]][[1]], "_Handle", None], None]];
+extractHandle[env_Association] :=
+  With[{terms = Values[env]},
+    If[Length[terms] > 0, Lookup[terms[[1]][[1]], "_Handle", None], None]];
 
 (* Internal type-check helper *)
 typeCheck[expr_, handle_Integer] :=
@@ -703,6 +725,115 @@ leanPP[$Failed, _] := "(failed)";
 leanPP[other_, _] := ToString[Short[other, 1]];
 
 (* ============================================================================ *)
+(* leanSource — Lean 4 source-safe pretty-printer                               *)
+(* Unlike leanPP (display), this produces valid Lean 4 ASCII/Unicode syntax.   *)
+(* ============================================================================ *)
+
+(* LeanExportString — export LeanEnvironment to source string *)
+LeanExportString[env_LeanEnvironment] := Module[
+  {src = Lookup[env[[1]], "_Source", None]},
+  If[StringQ[src], src,
+    (* Generate source from terms *)
+    Module[{terms, lines = {}},
+      terms = Select[Normal[env[[1]]], Head[#[[2]]] === LeanTerm &];
+      Do[
+        With[{name = kv[[1]], term = kv[[2]]},
+          AppendTo[lines, StringTemplate["theorem `1` : `2` := sorry"][
+            name, leanSource[term["Type"]]]]],
+        {kv, terms}];
+      StringRiffle[lines, "\n\n"]]]];
+
+LeanExportString[term_LeanTerm] := leanSource[term["Type"]];
+LeanExportString[expr_] := leanSource[expr];
+
+(* LeanExport — write to file *)
+LeanExport[file_String, env_LeanEnvironment] :=
+  Export[file, LeanExportString[env], "Text", CharacterEncoding -> "UTF-8"];
+
+leanSource[expr_] := leanSource[expr, 20];
+leanSource[e_, 0] := "_";
+
+leanSource[LeanConst[name_String, _List], _Integer] := name;
+
+leanSource[LeanSort[LeanLevelZero[]], _] := "Prop";
+leanSource[LeanSort[LeanLevelSucc[LeanLevelZero[]]], _] := "Type";
+leanSource[LeanSort[LeanLevelSucc[l_]], _] := "Type " <> leanPPLevel[l];
+leanSource[LeanSort[l_], _] := "Sort " <> leanPPLevel[l];
+
+leanSource[LeanBVar[n_Integer], _] := "#" <> ToString[n];
+leanSource[LeanFVar[_], _] := "_fvar";
+leanSource[LeanMVar[_], _] := "_";
+leanSource[LeanLitNat[n_Integer], _] := ToString[n];
+leanSource[LeanLitStr[s_String], _] := "\"" <> s <> "\"";
+
+(* Forall/Pi *)
+leanSource[e : LeanForall[_, _, _, _], d_Integer] := Module[
+  {binders = {}, body = e, name, dom, bi, nm},
+  While[MatchQ[body, LeanForall[_, _, _, _]] && d - Length[binders] > 0,
+    {name, dom, body, bi} = List @@ body;
+    nm = cleanName[name];
+    AppendTo[binders,
+      Switch[bi,
+        "implicit", "{" <> nm <> " : " <> leanSource[dom, d - 1] <> "}",
+        "strictImplicit", "\[LeftDoubleBracket]" <> nm <> " : " <> leanSource[dom, d - 1] <> "\[RightDoubleBracket]",
+        "instImplicit", "[" <> nm <> " : " <> leanSource[dom, d - 1] <> "]",
+        _,
+          If[nm === "" || StringMatchQ[nm, "_" ~~ ___],
+            leanSource[dom, d - 1],
+            "(" <> nm <> " : " <> leanSource[dom, d - 1] <> ")"]]]];  
+  If[AllTrue[binders, !StringStartsQ[#, "("] && !StringStartsQ[#, "{"] && !StringStartsQ[#, "["] && !StringStartsQ[#, "\[LeftDoubleBracket]"] &],
+    StringRiffle[Append[binders, leanSource[body, d - 1]], " " <> FromCharacterCode[8594] <> " "],
+    FromCharacterCode[8704] <> " " <> StringRiffle[binders, " "] <> ", " <> leanSource[body, d - 1]]];
+
+(* Lambda *)
+leanSource[e : LeanLam[_, _, _, _], d_Integer] := Module[
+  {binders = {}, body = e, name, dom, bi, nm},
+  While[MatchQ[body, LeanLam[_, _, _, _]] && d - Length[binders] > 0,
+    {name, dom, body, bi} = List @@ body;
+    nm = cleanName[name];
+    AppendTo[binders,
+      Switch[bi,
+        "implicit", "{" <> nm <> " : " <> leanSource[dom, d - 1] <> "}",
+        "instImplicit", "[" <> nm <> " : " <> leanSource[dom, d - 1] <> "]",
+        _,
+          "(" <> nm <> " : " <> leanSource[dom, d - 1] <> ")"]]];
+  "fun " <> StringRiffle[binders, " "] <> " => " <> leanSource[body, d - 1]];
+
+leanSource[LeanLet[name_String, type_, val_, body_], d_Integer] :=
+  "let " <> cleanName[name] <> " : " <> leanSource[type, d - 1] <>
+  " := " <> leanSource[val, d - 1] <> "; " <> leanSource[body, d - 1];
+
+(* Application *)
+leanSource[e_LeanApp, d_Integer] := Module[
+  {fn = e, args = {}, a},
+  While[MatchQ[fn, LeanApp[_, _]],
+    a = fn[[2]]; fn = fn[[1]];
+    PrependTo[args, leanSource[a, d - 1]]];
+  "(" <> leanSource[fn, d - 1] <> " " <> StringRiffle[args, " "] <> ")"];
+
+leanSource[LeanProj[struct_String, idx_Integer, expr_], d_Integer] :=
+  leanSource[expr, d - 1] <> "." <> ToString[idx];
+
+leanSource[LeanMData[_, expr_], d_Integer] := leanSource[expr, d];
+leanSource[LeanNoValue[], _] := "sorry";
+leanSource[$Failed, _] := "sorry";
+leanSource[other_, _] := "sorry /- " <> ToString[Short[other, 1]] <> " -/";
+
+(* ============================================================================ *)
+(* LeanImportString — compile source string to env                              *)
+(* ============================================================================ *)
+
+LeanImportString[src_String] := Module[
+  {tmpFile, modName, result},
+  modName = "LeanLinkTmp" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^6]];
+  tmpFile = FileNameJoin[{$TemporaryDirectory, modName <> ".lean"}];
+  Export[tmpFile, src, "Text", CharacterEncoding -> "UTF-8"];
+  result = LeanImport[tmpFile];
+  (* Cleanup the .lean source — olean kept for lazy queries *)
+  If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
+  result];
+
+(* ============================================================================ *)
 (* Expression head formatting                                                   *)
 (* ============================================================================ *)
 
@@ -888,10 +1019,10 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
             kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
             If[AssociationQ[kinds],
               kinds = KeySelect[kinds, !isInternalName[#] &];
-              results = Association @ KeyValueMap[
+              results = LeanEnvironment[Association @ KeyValueMap[
                 Function[{n, k},
                   n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]],
-                kinds]]]];
+                kinds]]]]];
         Return[results, Module]]];
     LeanImport["Imports" -> {module}, opts]];
 
@@ -951,10 +1082,10 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       kinds = KeySelect[kinds,
         !isInternalName[#] && MemberQ[srcNames, #] &];
       (* Build lazy LeanTerms *)
-      res = Association @ KeyValueMap[
+      res = LeanEnvironment[Association @ KeyValueMap[
         Function[{name, kind},
           name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
-        kinds];
+        kinds]];
       (* Don't delete tmpDir — olean needed for lazy queries *)
       res]];
 
@@ -968,10 +1099,10 @@ LeanImport[opts : OptionsPattern[]] := Module[{handle, kinds},
   (* Filter out internal/generated names *)
   kinds = KeySelect[kinds, !isInternalName[#] &];
   (* Build lazy LeanTerms: only Name + Kind + _Handle, no Type/Term yet *)
-  Association @ KeyValueMap[
+  LeanEnvironment[Association @ KeyValueMap[
     Function[{name, kind},
       name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
-    kinds]];
+    kinds]]];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
 
@@ -1002,6 +1133,39 @@ LeanListConstants[opts : OptionsPattern[]] :=
     {OptionValue["Filter"]},
     resolveProjDir[OptionValue["ProjectDir"]],
     OptionValue["Imports"]];
+
+(* ============================================================================ *)
+(* LeanEnvironment — typed collection of LeanTerms                              *)
+(* ============================================================================ *)
+
+(* Property/key access *)
+LeanEnvironment /: LeanEnvironment[data_Association][key_String] := data[key];
+LeanEnvironment /: Keys[LeanEnvironment[data_Association]] := Keys[data];
+LeanEnvironment /: Values[LeanEnvironment[data_Association]] := Values[data];
+LeanEnvironment /: Length[LeanEnvironment[data_Association]] := Length[data];
+LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key];
+LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
+LeanEnvironment /: Part[LeanEnvironment[data_Association], i_] := data[[i]];
+
+(* LeanEnvironment["Source"] property for source string storage *)
+LeanEnvironment /: LeanEnvironment[data_Association]["Source"] := Lookup[data, "_Source", None];
+
+(* MakeBoxes for LeanEnvironment *)
+LeanEnvironment /: MakeBoxes[LeanEnvironment[data_Association], StandardForm] :=
+  Module[{n = Length[Select[data, Head[#] === LeanTerm &]], kinds},
+    kinds = Counts[Lookup[#[[1]], "Kind", "?"] & /@ Select[Values[data], Head[#] === LeanTerm &]];
+    With[{display =
+      Panel[
+        Column[{
+          Style["LeanEnvironment", Bold, 14],
+          Style[ToString[n] <> " constants", Gray],
+          If[Length[kinds] > 0,
+            Row[KeyValueMap[
+              Style[ToString[#2] <> " " <> #1, Gray, FontSize -> 10] &, kinds], "  "],
+            Nothing]
+        }, Spacings -> 0.3],
+        FrameMargins -> 8]},
+      ToBoxes[Interpretation[display, LeanEnvironment[data]]]]];
 
 (* ============================================================================ *)
 (* LeanState — interactive proof state                                          *)

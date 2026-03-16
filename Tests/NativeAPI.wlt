@@ -11,9 +11,9 @@ VerificationTest[
   $env = LeanImport["LeanLink",
     "ProjectDir" -> $LeanLinkTestProjectDir,
     "Filter" -> "LeanLink.Examples"];
-  AssociationQ[$env] && Length[$env] > 5,
+  Head[$env] === LeanEnvironment && Length[$env] > 5,
   True,
-  TestID -> "LeanImport-Returns-Assoc"
+  TestID -> "LeanImport-Returns-LeanEnvironment"
 ]
 
 VerificationTest[
@@ -45,7 +45,7 @@ VerificationTest[
   $filtered = LeanImport["LeanLink.Examples",
     "ProjectDir" -> $LeanLinkTestProjectDir,
     "Imports" -> {"LeanLink"}, "Filter" -> "Examples"];
-  AssociationQ[$filtered] && Length[$filtered] === 12,
+  Head[$filtered] === LeanEnvironment && Length[$filtered] === 12,
   True,
   TestID -> "LeanImport-Filtered-Count"
 ]
@@ -65,9 +65,9 @@ VerificationTest[
 (* Standalone file import *)
 VerificationTest[
   $standalone = LeanImport[PacletObject["LeanLink"]["AssetLocation", "Examples"]];
-  AssociationQ[$standalone] && Length[$standalone] > 10,
+  Head[$standalone] === LeanEnvironment && Length[$standalone] > 10,
   True,
-  TestID -> "LeanImport-Standalone-Returns-Assoc"
+  TestID -> "LeanImport-Standalone-Returns-Env"
 ]
 
 VerificationTest[
@@ -323,7 +323,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-  $bound = LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]], $filtered];
+  $bound = Quiet[LeanTerm[LeanApp[LeanConst["Nat.succ", {}], LeanLitNat[42]], $filtered]];
   $bound["TypeForm"],
   "Nat",
   TestID -> "Constructed-LeanTerm-TypeForm"
@@ -387,6 +387,25 @@ VerificationTest[
   sf["Complete"],
   True,
   TestID -> "LeanTactic-AndComm-PipeComplete"
+]
+
+(* ================================================================ *)
+(* LeanExportString + LeanImportString                               *)
+(* ================================================================ *)
+
+VerificationTest[
+  $src = LeanExportString[$filtered["LeanLink.Examples.identity"]];
+  StringQ[$src] && StringContainsQ[$src, "Prop"],
+  True,
+  TestID -> "LeanExportString-Term-HasProp"
+]
+
+VerificationTest[
+  $importedEnv = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
+  Head[$importedEnv] === LeanEnvironment &&
+    KeyExistsQ[$importedEnv, "myT"],
+  True,
+  TestID -> "LeanImportString-CompileAndImport"
 ]
 
 EndTestSection[]

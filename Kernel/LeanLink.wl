@@ -178,3 +178,4 @@ EndPackage[];
 (* Load Utilities (ImportDOT) and native WXF-based Lean integration *)
 Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "Utilities.wl"}]];
 Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "Lean.wl"}]];
+Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "ProofToLean.wl"}]];
