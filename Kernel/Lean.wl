@@ -1073,10 +1073,10 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
             kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
             If[AssociationQ[kinds],
               kinds = KeySelect[kinds, !isInternalName[#] &];
-              results = LeanEnvironment[Association @ KeyValueMap[
+              results = LeanEnvironment[Append[Association @ KeyValueMap[
                 Function[{n, k},
                   n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]],
-                kinds]]]]];
+                kinds], "_Handle" -> h]]]]];
         Return[results, Module]]];
     LeanImport["Imports" -> {module}, opts]];
 
@@ -1136,10 +1136,10 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       kinds = KeySelect[kinds,
         !isInternalName[#] && MemberQ[srcNames, #] &];
       (* Build lazy LeanTerms *)
-      res = LeanEnvironment[Association @ KeyValueMap[
+      res = LeanEnvironment[Append[Association @ KeyValueMap[
         Function[{name, kind},
           name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
-        kinds]];
+        kinds], "_Handle" -> handle]];
       (* Don't delete tmpDir — olean needed for lazy queries *)
       res]];
 
@@ -1153,10 +1153,10 @@ LeanImport[opts : OptionsPattern[]] := Module[{handle, kinds},
   (* Filter out internal/generated names *)
   kinds = KeySelect[kinds, !isInternalName[#] &];
   (* Build lazy LeanTerms: only Name + Kind + _Handle, no Type/Term yet *)
-  LeanEnvironment[Association @ KeyValueMap[
+  LeanEnvironment[Append[Association @ KeyValueMap[
     Function[{name, kind},
       name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
-    kinds]]];
+    kinds], "_Handle" -> handle]]];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
 
@@ -1192,11 +1192,14 @@ LeanListConstants[opts : OptionsPattern[]] :=
 (* LeanEnvironment — typed collection of LeanTerms                              *)
 (* ============================================================================ *)
 
-(* Property/key access *)
+(* Property/key access — internal _-prefixed keys are hidden *)
 LeanEnvironment /: LeanEnvironment[data_Association][key_String] := data[key];
-LeanEnvironment /: Keys[LeanEnvironment[data_Association]] := Keys[data];
-LeanEnvironment /: Values[LeanEnvironment[data_Association]] := Values[data];
-LeanEnvironment /: Length[LeanEnvironment[data_Association]] := Length[data];
+LeanEnvironment /: Keys[LeanEnvironment[data_Association]] :=
+  Select[Keys[data], !StringStartsQ[#, "_"] &];
+LeanEnvironment /: Values[LeanEnvironment[data_Association]] :=
+  Values[KeySelect[data, !StringStartsQ[#, "_"] &]];
+LeanEnvironment /: Length[LeanEnvironment[data_Association]] :=
+  Length[Select[Keys[data], !StringStartsQ[#, "_"] &]];
 LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key];
 LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
 
@@ -1204,22 +1207,34 @@ LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
 (* LeanEnvironment["Source"] property for source string storage *)
 LeanEnvironment /: LeanEnvironment[data_Association]["Source"] := Lookup[data, "_Source", None];
 
-(* MakeBoxes for LeanEnvironment *)
-LeanEnvironment /: MakeBoxes[LeanEnvironment[data_Association], StandardForm] :=
-  Module[{n = Length[Select[data, Head[#] === LeanTerm &]], kinds},
+(* MakeBoxes for LeanEnvironment — summary box *)
+LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardForm] :=
+  Module[{n, kinds, handle, hasSource, icon},
+    n = Length[Select[data, Head[#] === LeanTerm &]];
     kinds = Counts[Lookup[#[[1]], "Kind", "?"] & /@ Select[Values[data], Head[#] === LeanTerm &]];
-    With[{display =
-      Panel[
-        Column[{
-          Style["LeanEnvironment", Bold, 14],
-          Style[ToString[n] <> " constants", Gray],
-          If[Length[kinds] > 0,
-            Row[KeyValueMap[
-              Style[ToString[#2] <> " " <> #1, Gray, FontSize -> 10] &, kinds], "  "],
-            Nothing]
-        }, Spacings -> 0.3],
-        FrameMargins -> 8]},
-      ToBoxes[Interpretation[display, LeanEnvironment[data]]]]];
+    handle = Lookup[data, "_Handle", None];
+    hasSource = StringQ[Lookup[data, "_Source", None]];
+    icon = Graphics[{Hue[0.6, 0.5, 0.8], Disk[]}, ImageSize -> 12];
+    BoxForm`ArrangeSummaryBox[LeanEnvironment, obj, icon,
+      {
+        BoxForm`SummaryItem[{"Constants: ", n}],
+        If[Length[kinds] > 0,
+          BoxForm`SummaryItem[{"Kinds: ",
+            Row[KeyValueMap[Row[{#2, " ", Style[#1, Gray]}] &, kinds], "  "]}],
+          Nothing]
+      },
+      {
+        BoxForm`SummaryItem[{"Handle: ",
+          If[IntegerQ[handle], Style[handle, Bold], Style["none", Gray]]}],
+        If[hasSource,
+          BoxForm`SummaryItem[{"Source: ", Style["available", Darker[Green]]}],
+          Nothing],
+        If[KeyExistsQ[data, "_DeclOrder"],
+          BoxForm`SummaryItem[{"Declarations: ", Length[data["_DeclOrder"]]}],
+          Nothing]
+      },
+      StandardForm,
+      "Interpretable" -> Automatic]];
 
 (* ============================================================================ *)
 (* LeanState — interactive proof state                                          *)
