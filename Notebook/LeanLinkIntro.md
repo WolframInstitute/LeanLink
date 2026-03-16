@@ -4,7 +4,7 @@
 
 ```wolfram
 PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];
-Needs["LeanLink`"];
+Get["LeanLink`"];
 nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
 ```
 

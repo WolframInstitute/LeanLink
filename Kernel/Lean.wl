@@ -730,18 +730,64 @@ leanPP[other_, _] := ToString[Short[other, 1]];
 (* ============================================================================ *)
 
 (* LeanExportString — export LeanEnvironment to source string *)
+(* Proof environment with _DeclOrder — serialize declarations *)
+LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] :=
+  Module[{data = env[[1]], preamble, decls, lines = {}},
+    preamble = Lookup[data, "_Preamble", <||>];
+    decls = Lookup[data, "_DeclOrder", {}];
+    (* Preamble *)
+    If[KeyExistsQ[preamble, "Imports"],
+      Do[AppendTo[lines, "import " <> imp], {imp, preamble["Imports"]}];
+      AppendTo[lines, ""]];
+    (* Type axiom *)
+    If[KeyExistsQ[preamble, "TypeAxiom"],
+      AppendTo[lines, "axiom " <> preamble["TypeAxiom"] <> " : Type"];
+      AppendTo[lines, ""]];
+    (* Operators *)
+    If[KeyExistsQ[preamble, "Operators"],
+      KeyValueMap[
+        AppendTo[lines,
+          "axiom " <> #1 <> " : " <> StringJoin[Table["U " <> FromCharacterCode[8594] <> " ", {#2}]] <> "U"] &,
+        preamble["Operators"]]];
+    If[TrueQ[preamble["CenterDot"]],
+      AppendTo[lines, "axiom cdot : U " <> FromCharacterCode[8594] <> " U " <> FromCharacterCode[8594] <> " U"];
+      AppendTo[lines, "infixl:70 \" " <> FromCharacterCode[11037] <> " \" => cdot"]];
+    (* Shared constants *)
+    If[KeyExistsQ[preamble, "SharedConstants"],
+      Do[AppendTo[lines, "axiom " <> c <> " : U"], {c, preamble["SharedConstants"]}]];
+    If[Length[lines] > 0, AppendTo[lines, ""]];
+    (* Declarations *)
+    Do[
+      With[{term = data[name]},
+        If[Head[term] =!= LeanTerm, Continue[]];
+        With[{kind = Lookup[term[[1]], "Kind", "theorem"],
+              typeExpr = Lookup[term[[1]], "_TypeExpr", None],
+              tactic = Lookup[term[[1]], "_Tactic", None]},
+          If[typeExpr === None, Continue[]];
+          Switch[kind,
+            "axiom",
+              AppendTo[lines, "axiom " <> name <> " : " <> leanSource[typeExpr]],
+            _,
+              If[StringQ[tactic],
+                AppendTo[lines, "theorem " <> name <> " : " <> leanSource[typeExpr] <> " := by\n" <> tactic <> "\n"],
+                AppendTo[lines, "theorem " <> name <> " : " <> leanSource[typeExpr] <> " := sorry\n"]]]]],
+      {name, decls}];
+    StringRiffle[lines, "\n"]];
+
+(* Environment with stashed source *)
+LeanExportString[env_LeanEnvironment] /; StringQ[Lookup[env[[1]], "_Source", None]] :=
+  env[[1]]["_Source"];
+
+(* Generic environment — generate theorems *)
 LeanExportString[env_LeanEnvironment] := Module[
-  {src = Lookup[env[[1]], "_Source", None]},
-  If[StringQ[src], src,
-    (* Generate source from terms *)
-    Module[{terms, lines = {}},
-      terms = Select[Normal[env[[1]]], Head[#[[2]]] === LeanTerm &];
-      Do[
-        With[{name = kv[[1]], term = kv[[2]]},
-          AppendTo[lines, StringTemplate["theorem `1` : `2` := sorry"][
-            name, leanSource[term["Type"]]]]],
-        {kv, terms}];
-      StringRiffle[lines, "\n\n"]]]];
+  {terms, lines = {}},
+  terms = Select[Normal[env[[1]]], Head[#[[2]]] === LeanTerm &];
+  Do[
+    With[{name = kv[[1]], term = kv[[2]]},
+      AppendTo[lines, StringTemplate["theorem `1` : `2` := sorry"][
+        name, leanSource[term["Type"]]]]],
+    {kv, terms}];
+  StringRiffle[lines, "\n\n"]];
 
 LeanExportString[term_LeanTerm] := leanSource[term["Type"]];
 LeanExportString[expr_] := leanSource[expr];
@@ -802,6 +848,10 @@ leanSource[e : LeanLam[_, _, _, _], d_Integer] := Module[
 leanSource[LeanLet[name_String, type_, val_, body_], d_Integer] :=
   "let " <> cleanName[name] <> " : " <> leanSource[type, d - 1] <>
   " := " <> leanSource[val, d - 1] <> "; " <> leanSource[body, d - 1];
+
+(* Eq infix: @Eq α lhs rhs → lhs = rhs *)
+leanSource[LeanApp[LeanApp[LeanApp[LeanConst["Eq", _], _], lhs_], rhs_], d_Integer] :=
+  leanSource[lhs, d - 1] <> " = " <> leanSource[rhs, d - 1];
 
 (* Application *)
 leanSource[e_LeanApp, d_Integer] := Module[
@@ -1145,7 +1195,7 @@ LeanEnvironment /: Values[LeanEnvironment[data_Association]] := Values[data];
 LeanEnvironment /: Length[LeanEnvironment[data_Association]] := Length[data];
 LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key];
 LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
-LeanEnvironment /: Part[LeanEnvironment[data_Association], i_] := data[[i]];
+
 
 (* LeanEnvironment["Source"] property for source string storage *)
 LeanEnvironment /: LeanEnvironment[data_Association]["Source"] := Lookup[data, "_Source", None];

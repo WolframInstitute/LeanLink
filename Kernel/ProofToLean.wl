@@ -1,20 +1,18 @@
-(* ProofToLean.wl -- Transpile ProofObject -> Lean 4 source *)
-(* Adapted from vibe-proof/scripts/proof_to_lean.wl *)
+(* ProofToLean.wl -- Transpile ProofObject -> LeanEnvironment *)
+(* Types are LeanTerm expression trees; tactic proofs are strings. *)
 (* Loaded by LeanLink.wl; operates within LeanLink` context. *)
 
 BeginPackage["LeanLink`"];
 Begin["`Private`"];
 
 (* ====== UNICODE CONSTANTS ====== *)
-$ptl$nand = FromCharacterCode[8892];     (* U+22BC *)
-$ptl$forall = FromCharacterCode[8704];   (* U+2200 *)
-$ptl$alpha = "U";
-$ptl$larr = FromCharacterCode[8592];     (* U+2190 *)
-$ptl$rarr = FromCharacterCode[8594];     (* U+2192 *)
-$ptl$check = FromCharacterCode[10003];   (* U+2713 *)
-$ptl$cdot = FromCharacterCode[11037];    (* U+2B1D *)
+$ptl$rarr = FromCharacterCode[8594];     (* → *)
+$ptl$larr = FromCharacterCode[8592];     (* ← *)
+$ptl$check = FromCharacterCode[10003];   (* ✓ *)
+$ptl$cdot = FromCharacterCode[11037];    (* ⬝ *)
 
-(* ====== CLEAN + CONVERT ====== *)
+(* ====== EXPRESSION TREE BUILDERS ====== *)
+(* Convert WL expressions to LeanTerm expression trees *)
 
 ptlCleanExpr[expr_] := Module[{uf},
   uf = If[TrueQ[$ptlHasUnformalize],
@@ -23,14 +21,42 @@ ptlCleanExpr[expr_] := Module[{uf},
   (expr /. s_Symbol :> RuleCondition[uf[s]]) //. 
     {Verbatim[Pattern][s_, Verbatim[Blank][]] :> s}];
 
-Clear[ptlToLean];
-ptlToLean[CenterDot[a_, b_]] := StringTemplate["(`1` `2` `3`)"][ptlToLean[a], $ptl$cdot, ptlToLean[b]];
-ptlToLean[f_Symbol[args___]] := StringTemplate["(`1` `2`)"][f, StringRiffle[ptlToLean /@ {args}, " "]];
-ptlToLean[s_Symbol] := ToString[s];
-ptlToLean[x_] := ToString[x];
+(* Expression → LeanTerm tree *)
+ptlToExpr[expr_] := ptlToExprI[ptlCleanExpr[expr]];
 
-ptlEqToLean[eq:Inactive[Equal][_, _]] := Module[{c = ptlCleanExpr[eq]},
-  StringTemplate["`1` = `2`"][ptlToLean[c[[1]]], ptlToLean[c[[2]]]]];
+ptlToExprI[CenterDot[a_, b_]] :=
+  LeanApp[LeanApp[LeanConst["cdot", {}], ptlToExprI[a]], ptlToExprI[b]];
+ptlToExprI[f_Symbol[args___]] :=
+  Fold[LeanApp, LeanConst[ToString[f], {}], ptlToExprI /@ {args}];
+ptlToExprI[s_Symbol] := LeanConst[ToString[s], {}];
+ptlToExprI[x_] := LeanConst[ToString[x], {}];
+
+(* Equation → @Eq U lhs rhs *)
+ptlMakeEq[lhs_, rhs_] :=
+  LeanApp[LeanApp[LeanApp[
+    LeanConst["Eq", {LeanLevelSucc[LeanLevelZero[]]}],
+    LeanConst["U", {}]], lhs], rhs];
+
+ptlEqToExpr[eq:Inactive[Equal][_, _]] := Module[{c = ptlCleanExpr[eq]},
+  ptlMakeEq[ptlToExprI[c[[1]]], ptlToExprI[c[[2]]]]];
+
+(* Wrap expression in ∀ binders: ∀ (x : U) (y : U), body *)
+ptlWrapForall[{}, body_] := body;
+ptlWrapForall[vars_List, body_] :=
+  Fold[LeanForall[#2, LeanConst["U", {}], #1, "default"] &,
+    body, Reverse[vars]];
+
+(* ====== STRING CONVERTERS (for tactic generation only) ====== *)
+(* These still produce strings because tactic scripts are textual *)
+
+Clear[ptlToStr];
+ptlToStr[CenterDot[a_, b_]] := StringTemplate["(`1` `2` `3`)"][ptlToStr[a], $ptl$cdot, ptlToStr[b]];
+ptlToStr[f_Symbol[args___]] := StringTemplate["(`1` `2`)"][f, StringRiffle[ptlToStr /@ {args}, " "]];
+ptlToStr[s_Symbol] := ToString[s];
+ptlToStr[x_] := ToString[x];
+
+ptlEqToStr[eq:Inactive[Equal][_, _]] := Module[{c = ptlCleanExpr[eq]},
+  StringTemplate["`1` = `2`"][ptlToStr[c[[1]]], ptlToStr[c[[2]]]]];
 
 ptlGetVarsFromEq[eq_, sharedConstants_] := Module[{c = ptlCleanExpr[eq], allVars},
   allVars = DeleteDuplicates@Cases[c, s_Symbol /; Context[s] === "Global`" :> ToString[s], Infinity];
@@ -55,7 +81,7 @@ ptlKeyToStr[s_Symbol] := ToString[s];
 ptlKeyToStr[x_] := ToString[x];
 
 ptlAssocToStr[a_Association] :=
-  StringRiffle[KeyValueMap[StringTemplate["`1` -> `2`"][ptlKeyToStr[#1], ptlToLean[ptlCleanExpr[#2]]] &, a], ", "];
+  StringRiffle[KeyValueMap[StringTemplate["`1` -> `2`"][ptlKeyToStr[#1], ptlToStr[ptlCleanExpr[#2]]] &, a], ", "];
 
 (* ====== POSITION -> CONV NAVIGATION ====== *)
 ptlPosToConv[{}] := "";
@@ -64,18 +90,22 @@ ptlPosToConv[pos_List] := Module[{first, restStr},
   restStr = StringRiffle[Map[StringTemplate["arg `1`"], Rest[pos]], "; "];
   If[restStr === "", first, StringTemplate["`1`; `2`"][first, restStr]]];
 
-(* ====== BUILD ARGS ====== *)
+(* ====== BUILD ARGS (string, for tactic construction) ====== *)
+(* lemmaVars is a DownValues function: lemmaVars[name] -> vars list *)
+ptlLVLookup[lv_, name_] := Module[{r = lv[name]},
+  If[ListQ[r], r, {}]];
+
 ptlBuildArgs[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
   {vars, vals = {}, k, v, targetVars, keys},
-  vars = Lookup[lemmaVars, name, {}];
-  targetVars = Lookup[lemmaVars, targetTag, {}];
+  vars = ptlLVLookup[lemmaVars, name];
+  targetVars = ptlLVLookup[lemmaVars, targetTag];
   If[Length[vars] == 0,
     keys = Sort[Keys[assoc]];
-    Do[AppendTo[vals, ptlToLean[ptlCleanExpr[assoc[k]]]], {k, keys}],
+    Do[AppendTo[vals, ptlToStr[ptlCleanExpr[assoc[k]]]], {k, keys}],
     Do[
       k = vars[[i]];
       v = Null;
-      KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToLean[ptlCleanExpr[#2]]] &, assoc];
+      KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToStr[ptlCleanExpr[#2]]] &, assoc];
       If[v === Null,
         If[MemberQ[targetVars, k], v = k,
           v = If[Length[targetVars] > 0, targetVars[[1]], "_"]]];
@@ -84,65 +114,68 @@ ptlBuildArgs[name_, assoc_Association, targetTag_String, lemmaVars_] := Module[
   StringTemplate[" `1`"][StringRiffle[vals, " "]]];
 
 (* ====== STEP PROCESSOR ====== *)
-(* All processing uses state variables through local association passed by reference *)
-
 Clear[ptlProcessStep];
 
+(* Axiom/Hypothesis definition — builds type expression tree *)
 ptlProcessStep[HoldComplete[Set[tag_[n_Integer], eq:Inactive[Equal][_, _]]], st_] := Module[
-  {tagStr = ptlAbbrev[tag, n], eqStr = ptlEqToLean[eq], vars = ptlGetVarsFromEq[eq, st["sharedConstants"]]},
-  st["lemmaVars"][tagStr] = vars;
+  {tagStr = ptlAbbrev[tag, n], vars = ptlGetVarsFromEq[eq, st["sharedConstants"]],
+   typeExpr},
+  st["lv", tagStr] = vars;
+  typeExpr = ptlWrapForall[vars, ptlEqToExpr[eq]];
   If[ToString[tag] === "Hypothesis",
-    st["finalEqStr"] = eqStr; st["finalVars"] = vars;
-    StringTemplate["axiom `1` `2` : `3`"][tagStr,
-      If[Length[vars]>0, StringTemplate["(`1` : U)"][StringRiffle[vars, " "]], ""], eqStr],
-    StringTemplate["axiom `1` `2` : `3`"][tagStr,
-      If[Length[vars]>0, StringTemplate["(`1` : U)"][StringRiffle[vars, " "]], ""], eqStr]]];
+    st["finalTypeExpr"] = typeExpr; st["finalVars"] = vars];
+  (* Store declaration *)
+  AppendTo[st["decls"], tagStr];
+  st["term", tagStr] = <|
+    "Name" -> tagStr, "Kind" -> "axiom",
+    "_TypeExpr" -> typeExpr|>;
+  Nothing];
 
 (* SubstitutionRule = Reverse[src] /. assoc *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[Reverse[src_], assoc_Association]]], st_] /;
   ToString[tag] === "SubstitutionRule" := (
   st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> assoc|>;
-  StringTemplate["  -- SR`1` `2` Reverse[`3`] /. {`4`}"][n, $ptl$larr, ptlLeanRef[src], ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* SubstitutionRule = src /. assoc *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[src_, assoc_Association]]], st_] /;
   ToString[tag] === "SubstitutionRule" := (
   st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> assoc|>;
-  StringTemplate["  -- SR`1` `2` `3` /. {`4`}"][n, $ptl$larr, ptlLeanRef[src], ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* SubstitutionRule = Rule[src[[1]], ...] *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], Rule[Part[src_, 1], ReplaceAll[_, assoc_Association]]]], st_] /;
   ToString[tag] === "SubstitutionRule" := (
   st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> assoc|>;
-  StringTemplate["  -- SR`1` `2` `3` /. {`4`}"][n, $ptl$larr, ptlLeanRef[src], ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* SubstitutionRule = Rule[src[[2]], ...] (Reverse) *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], Rule[Part[src_, 2], ReplaceAll[_, assoc_Association]]]], st_] /;
   ToString[tag] === "SubstitutionRule" := (
   st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> assoc|>;
-  StringTemplate["  -- SR`1` `2` Reverse[`3`] /. {`4`}"][n, $ptl$larr, ptlLeanRef[src], ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* SubstitutionRule = bare value *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], _]], st_] /; ToString[tag] === "SubstitutionRule" := (
   st["currentSR"] = <|"name" -> "?prev", "reversed" -> False, "assoc" -> <||>|>;
-  StringTemplate["  -- SR`1`"][n]);
+  Nothing);
 
 (* CPL/SL instantiation: tag = Reverse[src] /. assoc *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[Reverse[src_], assoc_Association]]], st_] := (
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> assoc|>;
-  StringTemplate["  -- `1` `2` Reverse[`3`] /. {`4`}"][ptlAbbrev[tag, n], $ptl$larr, ptlLeanRef[src], ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* CPL/SL instantiation: tag = src /. assoc *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[src_, assoc_Association]]], st_] := (
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> assoc|>;
-  StringTemplate["  -- `1` `2` `3` /. {`4`}"][ptlAbbrev[tag, n], $ptl$larr, ptlLeanRef[src], ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* ReplacePart at position *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplacePart[src_, _, pos_List]]], st_] := (
   st["pendingPos"] = pos;
   If[st["pendingSource"] === None,
     st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> <||>|>];
-  StringTemplate["  -- `1` `2` ReplacePart at `3`"][ptlAbbrev[tag, n], $ptl$larr, pos]);
+  Nothing);
 
 (* ReplaceAt extractRuleFromArg *)
 SetAttributes[ptlExtractRule, HoldFirst];
@@ -163,38 +196,42 @@ ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAt[Reverse[src_], rule_, pos_Li
   st["pendingPos"] = pos;
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> <||>|>;
   ptlExtractRule[rule, st];
-  StringTemplate["  -- `1` `2` ReplaceAt in Reverse[`3`] at `4`"][ptlAbbrev[tag, n], $ptl$larr, ptlLeanRef[src], pos]);
+  Nothing);
 
 (* ReplaceAt at position *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAt[src_, rule_, pos_List]]], st_] := (
   st["pendingPos"] = pos;
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> <||>|>;
   ptlExtractRule[rule, st];
-  StringTemplate["  -- `1` `2` ReplaceAt in `3` at `4`"][ptlAbbrev[tag, n], $ptl$larr, ptlLeanRef[src], pos]);
+  Nothing);
 
 (* ReplaceAt with Reverse and ReplaceAll *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[ReplaceAt[Reverse[src_], rule_, pos_List], assoc_Association]]], st_] := (
   st["pendingPos"] = pos;
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> assoc|>;
-  StringTemplate["  -- `1` `2` ReplaceAt in Reverse[`3`] at `4` /. {`5`}"][ptlAbbrev[tag, n], $ptl$larr, ptlLeanRef[src], pos, ptlAssocToStr[assoc]]);
+  Nothing);
 
 (* ReplaceAt with ReplaceAll *)
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[ReplaceAt[src_, rule_, pos_List], assoc_Association]]], st_] := (
   st["pendingPos"] = pos;
   st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> assoc|>;
-  StringTemplate["  -- `1` `2` ReplaceAt in `3` at `4` /. {`5`}"][ptlAbbrev[tag, n], $ptl$larr, ptlLeanRef[src], pos, ptlAssocToStr[assoc]]);
+  Nothing);
 
-(* ConfirmAssert: EMIT TACTIC *)
+(* ConfirmAssert: EMIT THEOREM with expression tree type + tactic string *)
 ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], st_] := Module[
-  {tag, eqStr, vars, tactic, srcCall, rwRule, rwPreamble, convNav, nonTrivial, assocKeys, allCovered},
+  {tag, vars, tactic, srcCall, rwRule, rwPreamble, convNav, nonTrivial, assocKeys, allCovered,
+   typeExpr},
   tag = ptlAbbrev[Head[lhs], lhs[[1]]];
-  eqStr = ptlEqToLean[eq];
   vars = ptlGetVarsFromEq[eq, st["sharedConstants"]];
-  st["lemmaVars"][tag] = vars;
+  st["lv", tag] = vars;
 
+  (* Build type as expression tree *)
+  typeExpr = ptlWrapForall[vars, ptlEqToExpr[eq]];
+
+  (* Build tactic as string *)
   tactic = If[st["pendingSource"] =!= None,
     srcCall = StringTemplate["`1``2`"][st["pendingSource"]["name"],
-      ptlBuildArgs[st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lemmaVars"]]];
+      ptlBuildArgs[st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st["lv"]]];
     If[st["pendingSource"]["reversed"], srcCall = StringTemplate["(`1`).symm"][srcCall]];
 
     {rwRule, rwPreamble} = If[st["currentSR"] =!= None,
@@ -202,12 +239,12 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
         name = st["currentSR"]["name"];
         rev = st["currentSR"]["reversed"];
         assoc = st["currentSR"]["assoc"];
-        srcVars = Lookup[st["lemmaVars"], name, {}];
+        srcVars = ptlLVLookup[st["lv"], name];
         assocKeys = ptlKeyToStr /@ Keys[assoc];
         allCovered = Length[srcVars] > 0 && ContainsAll[assocKeys, srcVars];
-        nonTrivial = AnyTrue[Normal[assoc], (ptlKeyToStr[#[[1]]] =!= ptlToLean[ptlCleanExpr[#[[2]]]]) &];
+        nonTrivial = AnyTrue[Normal[assoc], (ptlKeyToStr[#[[1]]] =!= ptlToStr[ptlCleanExpr[#[[2]]]]) &];
         If[allCovered && nonTrivial,
-          srArgs = ptlBuildArgs[name, assoc, tag, st["lemmaVars"]];
+          srArgs = ptlBuildArgs[name, assoc, tag, st["lv"]];
           preamble = If[rev,
             StringTemplate["  have sr := (`1``2`).symm\n"][name, srArgs],
             StringTemplate["  have sr := `1``2`\n"][name, srArgs]];
@@ -236,12 +273,15 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
   If[StringStartsQ[tag, "Hyp"], Return[Nothing]];
 
   st["finalLemma"] = tag;
-  st["finalLemmaEqStr"] = eqStr;
+  st["finalLemmaTypeExpr"] = typeExpr;
   st["finalLemmaVars"] = vars;
 
-  If[Length[vars] > 0,
-    StringTemplate["theorem `1` (`2` : `3`) : `4` := by\n`5`\n"][tag, StringRiffle[vars, " "], $ptl$alpha, eqStr, tactic],
-    StringTemplate["theorem `1` : `2` := by\n`3`\n"][tag, eqStr, tactic]]];
+  (* Store theorem declaration *)
+  AppendTo[st["decls"], tag];
+  st["term", tag] = <|
+    "Name" -> tag, "Kind" -> "theorem",
+    "_TypeExpr" -> typeExpr, "_Tactic" -> tactic|>;
+  Nothing];
 
 (* ConfirmAssert with Extract *)
 ptlProcessStep[HoldComplete[ConfirmAssert[Extract[_, _] === Part[src_, 1]]], st_] := (
@@ -255,28 +295,25 @@ ptlProcessStep[HoldComplete[ConfirmAssert[Extract[_, _] === Part[src_, 2]]], st_
   Nothing);
 
 ptlProcessStep[HoldComplete[ConfirmAssert[_ === _]], _] := Nothing;
-ptlProcessStep[HoldComplete[If[_, _, _]], _] := StringTemplate["  -- QED `1`"][$ptl$check];
-ptlProcessStep[x_HoldComplete, _] := StringTemplate["  -- [?] `1`"][Head[x[[1]]]];
+ptlProcessStep[HoldComplete[If[_, _, _]], _] := Nothing;
+ptlProcessStep[x_HoldComplete, _] := Nothing;
 
 (* ====== MAIN PUBLIC FUNCTION ====== *)
 
 ProofToLean[proof_] := Module[
-  {pf, step, lines = {}, st, opArities, hasCenterDot, allConstants, line},
+  {pf, step, st, opArities, hasCenterDot, allConstants, finalGoalType, envData, src, env},
 
   pf = proof["ProofFunction"];
 
-  (* State association — avoids global mutable state *)
-  st = <|
-    "currentSR" -> None, "pendingSource" -> None, "pendingPos" -> None,
-    "finalLemma" -> "sorry", "finalLemmaEqStr" -> "", "finalLemmaVars" -> {},
-    "lemmaVars" -> <||>, "sharedConstants" -> {},
-    "finalEqStr" -> "", "finalVars" -> {}|>;
+  (* State — bare symbol with DownValues for mutation *)
+  st["currentSR"] = None; st["pendingSource"] = None; st["pendingPos"] = None;
+  st["finalLemma"] = "sorry"; st["finalLemmaTypeExpr"] = None; st["finalLemmaVars"] = {};
+  st["sharedConstants"] = {};
+  st["finalTypeExpr"] = None; st["finalVars"] = {};
+  st["decls"] = {};
 
   (* Check if UnformalizeSymbols is available *)
   $ptlHasUnformalize = Quiet@Check[ResourceFunction["UnformalizeSymbols"]; True, False];
-
-  AppendTo[lines, "import Mathlib.Tactic\n"];
-  AppendTo[lines, "axiom U : Type\n"];
 
   (* Detect operators *)
   opArities = Association[];
@@ -284,13 +321,6 @@ ProofToLean[proof_] := Module[
   Cases[pf, Inactive[Equal][lhs_, rhs_] :> 
     Cases[{lhs, rhs}, f_Symbol[args___] /; Context[f] === "Global`" && StringLength[ToString[f]] > 1 :> (opArities[ToString[f]] = Length[{args}]), Infinity], 
   Infinity];
-
-  If[hasCenterDot,
-    AppendTo[lines, StringTemplate["axiom cdot : U `1` U `1` U"][$ptl$rarr]];
-    AppendTo[lines, StringTemplate["infixl:70 \" `1` \" => cdot"][$ptl$cdot]]];
-  KeyValueMap[
-    AppendTo[lines, StringTemplate["axiom `1` : `2`U"][#1, StringJoin[Table["U " <> $ptl$rarr <> " ", {#2}]]]] &,
-    opArities];
 
   (* Shared constants *)
   allConstants = Association[];
@@ -300,33 +330,49 @@ ProofToLean[proof_] := Module[
   Infinity];
 
   st["sharedConstants"] = Select[Keys[allConstants], StringLength[#] > 1 &];
-  Do[AppendTo[lines, StringTemplate["axiom `1` : U"][c]], {c, Sort[st["sharedConstants"]]}];
-  AppendTo[lines, ""];
 
   (* Process steps *)
   Do[
     step = Quiet@Extract[pf, {2, 1, 2, i}, HoldComplete];
     If[Head[step] =!= HoldComplete, Break[]];
-    line = ptlProcessStep[step, st];
-    If[line =!= Nothing, AppendTo[lines, line]];
+    ptlProcessStep[step, st];
   , {i, 500}];
 
-  AppendTo[lines, "\n-- Find the last lemma to prove the goal --"];
-  AppendTo[lines, StringTemplate["theorem FinalGoal `1` : `2` := by"][
-    If[Length[st["finalLemmaVars"]]>0, StringTemplate["(`1` : U)"][StringRiffle[st["finalLemmaVars"], " "]], ""],
-    st["finalLemmaEqStr"]]];
-  AppendTo[lines, StringTemplate["  exact `1``2`"][
-    st["finalLemma"],
-    If[Length[st["finalLemmaVars"]]>0, StringTemplate[" `1`"][StringRiffle[st["finalLemmaVars"], " "]], ""]]];
+  (* Add FinalGoal theorem *)
+  finalGoalType = If[st["finalLemmaTypeExpr"] =!= None,
+    st["finalLemmaTypeExpr"],
+    ptlWrapForall[st["finalLemmaVars"], st["finalTypeExpr"]]];
+  AppendTo[st["decls"], "FinalGoal"];
+  st["term", "FinalGoal"] = <|
+    "Name" -> "FinalGoal", "Kind" -> "theorem",
+    "_TypeExpr" -> finalGoalType,
+    "_Tactic" -> StringTemplate["  exact `1``2`"][
+      st["finalLemma"],
+      If[Length[st["finalLemmaVars"]] > 0,
+        " " <> StringRiffle[st["finalLemmaVars"], " "], ""]]|>;
 
-  Module[{src, env},
-    src = StringRiffle[lines, "\n"];
-    env = LeanImportString[src];
-    If[Head[env] === LeanEnvironment,
-      (* Stash source in the env *)
-      LeanEnvironment[Append[env[[1]], "_Source" -> src]],
-      (* Compilation failed — return bare source *)
-      env]]];
+  (* Build LeanEnvironment with expression tree types *)
+  envData = <||>;
+  Do[
+    envData[name] = LeanTerm[st["term", name]];
+  , {name, st["decls"]}];
+
+  (* Store metadata *)
+  envData["_Preamble"] = <|
+    "Imports" -> {"Mathlib.Tactic"},
+    "TypeAxiom" -> "U",
+    "Operators" -> opArities,
+    "CenterDot" -> hasCenterDot,
+    "SharedConstants" -> Sort[st["sharedConstants"]]|>;
+  envData["_DeclOrder"] = st["decls"];
+
+  (* Generate source via LeanExportString, then compile *)
+  env = LeanEnvironment[envData];
+  src = LeanExportString[env];
+  
+  (* Compile to verify, then return tree-based env with source *)
+  Quiet[LeanImportString[src]];
+  LeanEnvironment[Append[envData, "_Source" -> src]]];
 
 End[];
 EndPackage[];
