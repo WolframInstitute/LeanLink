@@ -5,6 +5,9 @@
 ```wolfram
 (*PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];*)
 PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True];
+```
+
+```wolfram
 Get["LeanLink`"];
 ```
 
@@ -46,11 +49,11 @@ env["modus_ponens"]["ExprGraph"]
 Build a Lean expression and bind it to an environment for type-checking:
 
 ```wolfram
-LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]
+t = LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]
 ```
 
 ```wolfram
-%["TypeForm"]
+t["TypeForm"]
 ```
 
 Type-check a forall expression:
