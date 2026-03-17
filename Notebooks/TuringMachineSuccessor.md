@@ -14,6 +14,7 @@ Get["WolframInstitute`TuringMachine`"];
 
 ```wolfram
 proofDir = FileNameJoin[{DirectoryName[PacletObject["WolframInstitute/TuringMachine"]["Location"]], "Proofs"}];
+p = "OneSidedTM.";
 ```
 
 A one-sided Turing machine reads a binary-encoded natural number on its tape (LSB at position 0), executes transitions, and halts when the head moves past position 0 to the left. We ask: which TMs compute the successor function? And can we prove it for ALL inputs?
@@ -79,24 +80,23 @@ Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInp
 We import the complete proof directly. `LeanImport` loads the compiled `.olean` environment with all proven theorems:
 
 ```wolfram
-plusOneEnv = LeanImport["OneSidedTM.PlusOne", "ProjectDir" -> proofDir]
+plusOneEnv = LeanImport["OneSidedTM.PlusOne", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
-
 
 ### Machine-Checked Spot Checks via `native_decide`
 
 ```wolfram
-plusOneEnv["rule445_succ_7"]["TypeForm"]
+plusOneEnv[p <> "rule445_succ_7"]["TypeForm"]
 ```
 
 ```wolfram
-plusOneEnv["rule445_succ_255"]["TypeForm"]
+plusOneEnv[p <> "rule445_succ_255"]["TypeForm"]
 ```
 
 Bulk verification -- all inputs 1..65535 in a single `native_decide`:
 
 ```wolfram
-plusOneEnv["rule445_succ_bulk"]["TypeForm"]
+plusOneEnv[p <> "rule445_succ_bulk"]["TypeForm"]
 ```
 
 ### The Universal Proof: `rule445_computesSucc`
@@ -104,11 +104,11 @@ plusOneEnv["rule445_succ_bulk"]["TypeForm"]
 Proves Rule 445 computes successor for ALL inputs by structural induction on the binary representation:
 
 ```wolfram
-plusOneEnv["rule445_computesSucc"]["TypeForm"]
+plusOneEnv[p <> "rule445_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-plusOneEnv["rule445_computesSucc"]["ExprGraph"]
+plusOneEnv[p <> "rule445_computesSucc"]["ExprGraph"]
 ```
 
 ## Part 5: All (2,2) Successor Rules by Class
@@ -126,43 +126,43 @@ Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 180, "
 ### Class A: Carry + Absorb + Scanback (Rule 445)
 
 ```wolfram
-plusOneEnv["rule445_computesSucc"]["ExprGraph"]
+plusOneEnv[p <> "rule445_computesSucc"]["ExprGraph"]
 ```
 
 ### Class B: Bounce-Back Scanback
 
 ```wolfram
-allEnv = LeanImport["OneSidedTM.AllPlusOne", "ProjectDir" -> proofDir]
+allEnv = LeanImport["OneSidedTM.AllPlusOne", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 ```wolfram
-allEnv["classB_computesSucc"]["TypeForm"]
+allEnv[p <> "classB_computesSucc"]["TypeForm"]
 ```
 
 Eight rules proven as cheap instances -- one structural predicate covers all:
 
 ```wolfram
-allEnv["r453_succ"]["TypeForm"]
+allEnv[p <> "r453_succ"]["TypeForm"]
 ```
 
 ```wolfram
-allEnv["classB_computesSucc"]["ExprGraph"]
+allEnv[p <> "classB_computesSucc"]["ExprGraph"]
 ```
 
 ### Class C: Skip + Absorb + Clear-on-Return
 
 ```wolfram
-allEnv["classC_computesSucc"]["TypeForm"]
+allEnv[p <> "classC_computesSucc"]["TypeForm"]
 ```
 
 All 8 rules (1512-1519) via class instantiation:
 
 ```wolfram
-allEnv["r1512_succ"]["TypeForm"]
+allEnv[p <> "r1512_succ"]["TypeForm"]
 ```
 
 ```wolfram
-allEnv["classC_computesSucc"]["ExprGraph"]
+allEnv[p <> "classC_computesSucc"]["ExprGraph"]
 ```
 
 ## Part 6: 3-State (3,2) Proof Classes
@@ -172,11 +172,11 @@ The 3-state space introduces much richer algorithm diversity. Each class has a d
 ### ThreeState: Rule 146514
 
 ```wolfram
-threeEnv = LeanImport["OneSidedTM.ThreeState", "ProjectDir" -> proofDir]
+threeEnv = LeanImport["OneSidedTM.ThreeState", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 ```wolfram
-threeEnv["rule146514_computesSucc"]["TypeForm"]
+threeEnv[p <> "rule146514_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
@@ -184,123 +184,123 @@ Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 31, 50, ImageSize -> 200, 
 ```
 
 ```wolfram
-threeEnv["rule146514_computesSucc"]["ExprGraph"]
+threeEnv[p <> "rule146514_computesSucc"]["ExprGraph"]
 ```
 
 ### Class S: Self-Loop Clear
 
 ```wolfram
-classSEnv = LeanImport["OneSidedTM.ClassS", "ProjectDir" -> proofDir]
+classSEnv = LeanImport["OneSidedTM.ClassS", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 ```wolfram
-classSEnv["classS_computesSucc"]["TypeForm"]
+classSEnv[p <> "classS_computesSucc"]["TypeForm"]
 ```
 
 Self-loop clear with absState=2 and absState=3:
 
 ```wolfram
-classSEnv["r651613_succ"]["TypeForm"]
+classSEnv[p <> "r651613_succ"]["TypeForm"]
 ```
 
 ```wolfram
-classSEnv["r727741_succ"]["TypeForm"]
+classSEnv[p <> "r727741_succ"]["TypeForm"]
 ```
 
 ```wolfram
-classSEnv["classS_computesSucc"]["ExprGraph"]
+classSEnv[p <> "classS_computesSucc"]["ExprGraph"]
 ```
 
 ### Class SX: Toggle + Drop + Self-Loop Variants
 
 ```wolfram
-classSXEnv = LeanImport["OneSidedTM.ClassSX", "ProjectDir" -> proofDir]
+classSXEnv = LeanImport["OneSidedTM.ClassSX", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 Three distinct clearback strategies, one proof framework:
 
 ```wolfram
-classSXEnv["classSX_self_computes"]["TypeForm"]
+classSXEnv[p <> "classSX_self_computes"]["TypeForm"]
 ```
 
 ```wolfram
-classSXEnv["classSX_toggle_computes"]["TypeForm"]
+classSXEnv[p <> "classSX_toggle_computes"]["TypeForm"]
 ```
 
 ```wolfram
-classSXEnv["classSX_drop_computes"]["TypeForm"]
+classSXEnv[p <> "classSX_drop_computes"]["TypeForm"]
 ```
 
 Concrete instances:
 
 ```wolfram
-classSXEnv["r658573_succ"]["TypeForm"]
+classSXEnv[p <> "r658573_succ"]["TypeForm"]
 ```
 
 ```wolfram
-classSXEnv["r741517_succ"]["TypeForm"]
+classSXEnv[p <> "r741517_succ"]["TypeForm"]
 ```
 
 ```wolfram
-classSXEnv["classSX_toggle_computes"]["ExprGraph"]
+classSXEnv[p <> "classSX_toggle_computes"]["ExprGraph"]
 ```
 
 ```wolfram
-classSXEnv["classSX_drop_computes"]["ExprGraph"]
+classSXEnv[p <> "classSX_drop_computes"]["ExprGraph"]
 ```
 
 ### Class SB: Bouncing Clearback
 
 ```wolfram
-classSBEnv = LeanImport["OneSidedTM.ClassSB", "ProjectDir" -> proofDir]
+classSBEnv = LeanImport["OneSidedTM.ClassSB", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 ```wolfram
-classSBEnv["classSB_computesSucc"]["TypeForm"]
+classSBEnv[p <> "classSB_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-classSBEnv["classSB_computesSucc"]["ExprGraph"]
+classSBEnv[p <> "classSB_computesSucc"]["ExprGraph"]
 ```
 
 ### Class D: Delegated Scan (DW + DS)
 
 ```wolfram
-classDEnv = LeanImport["OneSidedTM.ClassD", "ProjectDir" -> proofDir]
+classDEnv = LeanImport["OneSidedTM.ClassD", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 Two delegation variants -- walk-back and scan-back:
 
 ```wolfram
-classDEnv["classDW_computesSucc"]["TypeForm"]
+classDEnv[p <> "classDW_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-classDEnv["classDS_computesSucc"]["TypeForm"]
+classDEnv[p <> "classDS_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-classDEnv["classDW_computesSucc"]["ExprGraph"]
+classDEnv[p <> "classDW_computesSucc"]["ExprGraph"]
 ```
 
 ### Class W: Walk Variants
 
 ```wolfram
-classWEnv = LeanImport["OneSidedTM.ClassW", "ProjectDir" -> proofDir]
+classWEnv = LeanImport["OneSidedTM.ClassW", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 Self, toggle, and drop clearback with walk:
 
 ```wolfram
-classWEnv["exampleW8Self_computesSucc"]["TypeForm"]
+classWEnv[p <> "exampleW8Self_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-classWEnv["exampleW17Toggle_computesSucc"]["TypeForm"]
+classWEnv[p <> "exampleW17Toggle_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-classWEnv["exampleW8Self_computesSucc"]["ExprGraph"]
+classWEnv[p <> "exampleW8Self_computesSucc"]["ExprGraph"]
 ```
 
 ## Part 7: The Near-Miss -- Proving Incorrectness
