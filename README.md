@@ -1,71 +1,88 @@
 # LeanLink
 
-Wolfram Language paclet for native integration with the [Lean 4](https://lean-lang.org/) proof assistant.
+Wolfram Language paclet for native integration with [Lean 4](https://lean-lang.org/).
 
 ## Features
 
-- **Native LibraryLink bridge** -- embeds the Lean runtime directly in Wolfram Language via a C shim, no subprocess overhead
-- **Environment loading** -- loads Lean `.olean` environments and queries constants, theorems, and types
-- **WXF serialization** -- Lean expressions are serialized to WXF and deserialized as symbolic Wolfram expressions (`LeanApp`, `LeanConst`, `LeanForall`, etc.)
-- **Theorem listing** -- enumerate and filter constants in a Lean environment
+- **Native LibraryLink bridge** — embeds the Lean runtime directly via a C shim, no subprocess overhead
+- **Environment loading** — loads `.olean` environments, queries constants, theorems, types
+- **Symbolic expressions** — Lean expressions as `LeanApp`, `LeanConst`, `LeanForall`, etc.
+- **Pretty printing** — WL-side notation rules for source-code-like output (`a * b = b * a`)
+- **Interactive proofs** — `LeanState`/`LeanTactic` for step-by-step proof construction
+- **Mathlib support** — import and inspect Mathlib modules
+- **ProofToLean** — transpile Wolfram `ProofObject` to Lean environments
 
 ## Quick Start
 
 ```wolfram
 << LeanLink`
 
-(* Load a Lean environment *)
-env = LeanLoadEnv["OneSidedTM.PlusOne",
-  "/path/to/proofs/.lake/build/lib:/path/to/lean/lib/lean"];
+(* Import Mathlib algebra *)
+env = LeanImport["Mathlib.Algebra.Group.Basic",
+  "ProjectDir" -> "~/src/mathlib4",
+  "Imports" -> {"Mathlib.Algebra.Group.Basic"}];
 
-(* Get the type of a theorem *)
-LeanGetType[env, "OneSidedTM.rule445_computesSucc"]
-(* LeanApp[LeanConst["OneSidedTM.ComputesSucc", {}], LeanConst["OneSidedTM.rule445", {}]] *)
+env["mul_comm"]["TypeForm"]
+(* "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" *)
+
+(* Interactive proof *)
+state = LeanState[env["one_mul"]];
+state // LeanTactic["simp"]
 ```
 
 ## Building
 
 ### Prerequisites
-- [Lean 4](https://leanprover.github.io/lean4/doc/setup.html) (via elan)
-- [Wolfram Language](https://www.wolfram.com/language/) 15.0+
-- C compiler (clang/gcc)
 
-### Build steps
+- [Lean 4](https://leanprover.github.io/lean4/doc/setup.html) via elan
+- [Wolfram Language](https://www.wolfram.com/language/) 15.0+
+- CMake 3.20+, C compiler
+
+### Build
 
 ```bash
-cd Native
+./build.sh
+```
 
-# Build Lean library
-lake build
+This runs `lake build` for the Lean library, then `cmake` + `make` for the C shim.
+The dylib is output to `LeanLink/LibraryResources/<platform>/`.
 
-# Build C shim
-LEAN_HOME=$(elan which lean | sed 's|/bin/lean||')
-WL_INCLUDE="/Applications/Wolfram 15.0.app/Contents/SystemFiles/IncludeFiles/C"
+### Paclet archive
 
-cc -shared -O2 \
-  -I"$LEAN_HOME/include" -I"$WL_INCLUDE" \
-  -L"$LEAN_HOME/lib/lean" -lleanshared \
-  -rpath "$LEAN_HOME/lib/lean" \
-  -o .lake/build/lib/libLeanLinkShim.dylib \
-  .lake/build/ir/LeanLink.c \
-  .lake/build/ir/LeanLink/WXF.c \
-  .lake/build/ir/LeanLink/EnvStore.c \
-  shim/leanlink_shim.c
+```bash
+wolframscript -f build.wls
+```
+
+Packs `LeanLink/` into a `.paclet` file, installs it, and uploads to Wolfram Cloud.
+
+### Tests
+
+```bash
+wolframscript -f run_tests.wls
 ```
 
 ## Architecture
 
 ```
 LeanLink/
-├── Kernel/           # Wolfram Language package (.wl)
-├── Native/
-│   ├── lib/          # Lean 4 source
-│   │   └── LeanLink/
-│   │       ├── EnvStore.lean   # Environment loading & management
-│   │       └── WXF.lean        # WXF binary serialization
+├── LeanLink/                  # Paclet root
+│   ├── PacletInfo.wl
+│   ├── Kernel/                # Wolfram Language package
+│   │   └── Lean.wl            # Main API, pretty-printer, proof engine
+│   ├── Assets/                # Bundled .lean files
+│   ├── Tests/                 # .wlt test suite
+│   └── LibraryResources/      # Built dylibs (per-platform, gitignored)
+├── Native/                    # Lean + C source
+│   ├── lib/LeanLink/          # Lean 4 source
+│   │   ├── EnvStore.lean      # Environment loading, WXF goal export
+│   │   └── WXF.lean           # WXF binary serialization
 │   └── shim/
-│       └── leanlink_shim.c     # LibraryLink C bridge
-└── PacletInfo.wl
+│       ├── leanlink_shim.c    # LibraryLink C bridge
+│       └── CMakeLists.txt     # Multi-platform build
+├── Notebook/                  # Example notebooks
+├── build.sh                   # Native build script
+├── build.wls                  # Paclet archive script
+└── run_tests.wls              # Test runner
 ```
 
 ## License
