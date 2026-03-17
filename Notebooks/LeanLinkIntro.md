@@ -4,10 +4,7 @@
 
 ```wolfram
 (*PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];*)
-PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]
-```
-
-```wolfram
+Quiet[PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]];
 Get["LeanLink`"];
 ```
 
