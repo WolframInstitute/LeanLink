@@ -68,16 +68,27 @@ Begin["`Private`"];
 (* Shim library                                                                 *)
 (* ============================================================================ *)
 
-$ShimLib := $ShimLib = Module[{loc},
-  loc = FileNameJoin[{PacletObject["LeanLink"]["Location"],
-    "Native", ".lake", "build", "lib", "libLeanLinkShim.dylib"}];
-  If[FileExistsQ[loc], loc,
-    loc = FileNameJoin[{DirectoryName[DirectoryName[$InputFileName]],
-      "Native", ".lake", "build", "lib", "libLeanLinkShim.dylib"}];
-    If[FileExistsQ[loc], loc, $Failed]]];
+$ShimLib := $ShimLib = Module[{loc, pacletDir, devDir, libName, sysDir},
+  (* Platform-specific library name and directory *)
+  libName = Switch[$SystemID,
+    "MacOSX-ARM64" | "MacOSX-x86-64", "libLeanLinkShim.dylib",
+    "Windows-x86-64", "LeanLinkShim.dll",
+    _, "libLeanLinkShim.so"];
+  sysDir = $SystemID;
+  (* Standard paclet location: LibraryResources inside paclet *)
+  pacletDir = Quiet[PacletObject["LeanLink"]["Location"]];
+  If[StringQ[pacletDir],
+    loc = FileNameJoin[{pacletDir, "LibraryResources", sysDir, libName}];
+    If[FileExistsQ[loc], Return[loc, Module]]];
+  (* Dev fallback: Native/ is sibling of the LeanLink/ paclet dir *)
+  devDir = DirectoryName[DirectoryName[$InputFileName]];
+  loc = FileNameJoin[{DirectoryName[devDir],
+    "Native", ".lake", "build", "lib", libName}];
+  If[FileExistsQ[loc], loc, $Failed]];
 
-(* Cache paclet root dir at load time (before $InputFileName becomes unset) *)
-$PacletRoot = DirectoryName[DirectoryName[$InputFileName]];
+(* Dev project root: set only when Native/ exists as sibling (dev mode) *)
+$DevProjectRoot = With[{candidate = DirectoryName[DirectoryName[DirectoryName[$InputFileName]]]},
+  If[DirectoryQ[FileNameJoin[{candidate, "Native"}]], candidate, None]];
 
 LeanLink::nolib = "Shim library not found. Run 'lake build' in the Native/ directory first.";
 LeanLink::err = "Lean error: `1`";
@@ -363,13 +374,8 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
             If[KeyExistsQ[data, "_Tactic"], data["_Tactic"],
               Missing["NoHandle"]]]],
       "TypeForm",
-        If[IntegerQ[handle],
-          With[{r = Quiet[decodeWXF[$ppTypeFn[handle, name, level]]]},
-            If[StringQ[r], r, leanPP[LeanTerm[data]["Type", level]]]],
-          (* Fallback: use leanPP on _TypeExpr or cached Type *)
-          With[{typeExpr = If[KeyExistsQ[data, "_TypeExpr"], data["_TypeExpr"],
-                  LeanTerm[data]["Type", level]]},
-            If[MatchQ[typeExpr, _Missing], Missing["NoHandle"], leanPP[typeExpr]]]],
+        With[{typeExpr = LeanTerm[data]["Type", level]},
+          If[MatchQ[typeExpr, _Missing | $Failed], Missing["NoHandle"], leanPP[typeExpr]]],
       "TermForm",
         If[IntegerQ[handle],
           With[{r = Quiet[decodeWXF[$ppValueFn[handle, name, level]]]},
@@ -675,11 +681,40 @@ iBox[expr_, displayBoxes_] :=
 (* leanPP — fallback pretty-printer for expressions without a handle.          *)
 (* Lean's native PrettyPrinter.ppExpr is used when a handle is available.      *)
 
+(* Proper de Bruijn substitution: replace BVar[cutoff] with FreeVar[name],
+   shift down higher indices, tracking depth through binders *)
+substBVar[expr_, name_String, cutoff_Integer] :=
+  Switch[Head[expr],
+    LeanBVar, Which[
+      expr[[1]] === cutoff, LeanFreeVar[name],
+      expr[[1]] > cutoff, LeanBVar[expr[[1]] - 1],
+      True, expr],
+    LeanForall, LeanForall[expr[[1]],
+      substBVar[expr[[2]], name, cutoff],
+      substBVar[expr[[3]], name, cutoff + 1],
+      expr[[4]]],
+    LeanLam, LeanLam[expr[[1]],
+      substBVar[expr[[2]], name, cutoff],
+      substBVar[expr[[3]], name, cutoff + 1],
+      expr[[4]]],
+    LeanLet, LeanLet[expr[[1]],
+      substBVar[expr[[2]], name, cutoff],
+      substBVar[expr[[3]], name, cutoff],
+      substBVar[expr[[4]], name, cutoff + 1]],
+    LeanApp, LeanApp[
+      substBVar[expr[[1]], name, cutoff],
+      substBVar[expr[[2]], name, cutoff]],
+    LeanMData, LeanMData[expr[[1]], substBVar[expr[[2]], name, cutoff]],
+    LeanProj, LeanProj[expr[[1]], expr[[2]], substBVar[expr[[3]], name, cutoff]],
+    _, expr];
+substBVar0[body_, name_String] := substBVar[body, name, 0];
+
 leanPP[expr_] := leanPP[expr, 6];
 leanPP[e_, 0] := Switch[Head[e],
   LeanConst, shortName[e[[1]]],
   LeanApp, leanPP[e[[1]], 0],
   LeanBVar, "#" <> ToString[e[[1]]],
+  LeanFreeVar, cleanName[e[[1]]],
   LeanLitNat, ToString[e[[1]]],
   LeanLitStr, "\"" <> e[[1]] <> "\"",
   LeanSort, leanPP[e, 1],
@@ -708,6 +743,7 @@ levelToNat[LeanLevelSucc[l_]] := levelToNat[l] + 1;
 levelToNat[_] := 0;
 
 leanPP[LeanBVar[n_Integer], _] := "#" <> ToString[n];
+leanPP[LeanFreeVar[name_String], _] := cleanName[name];
 leanPP[LeanFVar[_], _] := "_fvar";
 leanPP[LeanMVar[_], _] := "?_";
 leanPP[LeanLitNat[n_Integer], _] := ToString[n];
@@ -719,6 +755,7 @@ leanPP[e : LeanForall[_, _, _, _], d_Integer] := Module[
   While[MatchQ[body, LeanForall[_, _, _, _]] && d - Length[binders] > 0,
     {name, dom, body, bi} = List @@ body;
     nm = cleanName[name];
+    body = substBVar0[body, name];
     AppendTo[binders,
       Switch[bi,
         "implicit", "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}",
@@ -738,6 +775,7 @@ leanPP[e : LeanLam[_, _, _, _], d_Integer] := Module[
   While[MatchQ[body, LeanLam[_, _, _, _]] && d - Length[binders] > 0,
     {name, dom, body, bi} = List @@ body;
     nm = cleanName[name];
+    body = substBVar0[body, name];
     AppendTo[binders,
       Switch[bi,
         "implicit", "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}",
@@ -750,7 +788,82 @@ leanPP[LeanLet[name_String, type_, val_, body_], d_Integer] :=
   "let " <> cleanName[name] <> " : " <> leanPP[type, d - 1] <>
   " := " <> leanPP[val, d - 1] <> "; " <> leanPP[body, d - 1];
 
-(* Application — simple uncurry *)
+(* Application — notation-aware rules then generic fallback *)
+
+(* Flatten app chain: LeanApp[LeanApp[f,a],b] -> {f, a, b} *)
+flattenApp[e_LeanApp] := Module[{fn = e, args = {}},
+  While[MatchQ[fn, LeanApp[_, _]],
+    PrependTo[args, fn[[2]]]; fn = fn[[1]]];
+  {fn, args}];
+
+(* Extract head constant name *)
+appHeadName[e_LeanApp] := With[{fa = flattenApp[e]},
+  If[MatchQ[fa[[1]], LeanConst[_String, _]], fa[[1, 1]], None]];
+appHeadName[_] := None;
+
+(* Infix helper — last 2 args *)
+leanPPInfix[e_LeanApp, d_Integer, op_String] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      leanPP[args[[-2]], d - 1] <> " " <> op <> " " <> leanPP[args[[-1]], d - 1],
+      leanPP[flattenApp[e][[1]], d - 1] <> " " <> StringRiffle[leanPP[#, d - 1] & /@ args, " "]]];
+
+(* Eq *)
+leanPP[e_LeanApp, d_Integer] /;
+  appHeadName[e] === "Eq" && Length[flattenApp[e][[2]]] >= 3 :=
+  With[{args = flattenApp[e][[2]]},
+    leanPP[args[[-2]], d - 1] <> " = " <> leanPP[args[[-1]], d - 1]];
+
+(* Ne *)
+leanPP[e_LeanApp, d_Integer] /;
+  appHeadName[e] === "Ne" && Length[flattenApp[e][[2]]] >= 3 :=
+  With[{args = flattenApp[e][[2]]},
+    leanPP[args[[-2]], d - 1] <> " \[NotEqual] " <> leanPP[args[[-1]], d - 1]];
+
+(* Neg.neg / HNeg.hNeg — unary prefix *)
+leanPP[e_LeanApp, d_Integer] /;
+  MatchQ[appHeadName[e], "Neg.neg" | "HNeg.hNeg" | "instHNeg.hNeg"] :=
+  "-" <> leanPP[Last[flattenApp[e][[2]]], d - 1];
+
+(* Arithmetic infix *)
+leanPP[e_LeanApp, d_Integer] /; MatchQ[appHeadName[e], "HMul.hMul" | "instHMul.hMul"] := leanPPInfix[e, d, "*"];
+leanPP[e_LeanApp, d_Integer] /; MatchQ[appHeadName[e], "HAdd.hAdd" | "instHAdd.hAdd"] := leanPPInfix[e, d, "+"];
+leanPP[e_LeanApp, d_Integer] /; MatchQ[appHeadName[e], "HSub.hSub" | "instHSub.hSub"] := leanPPInfix[e, d, "-"];
+leanPP[e_LeanApp, d_Integer] /; MatchQ[appHeadName[e], "HDiv.hDiv" | "instHDiv.hDiv"] := leanPPInfix[e, d, "/"];
+leanPP[e_LeanApp, d_Integer] /; MatchQ[appHeadName[e], "HPow.hPow" | "instHPow.hPow"] := leanPPInfix[e, d, "^"];
+leanPP[e_LeanApp, d_Integer] /; MatchQ[appHeadName[e], "HSMul.hSMul" | "instHSMul.hSMul"] := leanPPInfix[e, d, "\[CenterDot]"];
+
+(* Comparisons *)
+leanPP[e_LeanApp, d_Integer] /; StringEndsQ[Replace[appHeadName[e], None -> ""], ".le"] := leanPPInfix[e, d, "\[LessEqual]"];
+leanPP[e_LeanApp, d_Integer] /; StringEndsQ[Replace[appHeadName[e], None -> ""], ".lt"] := leanPPInfix[e, d, "<"];
+
+(* Logic *)
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Iff" && Length[flattenApp[e][[2]]] == 2 := leanPPInfix[e, d, "\[DoubleLeftRightArrow]"];
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "And" && Length[flattenApp[e][[2]]] == 2 := leanPPInfix[e, d, "\[And]"];
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Or" && Length[flattenApp[e][[2]]] == 2 := leanPPInfix[e, d, "\[Or]"];
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Not" && Length[flattenApp[e][[2]]] == 1 :=
+  "\[Not]" <> leanPP[flattenApp[e][[2, 1]], d - 1];
+
+(* Exists *)
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Exists" :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 1 && MatchQ[Last[args], LeanLam[_, _, _, _]],
+      "\[Exists] " <> cleanName[Last[args][[1]]] <> ", " <> leanPP[Last[args][[3]], d - 1],
+      "Exists " <> StringRiffle[leanPP[#, d - 1] & /@ args, " "]]];
+
+(* OfNat.ofNat — render as literal number *)
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "OfNat.ofNat" :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2, leanPP[args[[2]], d - 1],
+      "OfNat " <> StringRiffle[leanPP[#, d - 1] & /@ args, " "]]];
+
+(* Function.Injective / Bijective *)
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Function.Injective" :=
+  "Injective " <> leanPP[Last[flattenApp[e][[2]]], d - 1];
+leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Function.Bijective" :=
+  "Bijective " <> leanPP[Last[flattenApp[e][[2]]], d - 1];
+
+(* Generic fallback *)
 leanPP[e_LeanApp, d_Integer] := Module[
   {fn = e, args = {}, a},
   While[MatchQ[fn, LeanApp[_, _]],
@@ -1134,7 +1247,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
 LeanImport[file_String, opts : OptionsPattern[]] /;
   FileExistsQ[file] && StringEndsQ[file, ".lean"] :=
   Module[{absFile, projDir, modName, tmpDir, oleanFile, result, searchPath,
-          pacletNativeDir, tcFile, tcName, leanBin, leanLibDir, content, names},
+          tcFile, tcName, leanBin, leanLibDir, content, names},
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
     (* If within a lake project, delegate to module-based import *)
@@ -1147,8 +1260,9 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
         "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
         opts], Module]];
     (* Resolve the correct lean binary from the LeanLink project toolchain *)
-    pacletNativeDir = FileNameJoin[{$PacletRoot, "Native"}];
-    tcFile = FileNameJoin[{pacletNativeDir, "lean-toolchain"}];
+    If[StringQ[$DevProjectRoot],
+      tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}],
+      tcFile = None];
     If[FileExistsQ[tcFile],
       tcName = StringTrim[Import[tcFile, "Text"]];
       tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
@@ -1379,6 +1493,16 @@ LeanGoal /: LeanGoal[data_Association][prop_String] :=
     "Context", Lookup[data, "context", {}],
     _, data[prop]];
 
+(* Helper: pretty-print a goal target using leanPP when expression available *)
+ppGoalTarget[g_Association] :=
+  If[KeyExistsQ[g, "targetExpr"] && !MatchQ[g["targetExpr"], _String | _Missing],
+    leanPP[g["targetExpr"]], Lookup[g, "target", "?"]];
+
+(* Helper: pretty-print a context entry type *)
+ppCtxType[entry_Association] :=
+  If[KeyExistsQ[entry, "typeExpr"] && !MatchQ[entry["typeExpr"], _String | _Missing],
+    leanPP[entry["typeExpr"]], Lookup[entry, "type", "?"]];
+
 (* MakeBoxes for LeanState *)
 LeanState /: MakeBoxes[LeanState[data_Association], StandardForm] :=
   Module[{n = Lookup[data, "goalCount", 0], goals = Lookup[data, "goals", {}]},
@@ -1391,11 +1515,11 @@ LeanState /: MakeBoxes[LeanState[data_Association], StandardForm] :=
             MapIndexed[
               Module[{g = #1[[1]], idx = #2[[1]], ctx, target},
                 ctx = Lookup[g, "context", {}];
-                target = Lookup[g, "target", "?"];
+                target = ppGoalTarget[g];
                 Column[{
                   If[Length[ctx] > 0,
                     Column[
-                      (Style[#["name"] <> " : " <> #["type"], "Input"] & /@ ctx),
+                      (Style[#["name"] <> " : " <> ppCtxType[#], "Input"] & /@ ctx),
                       Spacings -> 0.3],
                     Nothing],
                   Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
@@ -1406,12 +1530,12 @@ LeanState /: MakeBoxes[LeanState[data_Association], StandardForm] :=
 
 (* MakeBoxes for LeanGoal *)
 LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] :=
-  Module[{ctx = Lookup[data, "context", {}], target = Lookup[data, "target", "?"]},
+  Module[{ctx = Lookup[data, "context", {}], target = ppGoalTarget[data]},
     With[{display =
       Column[{
         If[Length[ctx] > 0,
           Column[
-            (Style[#["name"] <> " : " <> #["type"], "Input"] & /@ ctx),
+            (Style[#["name"] <> " : " <> ppCtxType[#], "Input"] & /@ ctx),
             Spacings -> 0.3],
           Nothing],
         Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],

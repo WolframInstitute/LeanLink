@@ -372,7 +372,8 @@ def goalToWXF (env : Environment) (mstate : Meta.State) (goalId : MVarId) : IO B
           let tyPP ← PrettyPrinter.ppExpr ldecl.type
           ctxEntries := ctxEntries.push (WXF.wlAssociation #[
             (WXF.string "name", WXF.string ldecl.userName.toString),
-            (WXF.string "type", WXF.string s!"{tyPP}")])
+            (WXF.string "type", WXF.string s!"{tyPP}"),
+            (WXF.string "typeExpr", WXF.exprToWXF ldecl.type)])
       return WXF.wlAssociation #[
         (WXF.string "target", WXF.string s!"{targetPP}"),
         (WXF.string "targetExpr", WXF.exprToWXF target),

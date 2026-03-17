@@ -11,6 +11,34 @@ set(WL_INCLUDE "/Applications/Wolfram 15.0.app/Contents/SystemFiles/IncludeFiles
 set(NATIVE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 set(IR_DIR "${NATIVE_DIR}/.lake/build/ir")
 
+# --- Paclet LibraryResources output ---
+set(PACLET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../LeanLink")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+        set(WL_SYSID "MacOSX-ARM64")
+    else()
+        set(WL_SYSID "MacOSX-x86-64")
+    endif()
+    set(SHIM_LIB_NAME "libLeanLinkShim.dylib")
+    set(LEAN_SHARED_NAME "libleanshared.dylib")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+        set(WL_SYSID "Linux-ARM64")
+    else()
+        set(WL_SYSID "Linux-x86-64")
+    endif()
+    set(SHIM_LIB_NAME "libLeanLinkShim.so")
+    set(LEAN_SHARED_NAME "libleanshared.so")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(WL_SYSID "Windows-x86-64")
+    set(SHIM_LIB_NAME "LeanLinkShim.dll")
+    set(LEAN_SHARED_NAME "leanshared.dll")
+endif()
+
+set(LIB_RES_DIR "${PACLET_DIR}/LibraryResources/${WL_SYSID}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${LIB_RES_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${LIB_RES_DIR}")
+
 # Shim shared library
 add_library(LeanLinkShim SHARED
     leanlink_shim.c
@@ -33,12 +61,14 @@ target_include_directories(LeanLinkShim PRIVATE
 target_link_directories(LeanLinkShim PRIVATE ${LEAN_HOME}/lib/lean)
 target_link_libraries(LeanLinkShim PRIVATE leanshared)
 
-# Fix @rpath/libleanshared.dylib to absolute path for WolframKernel compatibility
-add_custom_command(TARGET LeanLinkShim POST_BUILD
-    COMMAND install_name_tool -change @rpath/libleanshared.dylib
-        ${LEAN_HOME}/lib/lean/libleanshared.dylib $<TARGET_FILE:LeanLinkShim>
-    COMMENT "Fixing libleanshared.dylib path for WolframKernel"
-)
+# Post-build: fix dylib paths (macOS) and copy libleanshared
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    add_custom_command(TARGET LeanLinkShim POST_BUILD
+        COMMAND install_name_tool -change @rpath/libleanshared.dylib
+            ${LEAN_HOME}/lib/lean/libleanshared.dylib $<TARGET_FILE:LeanLinkShim>
+        COMMENT "Fixing libleanshared.dylib path for WolframKernel"
+    )
+endif()
 
 # Standalone test
 add_executable(test_lean_proper test_lean_proper.c

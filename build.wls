@@ -1,15 +1,16 @@
 #!/usr/bin/env wolframscript
 
 name = "LeanLink"
+pacletDir = FileNameJoin[{Directory[], name}]
 
-PacletDirectoryLoad["."]
+PacletDirectoryLoad[pacletDir]
 paclet = PacletObject[name]
 
-pacletFile = CreatePacletArchive["."]
+pacletFile = CreatePacletArchive[pacletDir]
 
 Echo[StringTemplate["Paclet `` has size ``"][pacletFile, FileSize[pacletFile]]]
 
-PacletDirectoryUnload["."]
+PacletDirectoryUnload[pacletDir]
 
 PacletInstall[pacletFile, ForceVersionInstall -> True]
 

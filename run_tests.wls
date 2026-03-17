@@ -1,7 +1,8 @@
 #!/usr/bin/env wolframscript
 (* run_tests.wls -- Run all .wlt test files and report results *)
 
-$pacletDir = DirectoryName[$ScriptCommandLine[[1]]];
+$rootDir = DirectoryName[$ScriptCommandLine[[1]]];
+$pacletDir = FileNameJoin[{$rootDir, "LeanLink"}];
 $testDir = FileNameJoin[{$pacletDir, "Tests"}];
 
 (* Set globals for test files *)
@@ -9,7 +10,7 @@ PacletDirectoryLoad[$pacletDir];
 Needs["LeanLink`"];
 
 (* LeanLink Native build dir -- self-contained test environment *)
-$LeanLinkTestProjectDir = ExpandFileName[FileNameJoin[{$pacletDir, "Native"}]];
+$LeanLinkTestProjectDir = ExpandFileName[FileNameJoin[{$rootDir, "Native"}]];
 
 Print["LeanLink Test Runner"];
 Print["===================="];
