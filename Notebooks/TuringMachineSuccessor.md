@@ -13,9 +13,11 @@ Get["WolframInstitute`TuringMachine`"];
 ```
 
 ```wolfram
-proofDir = FileNameJoin[{DirectoryName[PacletObject["WolframInstitute/TuringMachine"]["Location"]], "Proofs"}];
 p = "OneSidedTM.";
-leanImport[mod_] := LeanImport[mod, "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
+With[{pd = FileNameJoin[{PacletObject["WolframInstitute/TuringMachine"]["Location"], "Proofs"}]},
+  If[DirectoryQ[FileNameJoin[{pd, ".lake"}]],
+    leanImport[file_] := LeanImport[FileNameJoin[{pd, file}], "Filter" -> "OneSidedTM"],
+    leanImport[file_] := LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/" <> file, "Filter" -> "OneSidedTM"]]]
 ```
 
 A one-sided Turing machine reads a binary-encoded natural number on its tape (LSB at position 0), executes transitions, and halts when the head moves past position 0 to the left. We ask: which TMs compute the successor function? And can we prove it for ALL inputs?
@@ -69,7 +71,7 @@ Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInp
 ## Part 4: The Universal Proof
 
 ```wolfram
-plusOneEnv = leanImport["OneSidedTM.PlusOne"]
+plusOneEnv = leanImport["OneSidedTM/PlusOne.lean"]
 ```
 
 ### Machine-Checked Spot Checks via `native_decide`
@@ -101,7 +103,7 @@ Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 180, "
 ### Class B: Bounce-Back Scanback (8 rules)
 
 ```wolfram
-allEnv = leanImport["OneSidedTM.AllPlusOne"]
+allEnv = leanImport["OneSidedTM/AllPlusOne.lean"]
 ```
 
 ```wolfram
@@ -127,7 +129,7 @@ allEnv[p <> "classC_computesSucc"]["ExprGraph"]
 ### ThreeState: Rule 146514
 
 ```wolfram
-threeEnv = leanImport["OneSidedTM.ThreeState"]
+threeEnv = leanImport["OneSidedTM/ThreeState.lean"]
 ```
 
 ```wolfram
@@ -145,7 +147,7 @@ threeEnv[p <> "rule146514_computesSucc"]["ExprGraph"]
 ### Class S: Self-Loop Clear
 
 ```wolfram
-classSEnv = leanImport["OneSidedTM.ClassS"]
+classSEnv = leanImport["OneSidedTM/ClassS.lean"]
 ```
 
 ```wolfram
@@ -159,7 +161,7 @@ classSEnv[p <> "classS_computesSucc"]["ExprGraph"]
 ### Class SX: Toggle + Drop + Self-Loop Variants
 
 ```wolfram
-classSXEnv = leanImport["OneSidedTM.ClassSX"]
+classSXEnv = leanImport["OneSidedTM/ClassSX.lean"]
 ```
 
 ```wolfram
@@ -173,7 +175,7 @@ classSXEnv[p <> "classSX_toggle_computes"]["ExprGraph"]
 ### Class SB: Bouncing Clearback
 
 ```wolfram
-classSBEnv = leanImport["OneSidedTM.ClassSB"]
+classSBEnv = leanImport["OneSidedTM/ClassSB.lean"]
 ```
 
 ```wolfram
@@ -187,7 +189,7 @@ classSBEnv[p <> "classSB_computesSucc"]["ExprGraph"]
 ### Class D: Delegated Scan (DW + DS)
 
 ```wolfram
-classDEnv = leanImport["OneSidedTM.ClassD"]
+classDEnv = leanImport["OneSidedTM/ClassD.lean"]
 ```
 
 ```wolfram
@@ -201,7 +203,7 @@ classDEnv[p <> "classDW_computesSucc"]["ExprGraph"]
 ### Class W: Walk Variants
 
 ```wolfram
-classWEnv = leanImport["OneSidedTM.ClassW"]
+classWEnv = leanImport["OneSidedTM/ClassW.lean"]
 ```
 
 ```wolfram
