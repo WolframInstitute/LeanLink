@@ -25,7 +25,11 @@ Create a Lean project with Mathlib as a dependency and build the modules used in
 ## Setup
 
 ```wolfram
-PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];
+(*PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];*)
+PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]
+```
+
+```wolfram
 Get["LeanLink`"];
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 ```
@@ -308,18 +312,28 @@ Visualize the full type of `exists_aeval_eq_zero` as a graph:
 ftaEnv["IsAlgClosed.exists_aeval_eq_zero"]["ExprGraph"]
 ```
 
-### A simple proof: commutativity
+### A simple proof: `mul_one`
 
-To see LeanLink's tactic engine in action, let's prove something simple from the algebra environment:
+To see LeanLink's tactic engine in action, let's prove `mul_one` step by step.
+
+Open the proof goal:
 
 ```wolfram
 s0 = LeanState[algEnv, "mul_one"]
 ```
 
-```wolfram
-s0["Goals"][[1]]["Target"]
-```
+The state shows the goal we need to prove. Not yet complete:
 
 ```wolfram
 s0["Complete"]
+```
+
+Close it with `simp`:
+
+```wolfram
+s1 = LeanTactic["simp [MulOneClass.mul_one]"][s0]
+```
+
+```wolfram
+s1["Complete"]
 ```

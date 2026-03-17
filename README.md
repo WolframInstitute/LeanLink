@@ -61,6 +61,19 @@ Packs `LeanLink/` into a `.paclet` file, installs it, and uploads to Wolfram Clo
 wolframscript -f run_tests.wls
 ```
 
+### Publish notebooks
+
+```bash
+wolframscript -f publish_notebooks.wls
+```
+
+Converts markdown sources to `.nb`, evaluates all cells, uploads to Wolfram Cloud.
+
+## Notebooks
+
+- [LeanLinkIntro](https://www.wolframcloud.com/obj/nikm/LeanLink/LeanLinkIntro.nb) — Getting started with LeanLink
+- [MathlibExamples](https://www.wolframcloud.com/obj/nikm/LeanLink/MathlibExamples.nb) — Exploring Mathlib from Wolfram Language
+
 ## Architecture
 
 ```
@@ -79,9 +92,10 @@ LeanLink/
 │   └── shim/
 │       ├── leanlink_shim.c    # LibraryLink C bridge
 │       └── CMakeLists.txt     # Multi-platform build
-├── Notebook/                  # Example notebooks
+├── Notebooks/                 # Example notebooks (.md source + .nb)
 ├── build.sh                   # Native build script
 ├── build.wls                  # Paclet archive script
+├── publish_notebooks.wls      # Notebook evaluation + cloud upload
 └── run_tests.wls              # Test runner
 ```
 

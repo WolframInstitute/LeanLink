@@ -1,0 +1,623 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Wolfram 15.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       154,          7]
+NotebookDataLength[     26487,        614]
+NotebookOptionsPosition[     19271,        528]
+NotebookOutlinePosition[     19591,        542]
+CellTagsIndexPosition[     19548,        539]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell["LeanLink \[LongDash] Interactive Lean from Wolfram Language", "Title",ExpressionUUID->"93c44a71-0a9b-4377-843f-9e73d188dbdf"],
+
+Cell["Setup", "Chapter",ExpressionUUID->"c2bd0174-67fc-41a7-8e8b-84ef5c6b0982"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"PacletDirectoryLoad", "[", 
+   RowBox[{
+    RowBox[{"NotebookDirectory", "[", "]"}], " ", "//", " ", 
+    "ParentDirectory"}], "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"Get", "[", "\"\<LeanLink`\>\"", "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"nativeDir", " ", "=", " ", 
+   RowBox[{"FileNameJoin", "[", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"PacletObject", "[", "\"\<LeanLink\>\"", "]"}], 
+       "[", "\"\<Location\>\"", "]"}], ",", " ", "\"\<Native\>\""}], "}"}], 
+    "]"}]}], ";"}]}], "Input",ExpressionUUID->"3bb837ec-e050-4237-aabe-\
+13ce23037f75"],
+
+Cell["Importing a Lean Environment", "Chapter",ExpressionUUID->"10015811-69b1-4b15-89f4-4fec5b9ed9b1"],
+
+Cell[BoxData[
+ RowBox[{"env", " ", "=", " ", 
+  RowBox[{"LeanImport", "[", 
+   RowBox[{"\"\<LeanLink.Examples\>\"", ",", "\n", "  ", 
+    RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "nativeDir"}], ",", "\n", 
+    "  ", 
+    RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+     RowBox[{"{", "\"\<LeanLink\>\"", "}"}]}], ",", "\n", "  ", 
+    RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<Examples\>\""}]}], 
+   "]"}]}]], "Input",ExpressionUUID->"c84b18bf-1e26-45c4-a789-975d9b668aa9"],
+
+Cell[BoxData[
+ RowBox[{"Keys", "[", "env", "]"}]], "Input",ExpressionUUID->"f866dc48-5d5c-4323-9da5-b870d4a36e0f"],
+
+Cell["Inspecting Types and Terms", "Chapter",ExpressionUUID->"7264c764-47b8-4a12-8bbf-875c82d23d6f"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"adc21e41-22fc-\
+4aeb-9b89-a730a0aed7a8"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "[", "\"\<Type\>\"", "]"}]], "Input",ExpressionUUID->"6090df1d-2899-4da2-\
+8d95-cd48ae449f34"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.Vec.head\>\"", "]"}], "[", 
+  RowBox[{"\"\<TypeForm\>\"", ",", " ", "1"}], "]"}]], "Input",ExpressionUUID->\
+"943ff429-72eb-4c85-83d7-ae96bda7ec0b"],
+
+Cell["Expression Graphs", "Chapter",ExpressionUUID->"a82165ac-8e1d-42be-a0a6-82e3d68d0a74"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.modus_ponens\>\"", "]"}], 
+  "[", "\"\<ExprGraph\>\"", "]"}]], "Input",ExpressionUUID->"5f330927-a6a3-\
+4353-939f-1e27e8bd1ecf"],
+
+Cell["Constructing Expressions", "Chapter",ExpressionUUID->"42661718-4cc5-40e8-a4ca-bb70c5754f66"],
+
+Cell["\<\
+Build a Lean expression and bind it to an environment for type-checking:\
+\>", "Text",ExpressionUUID->"f5a75b15-3ad2-4762-bd12-b4f248be3323"],
+
+Cell[BoxData[
+ RowBox[{"LeanTerm", "[", 
+  RowBox[{
+   RowBox[{"LeanApp", "[", 
+    RowBox[{
+     RowBox[{"LeanConst", "[", "\"\<Nat.succ\>\"", "]"}], ",", " ", 
+     RowBox[{"LeanLitNat", "[", "42", "]"}]}], "]"}], ",", " ", "env"}], 
+  "]"}]], "Input",ExpressionUUID->"22f52676-641c-474d-8b16-98a2dc7acc16"],
+
+Cell[BoxData[
+ RowBox[{"%", "[", "\"\<TypeForm\>\"", "]"}]], "Input",ExpressionUUID->"c0ea7c7d-64ff-4bb3-a7ca-62a9ca73d4ab"],
+
+Cell["Type-check a forall expression:", "Text",ExpressionUUID->"491c2699-c285-49de-a634-3d4bc490eb84"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"LeanTerm", "[", 
+   RowBox[{
+    RowBox[{"LeanForall", "[", 
+     RowBox[{"\"\<n\>\"", ",", " ", 
+      RowBox[{"LeanConst", "[", "\"\<Nat\>\"", "]"}], ",", " ", 
+      RowBox[{"LeanConst", "[", "\"\<Nat\>\"", "]"}], ",", 
+      " ", "\"\<default\>\""}], "]"}], ",", " ", "env"}], "]"}], 
+  "[", "\"\<Type\>\"", "]"}]], "Input",ExpressionUUID->"7c83a9ff-6e10-4dc5-\
+9406-e575c55352b3"],
+
+Cell["Interactive Tactic Proofs", "Chapter",ExpressionUUID->"fd72f345-5a53-4c66-b745-c71d7ee7c7cd"],
+
+Cell[TextData[{
+ "Identity: ",
+ Cell[BoxData[Cell[TextData[{
+   Cell[BoxData[
+    FormBox[
+     RowBox[{"\[ForAll]", 
+      StyleBox["P", "TI"], 
+      RowBox[{
+       RowBox[{":", "Prop"}], ",", " "}], 
+      StyleBox["P", "TI"], "\[Rule]", 
+      StyleBox["P", "TI"]}], TraditionalForm]], "InlineFormula",
+    ExpressionUUID->"f05ea117-4cbb-4c47-a808-c558e8c6b0a5"],
+   "  "
+  }], "DisplayFormula",ExpressionUUID->
+   "e5243377-5577-4523-905c-5f0da5c1a14d"]],ExpressionUUID->
+  "0d418884-8f8b-4d07-a3e8-5e45b91fddf5"]
+}], "Section",ExpressionUUID->"55a7f74c-5d5a-4a24-88b8-51cfaca5dee4"],
+
+Cell[BoxData[
+ RowBox[{"s0", " ", "=", " ", 
+  RowBox[{"LeanState", "[", 
+   RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+   "]"}]}]], "Input",ExpressionUUID->"7a327bd5-d7ed-443b-9a8e-403cdbd8f878"],
+
+Cell[BoxData[
+ RowBox[{"s1", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"LeanTactic", "[", "\"\<intro P\>\"", "]"}], "[", "s0", 
+   "]"}]}]], "Input",ExpressionUUID->"15e78297-dcbb-4608-afbf-77f05eeacd7d"],
+
+Cell[BoxData[
+ RowBox[{"s2", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"LeanTactic", "[", "\"\<intro h\>\"", "]"}], "[", "s1", 
+   "]"}]}]], "Input",ExpressionUUID->"0dd785bb-366e-45da-b0d6-e7007af94a4e"],
+
+Cell[BoxData[
+ RowBox[{"s3", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"LeanTactic", "[", "\"\<exact h\>\"", "]"}], "[", "s2", 
+   "]"}]}]], "Input",ExpressionUUID->"2db77e50-79ba-4955-b79d-e2d41726c323"],
+
+Cell[TextData[{
+ "Modus Ponens: ",
+ Cell[BoxData[Cell[TextData[{
+   Cell[BoxData[
+    FormBox[
+     RowBox[{
+      StyleBox["P", "TI"], "\[Rule]", 
+      RowBox[{"(", 
+       RowBox[{
+        StyleBox["P", "TI"], "\[Rule]", 
+        StyleBox["Q", "TI"]}], ")"}], "\[Rule]", 
+      StyleBox["Q", "TI"]}], TraditionalForm]], "InlineFormula",
+    ExpressionUUID->"5f2396c7-d29f-41f9-b046-137447d1734e"],
+   "  "
+  }], "DisplayFormula",ExpressionUUID->
+   "aee8771b-562b-45cf-bcf8-2f7467d99190"]],ExpressionUUID->
+  "9d7d0a95-c44f-4d32-abe1-6c12b9a8637b"]
+}], "Section",ExpressionUUID->"da03d98c-b11d-491c-8839-ba4fa32d0695"],
+
+Cell[BoxData[
+ RowBox[{"s0", " ", "=", " ", 
+  RowBox[{"LeanState", "[", 
+   RowBox[{"env", "[", "\"\<LeanLink.Examples.modus_ponens\>\"", "]"}], 
+   "]"}]}]], "Input",ExpressionUUID->"8ab123e3-096e-4245-9350-0cd1ca588b21"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"LeanTactic", "[", 
+   RowBox[{"{", 
+    RowBox[{"\"\<intro P Q hP hPQ\>\"", ",", " ", "\"\<exact hPQ hP\>\""}], 
+    "}"}], "]"}], "[", "s0", "]"}]], "Input",ExpressionUUID->"34f4b876-5930-\
+4f1b-9719-4621c4c6d1b5"],
+
+Cell[TextData[{
+ "Contrapositive: ",
+ Cell[BoxData[Cell[TextData[{
+   Cell[BoxData[
+    FormBox[
+     RowBox[{
+      RowBox[{"(", 
+       RowBox[{
+        StyleBox["P", "TI"], "\[Rule]", 
+        StyleBox["Q", "TI"]}], ")"}], "\[Rule]", 
+      RowBox[{"(", 
+       RowBox[{"\[Not]", 
+        StyleBox["Q", "TI"], 
+        RowBox[{"\[Rule]", "\[Not]"}], 
+        StyleBox["P", "TI"]}], ")"}]}], TraditionalForm]], "InlineFormula",
+    ExpressionUUID->"b908cee8-4dec-4022-b776-cf1b89018667"],
+   "  "
+  }], "DisplayFormula",ExpressionUUID->
+   "1565380e-78a7-4838-a11e-aadf9cff1917"]],ExpressionUUID->
+  "b27253a2-53fd-4048-960b-79b2220cf4fb"]
+}], "Section",ExpressionUUID->"d29eec3b-aac9-474a-a880-7d179b2244ac"],
+
+Cell[BoxData[
+ RowBox[{"s0", " ", "=", " ", 
+  RowBox[{"LeanState", "[", 
+   RowBox[{"env", "[", "\"\<LeanLink.Examples.contrapositive\>\"", "]"}], 
+   "]"}]}]], "Input",ExpressionUUID->"a9eda5aa-44b0-43b0-9950-75c3fb906652"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"LeanTactic", "[", 
+   RowBox[{"{", 
+    RowBox[{"\"\<intro P Q hPQ hnQ hP\>\"", ",", " ", "\"\<apply hnQ\>\"", ",",
+      " ", "\"\<exact hPQ hP\>\""}], "}"}], "]"}], "[", "s0", "]"}]], "Input",\
+ExpressionUUID->"164f4aad-f07d-43f8-9c8d-51292ca4a824"],
+
+Cell[TextData[{
+ "And Commutativity: ",
+ Cell[BoxData[Cell[TextData[{
+   Cell[BoxData[
+    FormBox[
+     RowBox[{
+      StyleBox["P", "TI"], "\[Wedge]", 
+      StyleBox["Q", "TI"], "\[Rule]", 
+      StyleBox["Q", "TI"], "\[Wedge]", 
+      StyleBox["P", "TI"]}], TraditionalForm]], "InlineFormula",
+    ExpressionUUID->"a0664b20-1133-4f7f-91b0-7e1f8a21e84c"],
+   "  "
+  }], "DisplayFormula",ExpressionUUID->
+   "c323077b-314b-4a36-a30e-53dc24a64318"]],ExpressionUUID->
+  "4693048c-2543-4bb0-8d42-832fe1d2034b"]
+}], "Section",ExpressionUUID->"da663223-e567-4756-9bd5-75c48f4c3a5b"],
+
+Cell[BoxData[
+ RowBox[{"s0", " ", "=", " ", 
+  RowBox[{"LeanState", "[", 
+   RowBox[{"env", "[", "\"\<LeanLink.Examples.and_comm\>\"", "]"}], 
+   "]"}]}]], "Input",ExpressionUUID->"8273c028-3659-4cee-aa00-83a63c1c6c35"],
+
+Cell[BoxData[
+ RowBox[{"s1", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"LeanTactic", "[", "\"\<intro P Q h\>\"", "]"}], "[", "s0", 
+   "]"}]}]], "Input",ExpressionUUID->"4ba558c6-1efe-45e8-a5ef-851181dd2998"],
+
+Cell[BoxData[
+ RowBox[{"s2", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"LeanTactic", "[", "\"\<constructor\>\"", "]"}], "[", "s1", 
+   "]"}]}]], "Input",ExpressionUUID->"53324c0f-75af-4ae4-84a8-f9e887d8a51c"],
+
+Cell["Accessing Goal Properties", "Section",ExpressionUUID->"01f3f9ef-f2af-42ac-a8c2-06444fda8233"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"s0", " ", "=", " ", 
+   RowBox[{"LeanState", "[", 
+    RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], "]"}]}], 
+  ";"}], "\n", 
+ RowBox[{"s0", "[", "\"\<Goals\>\"", "]"}]}], "Input",ExpressionUUID->\
+"2b0eb275-6202-41dc-b2df-c5091f50e378"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"s0", "[", "\"\<Goals\>\"", "]"}], "[", 
+   RowBox[{"[", "1", "]"}], "]"}], "[", "\"\<Target\>\"", "]"}]], "Input",Expr\
+essionUUID->"360deb61-6874-4ef0-bd50-932dfaced434"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"s0", "[", "\"\<Goals\>\"", "]"}], "[", 
+   RowBox[{"[", "1", "]"}], "]"}], "[", "\"\<Context\>\"", "]"}]], "Input",Exp\
+ressionUUID->"d6eadd06-929c-480d-93e6-a4d9b03e8df8"],
+
+Cell[BoxData[
+ RowBox[{"s0", "[", "\"\<Complete\>\"", "]"}]], "Input",ExpressionUUID->"e8f5cf08-2f80-41f6-a695-3deb18703ed5"],
+
+Cell["LeanEnvironment", "Chapter",ExpressionUUID->"83a516b3-3d93-49c2-84dd-26610e23ea3f"],
+
+Cell[TextData[{
+ Cell["LeanImport", "InlineCode",ExpressionUUID->
+  "4c284030-afcf-46b0-8630-2960c46945ce"],
+ " returns a ",
+ Cell["LeanEnvironment", "InlineCode",ExpressionUUID->
+  "4e8c6a4b-1684-4f02-8363-694081cd1f19"],
+ " \[LongDash] a typed wrapper around ",
+ Cell["<|name \[RightArrow] LeanTerm, ...|>", "InlineCode",ExpressionUUID->
+  "dbcec59a-d14b-417a-b1b5-be3725268ad1"],
+ ":"
+}], "Text",ExpressionUUID->"2d8b7c18-d3d1-4858-b376-be7c956e1832"],
+
+Cell[BoxData[
+ RowBox[{"Head", "[", "env", "]"}]], "Input",ExpressionUUID->"20dbb951-2f78-4a2c-8d64-5c29c27199b8"],
+
+Cell[BoxData[
+ RowBox[{"Length", "[", "env", "]"}]], "Input",ExpressionUUID->"4fa3deda-a210-4d28-8546-c4b6fd9f3a5e"],
+
+Cell[BoxData[
+ RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}]], "Input",Exp\
+ressionUUID->"0ba5ecfb-4c84-4e0f-a550-1c98344ae5f0"],
+
+Cell[BoxData[
+ RowBox[{"Information", "[", 
+  RowBox[{"env", ",", " ", "\"\<Kinds\>\""}], "]"}]], "Input",ExpressionUUID->\
+"b4a16062-92fa-4118-bacb-757572366d92"],
+
+Cell["Exporting to Source", "Chapter",ExpressionUUID->"661124df-1e8b-437c-bc1b-2a597e1a784b"],
+
+Cell["Single term", "Section",ExpressionUUID->"fe76d44c-1508-4bf3-992c-b7cee1b8e472"],
+
+Cell[BoxData[
+ RowBox[{"LeanExportString", "[", 
+  RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], 
+  "]"}]], "Input",ExpressionUUID->"015a2ede-3c27-4a5d-a95e-1b7338370bc8"],
+
+Cell["Full environment to file", "Section",ExpressionUUID->"8758b2ab-4ccc-4e65-b8d7-419f2e1b8728"],
+
+Cell[BoxData[
+ RowBox[{"LeanExport", "[", 
+  RowBox[{
+   RowBox[{"FileNameJoin", "[", 
+    RowBox[{"{", 
+     RowBox[{"$TemporaryDirectory", ",", " ", "\"\<out.lean\>\""}], "}"}], 
+    "]"}], ",", " ", "env"}], "]"}]], "Input",ExpressionUUID->"2fdb65be-946a-\
+4e1d-8794-0bfb6f997db4"],
+
+Cell["Importing from Source String", "Chapter",ExpressionUUID->"313d844b-2727-4916-8795-52002f582c86"],
+
+Cell[BoxData[
+ RowBox[{"imported", " ", "=", " ", 
+  RowBox[{
+  "LeanImportString", "[", "\"\<theorem myT : Nat.succ 0 = 1 := rfl\>\"", 
+   "]"}]}]], "Input",ExpressionUUID->"3dc15016-33cc-4c94-a042-e59f22d6b5db"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"imported", "[", "\"\<myT\>\"", "]"}], "[", "\"\<TypeForm\>\"", 
+  "]"}]], "Input",ExpressionUUID->"8a801024-4be2-4320-b563-3197a8f65af5"],
+
+Cell["ProofToLean \[LongDash] ProofObject to Lean", "Chapter",ExpressionUUID->"cc7e1068-3ef1-4971-b234-8490079d5dff"],
+
+Cell[TextData[{
+ "Transpile a Wolfram ",
+ Cell["ProofObject", "InlineCode",ExpressionUUID->
+  "48aa5071-5b20-4bb4-a573-c641fbfcece2"],
+ " into a ",
+ Cell["LeanEnvironment", "InlineCode",ExpressionUUID->
+  "406ce1bb-c486-49e8-93ca-119c88a9b990"],
+ " with expression tree types and structured tactics:"
+}], "Text",ExpressionUUID->"408a3d97-b8ad-4b7b-9250-b9a96878b00c"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"proof", " ", "=", " ", 
+   RowBox[{"FindEquationalProof", "[", 
+    RowBox[{
+     RowBox[{"a", " ", "==", " ", "c"}], ",", " ", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"a", " ", "==", " ", "b"}], ",", " ", 
+       RowBox[{"b", " ", "==", " ", "c"}]}], "}"}]}], "]"}]}], ";"}], "\n", 
+ RowBox[{"leanEnv", " ", "=", " ", 
+  RowBox[{"ProofToLean", "[", "proof", "]"}]}]}], "Input",ExpressionUUID->\
+"a08dd15c-38cf-4943-aeab-929db7a71891"],
+
+Cell["Inspecting the result", "Section",ExpressionUUID->"54a70995-365c-4965-beeb-520757cacedd"],
+
+Cell[BoxData[
+ RowBox[{"Keys", "[", "leanEnv", "]"}]], "Input",ExpressionUUID->"c7ea498c-fb48-4754-80a2-5604644c5f9e"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"leanEnv", "[", "\"\<FinalGoal\>\"", "]"}], "[", "\"\<Type\>\"", 
+  "]"}]], "Input",ExpressionUUID->"9f63253a-d7b5-4e01-968e-3b68664a4800"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"leanEnv", "[", "\"\<FinalGoal\>\"", "]"}], "[", "\"\<TypeForm\>\"",
+   "]"}]], "Input",ExpressionUUID->"d7c92c8f-cf7b-46b6-985a-80a8432d7fe1"],
+
+Cell["Generated Lean source", "Section",ExpressionUUID->"d347fb5a-b76d-4d14-9b9c-d194888888b6"],
+
+Cell[BoxData[
+ RowBox[{"LeanExportString", "[", "leanEnv", "]"}]], "Input",ExpressionUUID->"8bc0a5b9-b25c-4135-a014-28ece19dff03"],
+
+Cell["\<\
+Roundtrip: ProofObject \[RightArrow] LeanTerm \[RightArrow] Source \
+\[RightArrow] LeanImportString\
+\>", "Section",ExpressionUUID->"3e4f2432-cd42-4764-b0df-e8d5e544da36"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"src", " ", "=", " ", 
+   RowBox[{"LeanExportString", "[", "leanEnv", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"roundtrip", " ", "=", " ", 
+   RowBox[{"LeanImportString", "[", "src", "]"}]}], ";"}], "\n", 
+ RowBox[{"Keys", "[", "roundtrip", "]"}]}], "Input",ExpressionUUID->"cd9dbbcb-\
+3e3a-4a56-b289-9a026fc21bc0"],
+
+Cell["Auto-completing proofs with LeanState", "Section",ExpressionUUID->"8f7bedf0-1cf2-4bff-8f30-fe7d0d3a2c79"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"goal", " ", "=", " ", 
+   RowBox[{"leanEnv", "[", "\"\<FinalGoal\>\"", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"state", " ", "=", " ", 
+   RowBox[{"LeanState", "@", "goal"}]}], ";"}], "\n", 
+ RowBox[{"state", "[", "\"\<Complete\>\"", "]"}]}], "Input",ExpressionUUID->\
+"b7a1c6d7-d4b9-4ae0-89c8-e8f7c49bc549"],
+
+Cell["Importing from Mathlib", "Chapter",ExpressionUUID->"7d94dbb4-8ce8-49c6-891a-edbc2553a33d"],
+
+Cell[TextData[{
+ "LeanLink can import theorems from any Lean project. Point ",
+ Cell["\"ProjectDir\"", "InlineCode",ExpressionUUID->
+  "14ae8f77-c0cb-4646-86c2-96d3abe88f64"],
+ " at a mathlib4 checkout where ",
+ Cell["lake exe cache get && lake build Mathlib.Tactic.Ring", "InlineCode",
+  ExpressionUUID->"6c3339a0-d231-4469-8182-9da4fd556629"],
+ " has been run:"
+}], "Text",ExpressionUUID->"8627a99d-1a5b-49fa-a6ce-7d7f9047155c"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"mathlibDir", " ", "=", " ", 
+   RowBox[{"FileNameJoin", "[", 
+    RowBox[{"{", 
+     RowBox[{
+     "$HomeDirectory", ",", " ", "\"\<src\>\"", ",", 
+      " ", "\"\<mathlib4\>\""}], "}"}], "]"}]}], ";"}], "\n", 
+ RowBox[{"If", "[", 
+  RowBox[{
+   RowBox[{"DirectoryQ", "[", 
+    RowBox[{"FileNameJoin", "[", 
+     RowBox[{"{", 
+      RowBox[{
+      "mathlibDir", ",", " ", "\"\<.lake\>\"", ",", " ", "\"\<build\>\""}], 
+      "}"}], "]"}], "]"}], ",", "\n", "  ", 
+   RowBox[{
+    RowBox[{"mathEnv", " ", "=", " ", 
+     RowBox[{"LeanImport", "[", 
+      RowBox[{"\"\<Mathlib.Tactic.Ring\>\"", ",", "\n", "    ", 
+       RowBox[{"\"\<ProjectDir\>\"", " ", "->", " ", "mathlibDir"}], ",", 
+       "\n", "    ", 
+       RowBox[{"\"\<Imports\>\"", " ", "->", " ", 
+        RowBox[{"{", "\"\<Mathlib.Tactic.Ring\>\"", "}"}]}], ",", "\n", 
+       "    ", 
+       RowBox[{"\"\<Filter\>\"", " ", "->", " ", "\"\<Ring\>\""}]}], "]"}]}], 
+    ";", "\n", "  ", 
+    RowBox[{"Keys", "[", "mathEnv", "]"}]}], ",", "\n", 
+   "  ", "\"\<Mathlib not built \[LongDash] run in mathlib4/: lake exe cache \
+get && lake build Mathlib.Tactic.Ring\>\""}], "]"}]}], "Input",ExpressionUUID->\
+"bbc97062-5dce-4862-93fc-6e0bddffdfab"],
+
+Cell["Structured Tactics", "Chapter",ExpressionUUID->"10399a3a-9e05-4413-a852-a10a35137dc3"],
+
+Cell["Tactics are symbolic objects with Lean-native names:", "Text",ExpressionUUID->"da7f48b5-90fb-4235-84ee-15a526c2aa83"],
+
+Cell[BoxData[
+ RowBox[{"LeanTactic", "[", 
+  RowBox[{"\"\<exact\>\"", ",", " ", 
+   RowBox[{"LeanConst", "[", "\"\<h\>\"", "]"}]}], "]"}]], "Input",ExpressionU\
+UID->"05f7ecef-4515-41a7-ba89-a6ab77c1e1c6"],
+
+Cell[BoxData[
+ RowBox[{"LeanTactic", "[", 
+  RowBox[{"{", "\n", "  ", 
+   RowBox[{
+    RowBox[{"LeanTactic", "[", 
+     RowBox[{"\"\<intro\>\"", ",", " ", 
+      RowBox[{"{", 
+       RowBox[{"\"\<P\>\"", ",", " ", "\"\<h\>\""}], "}"}]}], "]"}], ",", 
+    "\n", "  ", 
+    RowBox[{"LeanTactic", "[", 
+     RowBox[{"\"\<exact\>\"", ",", " ", 
+      RowBox[{"LeanConst", "[", "\"\<h\>\"", "]"}]}], "]"}]}], "\n", "}"}], 
+  "]"}]], "Input",ExpressionUUID->"a89108c2-47e2-4b2c-8870-072ae0c3c230"],
+
+Cell["Apply structured tactics to proof states:", "Text",ExpressionUUID->"04724268-121f-494a-a3d7-d3ccbead2651"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"s0", " ", "=", " ", 
+   RowBox[{"LeanState", "[", 
+    RowBox[{"env", "[", "\"\<LeanLink.Examples.identity\>\"", "]"}], "]"}]}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"s1", " ", "=", " ", 
+   RowBox[{
+    RowBox[{"LeanTactic", "[", 
+     RowBox[{"\"\<intro\>\"", ",", " ", 
+      RowBox[{"{", "\"\<P\>\"", "}"}]}], "]"}], "[", "s0", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"s2", " ", "=", " ", 
+   RowBox[{
+    RowBox[{"LeanTactic", "[", 
+     RowBox[{"\"\<intro\>\"", ",", " ", 
+      RowBox[{"{", "\"\<h\>\"", "}"}]}], "]"}], "[", "s1", "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"s3", " ", "=", " ", 
+   RowBox[{
+    RowBox[{"LeanTactic", "[", 
+     RowBox[{"\"\<exact\>\"", ",", " ", 
+      RowBox[{"LeanConst", "[", "\"\<h\>\"", "]"}]}], "]"}], "[", "s2", 
+    "]"}]}], ";"}], "\n", 
+ RowBox[{"s3", "[", "\"\<Complete\>\"", "]"}]}], "Input",ExpressionUUID->\
+"2b240859-87eb-41e1-aed4-18ddf61cc901"]
+},
+FrontEndVersion->"15.0 for Mac OS X ARM (64-bit) (January 5, 2026)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"f055e6b3-4a69-4ffb-8784-2312d6141abc"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[554, 20, 131, 0, 70, "Title",ExpressionUUID->"93c44a71-0a9b-4377-843f-9e73d188dbdf"],
+Cell[688, 22, 79, 0, 70, "Chapter",ExpressionUUID->"c2bd0174-67fc-41a7-8e8b-84ef5c6b0982"],
+Cell[770, 24, 615, 17, 70, "Input",ExpressionUUID->"3bb837ec-e050-4237-aabe-13ce23037f75"],
+Cell[1388, 43, 102, 0, 70, "Chapter",ExpressionUUID->"10015811-69b1-4b15-89f4-4fec5b9ed9b1"],
+Cell[1493, 45, 482, 9, 70, "Input",ExpressionUUID->"c84b18bf-1e26-45c4-a789-975d9b668aa9"],
+Cell[1978, 56, 114, 1, 70, "Input",ExpressionUUID->"f866dc48-5d5c-4323-9da5-b870d4a36e0f"],
+Cell[2095, 59, 100, 0, 70, "Chapter",ExpressionUUID->"7264c764-47b8-4a12-8bbf-875c82d23d6f"],
+Cell[2198, 61, 192, 4, 70, "Input",ExpressionUUID->"adc21e41-22fc-4aeb-9b89-a730a0aed7a8"],
+Cell[2393, 67, 188, 4, 70, "Input",ExpressionUUID->"6090df1d-2899-4da2-8d95-cd48ae449f34"],
+Cell[2584, 73, 217, 4, 70, "Input",ExpressionUUID->"943ff429-72eb-4c85-83d7-ae96bda7ec0b"],
+Cell[2804, 79, 91, 0, 70, "Chapter",ExpressionUUID->"a82165ac-8e1d-42be-a0a6-82e3d68d0a74"],
+Cell[2898, 81, 197, 4, 70, "Input",ExpressionUUID->"5f330927-a6a3-4353-939f-1e27e8bd1ecf"],
+Cell[3098, 87, 98, 0, 70, "Chapter",ExpressionUUID->"42661718-4cc5-40e8-a4ca-bb70c5754f66"],
+Cell[3199, 89, 151, 2, 70, "Text",ExpressionUUID->"f5a75b15-3ad2-4762-bd12-b4f248be3323"],
+Cell[3353, 93, 309, 7, 70, "Input",ExpressionUUID->"22f52676-641c-474d-8b16-98a2dc7acc16"],
+Cell[3665, 102, 124, 1, 70, "Input",ExpressionUUID->"c0ea7c7d-64ff-4bb3-a7ca-62a9ca73d4ab"],
+Cell[3792, 105, 102, 0, 70, "Text",ExpressionUUID->"491c2699-c285-49de-a634-3d4bc490eb84"],
+Cell[3897, 107, 420, 10, 70, "Input",ExpressionUUID->"7c83a9ff-6e10-4dc5-9406-e575c55352b3"],
+Cell[4320, 119, 99, 0, 70, "Chapter",ExpressionUUID->"fd72f345-5a53-4c66-b745-c71d7ee7c7cd"],
+Cell[4422, 121, 589, 16, 70, "Section",ExpressionUUID->"55a7f74c-5d5a-4a24-88b8-51cfaca5dee4"],
+Cell[5014, 139, 219, 4, 70, "Input",ExpressionUUID->"7a327bd5-d7ed-443b-9a8e-403cdbd8f878"],
+Cell[5236, 145, 200, 4, 70, "Input",ExpressionUUID->"15e78297-dcbb-4608-afbf-77f05eeacd7d"],
+Cell[5439, 151, 200, 4, 70, "Input",ExpressionUUID->"0dd785bb-366e-45da-b0d6-e7007af94a4e"],
+Cell[5642, 157, 200, 4, 70, "Input",ExpressionUUID->"2db77e50-79ba-4955-b79d-e2d41726c323"],
+Cell[5845, 163, 621, 17, 70, "Section",ExpressionUUID->"da03d98c-b11d-491c-8839-ba4fa32d0695"],
+Cell[6469, 182, 223, 4, 70, "Input",ExpressionUUID->"8ab123e3-096e-4245-9350-0cd1ca588b21"],
+Cell[6695, 188, 250, 6, 70, "Input",ExpressionUUID->"34f4b876-5930-4f1b-9719-4621c4c6d1b5"],
+Cell[6948, 196, 711, 20, 70, "Section",ExpressionUUID->"d29eec3b-aac9-474a-a880-7d179b2244ac"],
+Cell[7662, 218, 225, 4, 70, "Input",ExpressionUUID->"a9eda5aa-44b0-43b0-9950-75c3fb906652"],
+Cell[7890, 224, 286, 6, 70, "Input",ExpressionUUID->"164f4aad-f07d-43f8-9c8d-51292ca4a824"],
+Cell[8179, 232, 579, 15, 70, "Section",ExpressionUUID->"da663223-e567-4756-9bd5-75c48f4c3a5b"],
+Cell[8761, 249, 219, 4, 70, "Input",ExpressionUUID->"8273c028-3659-4cee-aa00-83a63c1c6c35"],
+Cell[8983, 255, 204, 4, 70, "Input",ExpressionUUID->"4ba558c6-1efe-45e8-a5ef-851181dd2998"],
+Cell[9190, 261, 204, 4, 70, "Input",ExpressionUUID->"53324c0f-75af-4ae4-84a8-f9e887d8a51c"],
+Cell[9397, 267, 99, 0, 70, "Section",ExpressionUUID->"01f3f9ef-f2af-42ac-a8c2-06444fda8233"],
+Cell[9499, 269, 293, 7, 70, "Input",ExpressionUUID->"2b0eb275-6202-41dc-b2df-c5091f50e378"],
+Cell[9795, 278, 218, 5, 70, "Input",ExpressionUUID->"360deb61-6874-4ef0-bd50-932dfaced434"],
+Cell[10016, 285, 219, 5, 70, "Input",ExpressionUUID->"d6eadd06-929c-480d-93e6-a4d9b03e8df8"],
+Cell[10238, 292, 125, 1, 70, "Input",ExpressionUUID->"e8f5cf08-2f80-41f6-a695-3deb18703ed5"],
+Cell[10366, 295, 89, 0, 70, "Chapter",ExpressionUUID->"83a516b3-3d93-49c2-84dd-26610e23ea3f"],
+Cell[10458, 297, 454, 10, 70, "Text",ExpressionUUID->"2d8b7c18-d3d1-4858-b376-be7c956e1832"],
+Cell[10915, 309, 114, 1, 70, "Input",ExpressionUUID->"20dbb951-2f78-4a2c-8d64-5c29c27199b8"],
+Cell[11032, 312, 116, 1, 70, "Input",ExpressionUUID->"4fa3deda-a210-4d28-8546-c4b6fd9f3a5e"],
+Cell[11151, 315, 146, 2, 70, "Input",ExpressionUUID->"0ba5ecfb-4c84-4e0f-a550-1c98344ae5f0"],
+Cell[11300, 319, 163, 3, 70, "Input",ExpressionUUID->"b4a16062-92fa-4118-bacb-757572366d92"],
+Cell[11466, 324, 93, 0, 70, "Chapter",ExpressionUUID->"661124df-1e8b-437c-bc1b-2a597e1a784b"],
+Cell[11562, 326, 85, 0, 70, "Section",ExpressionUUID->"fe76d44c-1508-4bf3-992c-b7cee1b8e472"],
+Cell[11650, 328, 190, 3, 70, "Input",ExpressionUUID->"015a2ede-3c27-4a5d-a95e-1b7338370bc8"],
+Cell[11843, 333, 98, 0, 70, "Section",ExpressionUUID->"8758b2ab-4ccc-4e65-b8d7-419f2e1b8728"],
+Cell[11944, 335, 284, 7, 70, "Input",ExpressionUUID->"2fdb65be-946a-4e1d-8794-0bfb6f997db4"],
+Cell[12231, 344, 102, 0, 70, "Chapter",ExpressionUUID->"313d844b-2727-4916-8795-52002f582c86"],
+Cell[12336, 346, 213, 4, 70, "Input",ExpressionUUID->"3dc15016-33cc-4c94-a042-e59f22d6b5db"],
+Cell[12552, 352, 172, 3, 70, "Input",ExpressionUUID->"8a801024-4be2-4320-b563-3197a8f65af5"],
+Cell[12727, 357, 117, 0, 70, "Chapter",ExpressionUUID->"cc7e1068-3ef1-4971-b234-8490079d5dff"],
+Cell[12847, 359, 367, 8, 70, "Text",ExpressionUUID->"408a3d97-b8ad-4b7b-9250-b9a96878b00c"],
+Cell[13217, 369, 481, 12, 70, "Input",ExpressionUUID->"a08dd15c-38cf-4943-aeab-929db7a71891"],
+Cell[13701, 383, 95, 0, 70, "Section",ExpressionUUID->"54a70995-365c-4965-beeb-520757cacedd"],
+Cell[13799, 385, 118, 1, 70, "Input",ExpressionUUID->"c7ea498c-fb48-4754-80a2-5604644c5f9e"],
+Cell[13920, 388, 173, 3, 70, "Input",ExpressionUUID->"9f63253a-d7b5-4e01-968e-3b68664a4800"],
+Cell[14096, 393, 177, 3, 70, "Input",ExpressionUUID->"d7c92c8f-cf7b-46b6-985a-80a8432d7fe1"],
+Cell[14276, 398, 95, 0, 70, "Section",ExpressionUUID->"d347fb5a-b76d-4d14-9b9c-d194888888b6"],
+Cell[14374, 400, 130, 1, 70, "Input",ExpressionUUID->"8bc0a5b9-b25c-4135-a014-28ece19dff03"],
+Cell[14507, 403, 181, 3, 70, "Section",ExpressionUUID->"3e4f2432-cd42-4764-b0df-e8d5e544da36"],
+Cell[14691, 408, 352, 8, 70, "Input",ExpressionUUID->"cd9dbbcb-3e3a-4a56-b289-9a026fc21bc0"],
+Cell[15046, 418, 111, 0, 70, "Section",ExpressionUUID->"8f7bedf0-1cf2-4bff-8f30-fe7d0d3a2c79"],
+Cell[15160, 420, 347, 8, 70, "Input",ExpressionUUID->"b7a1c6d7-d4b9-4ae0-89c8-e8f7c49bc549"],
+Cell[15510, 430, 96, 0, 70, "Chapter",ExpressionUUID->"7d94dbb4-8ce8-49c6-891a-edbc2553a33d"],
+Cell[15609, 432, 430, 8, 70, "Text",ExpressionUUID->"8627a99d-1a5b-49fa-a6ce-7d7f9047155c"],
+Cell[16042, 442, 1243, 30, 70, "Input",ExpressionUUID->"bbc97062-5dce-4862-93fc-6e0bddffdfab"],
+Cell[17288, 474, 92, 0, 70, "Chapter",ExpressionUUID->"10399a3a-9e05-4413-a852-a10a35137dc3"],
+Cell[17383, 476, 123, 0, 70, "Text",ExpressionUUID->"da7f48b5-90fb-4235-84ee-15a526c2aa83"],
+Cell[17509, 478, 205, 4, 70, "Input",ExpressionUUID->"05f7ecef-4515-41a7-ba89-a6ab77c1e1c6"],
+Cell[17717, 484, 491, 12, 70, "Input",ExpressionUUID->"a89108c2-47e2-4b2c-8870-072ae0c3c230"],
+Cell[18211, 498, 112, 0, 70, "Text",ExpressionUUID->"04724268-121f-494a-a3d7-d3ccbead2651"],
+Cell[18326, 500, 941, 26, 70, "Input",ExpressionUUID->"2b240859-87eb-41e1-aed4-18ddf61cc901"]
+}
+]
+*)
+
+(* End of internal cache information *)
