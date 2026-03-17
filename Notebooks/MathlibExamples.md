@@ -328,12 +328,23 @@ The state shows the goal we need to prove. Not yet complete:
 s0["Complete"]
 ```
 
-Close it with `simp`:
+Introduce the variables:
 
 ```wolfram
-s1 = LeanTactic["simp [MulOneClass.mul_one]"][s0]
+s1 = LeanTactic["intro M inst a"][s0]
 ```
 
 ```wolfram
-s1["Complete"]
+s1["Goals"][[1]]["Target"]
 ```
+
+Close it with the axiom:
+
+```wolfram
+s2 = LeanTactic["exact MulOneClass.mul_one a"][s1]
+```
+
+```wolfram
+s2["Complete"]
+```
+

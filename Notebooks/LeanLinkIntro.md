@@ -4,7 +4,7 @@
 
 ```wolfram
 (*PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];*)
-Quiet[PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]];
+PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True];
 Get["LeanLink`"];
 ```
 
@@ -232,7 +232,7 @@ If[DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
     "ProjectDir" -> mathlibDir,
     "Imports" -> {"Mathlib.Tactic.Ring"},
     "Filter" -> "Ring"];
-  Keys[mathEnv],
+  Length[mathEnv],
   "Mathlib not built — run in mathlib4/: lake exe cache get && lake build Mathlib.Tactic.Ring"]
 ```
 
