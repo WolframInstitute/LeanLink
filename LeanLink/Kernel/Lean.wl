@@ -1195,7 +1195,7 @@ LeanFreeEnvironment[handle_Integer] := ($freeEnvFn[handle]; Null);
 
 (* --- LeanImport --- *)
 
-Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> ""};
+Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False};
 
 (* Internal name patterns to filter out *)
 $internalPatterns = "_cstage1" | "_cstage2" | "_rarg" | "_sunfold" |
@@ -1235,7 +1235,8 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
           If[IntegerQ[h] && h > 0,
             kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
             If[AssociationQ[kinds],
-              kinds = KeySelect[kinds, !isInternalName[#] &];
+              If[!TrueQ[OptionValue["IncludeInternal"]],
+                kinds = KeySelect[kinds, !isInternalName[#] &]];
               results = LeanEnvironment[Append[Association @ KeyValueMap[
                 Function[{n, k},
                   n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]],
@@ -1298,7 +1299,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       kinds = decodeWXF[$listConstantKindsFn[handle, ""]];
       If[!AssociationQ[kinds], Return[$Failed, Module]];
       kinds = KeySelect[kinds,
-        !isInternalName[#] && MemberQ[srcNames, #] &];
+        (TrueQ[OptionValue["IncludeInternal"]] || !isInternalName[#]) && MemberQ[srcNames, #] &];
       (* Build lazy LeanTerms *)
       res = LeanEnvironment[Append[Association @ KeyValueMap[
         Function[{name, kind},
@@ -1315,7 +1316,8 @@ LeanImport[opts : OptionsPattern[]] := Module[{handle, kinds},
   kinds = decodeWXF[$listConstantKindsFn[handle, OptionValue["Filter"]]];
   If[!AssociationQ[kinds], Return[$Failed]];
   (* Filter out internal/generated names *)
-  kinds = KeySelect[kinds, !isInternalName[#] &];
+  If[!TrueQ[OptionValue["IncludeInternal"]],
+    kinds = KeySelect[kinds, !isInternalName[#] &]];
   (* Build lazy LeanTerms: only Name + Kind + _Handle, no Type/Term yet *)
   LeanEnvironment[Append[Association @ KeyValueMap[
     Function[{name, kind},
