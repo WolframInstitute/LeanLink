@@ -50,7 +50,7 @@ The dylib is output to `LeanLink/LibraryResources/<platform>/`.
 ### Paclet archive
 
 ```bash
-wolframscript -f build.wls
+./build.wls
 ```
 
 Packs `LeanLink/` into a `.paclet` file, installs it, and uploads to Wolfram Cloud.
@@ -58,16 +58,16 @@ Packs `LeanLink/` into a `.paclet` file, installs it, and uploads to Wolfram Clo
 ### Tests
 
 ```bash
-wolframscript -f run_tests.wls
+./run_tests.wls
 ```
 
 ### Publish notebooks
 
 ```bash
-wolframscript -f publish_notebooks.wls
+./publish_notebooks.wls
 ```
 
-Converts `.md` → `.nb`, evaluates all cells (via headless `MathematicaServer`), uploads to Wolfram Cloud.
+Uploads `.nb` notebooks to Wolfram Cloud.
 
 ## Notebooks
 
