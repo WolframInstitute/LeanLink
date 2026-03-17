@@ -14,7 +14,7 @@ Get["WolframInstitute`TuringMachine`"];
 
 ```wolfram
 p = "OneSidedTM.";
-proofDir = FileNameJoin[{PacletObject["WolframInstitute/TuringMachine"]["Location"], "Proofs"}];
+proofDir = FileNameJoin[{NotebookDirectory[], "..", "TuringMachine", "Proofs"}];
 leanImport[file_] := LeanImport[FileNameJoin[{proofDir, file}], "Filter" -> "OneSidedTM"]
 ```
 
@@ -69,7 +69,7 @@ Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInp
 ## Part 4: The Universal Proof
 
 ```wolfram
-plusOneEnv = leanImport["OneSidedTM/PlusOne.lean"]
+plusOneEnv = leanImport["OneSidedTM.PlusOne"]
 ```
 
 ### Machine-Checked Spot Checks via `native_decide`
@@ -101,7 +101,7 @@ Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 180, "
 ### Class B: Bounce-Back Scanback (8 rules)
 
 ```wolfram
-allEnv = leanImport["OneSidedTM/AllPlusOne.lean"]
+allEnv = leanImport["OneSidedTM.AllPlusOne"]
 ```
 
 ```wolfram
@@ -127,7 +127,7 @@ allEnv[p <> "classC_computesSucc"]["ExprGraph"]
 ### ThreeState: Rule 146514
 
 ```wolfram
-threeEnv = leanImport["OneSidedTM/ThreeState.lean"]
+threeEnv = leanImport["OneSidedTM.ThreeState"]
 ```
 
 ```wolfram
@@ -145,7 +145,7 @@ threeEnv[p <> "rule146514_computesSucc"]["ExprGraph"]
 ### Class S: Self-Loop Clear
 
 ```wolfram
-classSEnv = leanImport["OneSidedTM/ClassS.lean"]
+classSEnv = leanImport["OneSidedTM.ClassS"]
 ```
 
 ```wolfram
@@ -159,7 +159,7 @@ classSEnv[p <> "classS_computesSucc"]["ExprGraph"]
 ### Class SX: Toggle + Drop + Self-Loop Variants
 
 ```wolfram
-classSXEnv = leanImport["OneSidedTM/ClassSX.lean"]
+classSXEnv = leanImport["OneSidedTM.ClassSX"]
 ```
 
 ```wolfram
@@ -173,7 +173,7 @@ classSXEnv[p <> "classSX_toggle_computes"]["ExprGraph"]
 ### Class SB: Bouncing Clearback
 
 ```wolfram
-classSBEnv = leanImport["OneSidedTM/ClassSB.lean"]
+classSBEnv = leanImport["OneSidedTM.ClassSB"]
 ```
 
 ```wolfram
@@ -187,7 +187,7 @@ classSBEnv[p <> "classSB_computesSucc"]["ExprGraph"]
 ### Class D: Delegated Scan (DW + DS)
 
 ```wolfram
-classDEnv = leanImport["OneSidedTM/ClassD.lean"]
+classDEnv = leanImport["OneSidedTM.ClassD"]
 ```
 
 ```wolfram
@@ -201,7 +201,7 @@ classDEnv[p <> "classDW_computesSucc"]["ExprGraph"]
 ### Class W: Walk Variants
 
 ```wolfram
-classWEnv = leanImport["OneSidedTM/ClassW.lean"]
+classWEnv = leanImport["OneSidedTM.ClassW"]
 ```
 
 ```wolfram
