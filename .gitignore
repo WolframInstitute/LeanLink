@@ -5,6 +5,7 @@
 .DS_Store
 
 # Wolfram
+*.nb
 *.mx
 *.wl.bak
 
