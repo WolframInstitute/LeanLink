@@ -63,8 +63,8 @@ LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment.";
 
 (* Compilation *)
-LeanToFunction::usage = "LeanToFunction[term] converts a Lean definition (LeanTerm of kind \"def\") to a Function with Typed arguments suitable for FunctionCompile.";
-LeanCompile::usage = "LeanCompile[term] compiles a Lean definition to native code via FunctionCompile. LeanCompile[env] compiles all eligible definitions in a LeanEnvironment.";
+LeanToFunction::usage = "LeanToFunction[term] converts a LeanTerm with compilable types to a Function with Typed arguments suitable for FunctionCompile.";
+LeanCompile::usage = "LeanCompile[term] compiles a LeanTerm to native code via FunctionCompile. LeanCompile[env] compiles all eligible terms in a LeanEnvironment.";
 
 Begin["`Private`"];
 
@@ -93,6 +93,9 @@ $ShimLib := $ShimLib = Module[{loc, pacletDir, devDir, libName, sysDir},
 (* Dev project root: set only when Native/ exists as sibling (dev mode) *)
 $DevProjectRoot = With[{candidate = DirectoryName[DirectoryName[DirectoryName[$InputFileName]]]},
   If[DirectoryQ[FileNameJoin[{candidate, "Native"}]], candidate, None]];
+
+(* Paclet root: the directory containing PacletInfo.wl, cached at load time *)
+$PacletRoot = DirectoryName[DirectoryName[$InputFileName]];
 
 LeanLink::nolib = "Shim library not found. Run 'lake build' in the Native/ directory first.";
 LeanLink::err = "Lean error: `1`";
@@ -695,10 +698,12 @@ substBVar[expr_, name_String, cutoff_Integer] :=
       expr[[1]] === cutoff, LeanFreeVar[name],
       expr[[1]] > cutoff, LeanBVar[expr[[1]] - 1],
       True, expr],
-    LeanForall, LeanForall[expr[[1]],
-      substBVar[expr[[2]], name, cutoff],
-      substBVar[expr[[3]], name, cutoff + 1],
-      expr[[4]]],
+    LeanForall, If[Length[expr] >= 4,
+      LeanForall[expr[[1]],
+        substBVar[expr[[2]], name, cutoff],
+        substBVar[expr[[3]], name, cutoff + 1],
+        expr[[4]]],
+      expr],
     LeanLam, LeanLam[expr[[1]],
       substBVar[expr[[2]], name, cutoff],
       substBVar[expr[[3]], name, cutoff + 1],
@@ -1062,6 +1067,77 @@ LeanImportString[src_String] := Module[
   If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
   result];
 
+(* --- LeanImport URL support --- *)
+
+(* Convert GitHub blob URL to raw URL *)
+githubRawURL[url_String] :=
+  StringReplace[url, {
+    "github.com" -> "raw.githubusercontent.com",
+    "/blob/" -> "/"}];
+
+(* Extract the repo base URL and relative path from a GitHub blob URL *)
+githubParts[url_String] := Module[{parts},
+  parts = StringCases[url,
+    RegularExpression["https://github\\.com/([^/]+/[^/]+)/blob/([^/]+)/(.+)"] :>
+      {"$1", "$2", "$3"}];
+  If[Length[parts] > 0, parts[[1]], None]];
+
+(* Parse import statements from Lean source, return module names *)
+parseImports[src_String] :=
+  StringCases[src, RegularExpression["(?m)^import\\s+([A-Za-z_][A-Za-z0-9_.]+)"] :> "$1"];
+
+(* LeanImport[url] -- import from a GitHub URL pointing to a .lean file *)
+LeanImport[url_String, opts : OptionsPattern[]] /;
+  StringStartsQ[url, "http://" | "https://"] && StringEndsQ[url, ".lean"] :=
+  Module[{parts, repo, branch, relPath, baseRaw, tmpDir, downloaded = <||>,
+          queue, modName, content, rawURL, imports, modPath, localPath,
+          targetFile},
+    parts = githubParts[url];
+    If[parts === None,
+      (* Non-GitHub URL: simple download *)
+      content = Quiet[Import[githubRawURL[url], "Text"]];
+      If[!StringQ[content],
+        Message[LeanLink::err, "Failed to download: " <> url];
+        Return[$Failed, Module]];
+      Return[LeanImportString[content], Module]];
+    {repo, branch, relPath} = parts;
+    baseRaw = "https://raw.githubusercontent.com/" <> repo <> "/" <> branch <> "/";
+    (* Create temp project directory *)
+    tmpDir = FileNameJoin[{$TemporaryDirectory,
+      "leanlink_url_" <> ToString[$SessionID] <> "_" <> ToString[RandomInteger[10^6]]}];
+    CreateDirectory[tmpDir];
+    (* BFS: download target file and all its imports *)
+    queue = {relPath};
+    While[Length[queue] > 0,
+      modPath = First[queue];
+      queue = Rest[queue];
+      If[KeyExistsQ[downloaded, modPath], Continue[]];
+      rawURL = baseRaw <> modPath;
+      content = Quiet[Import[rawURL, "Text"]];
+      If[!StringQ[content], Continue[]];
+      AssociateTo[downloaded, modPath -> content];
+      localPath = FileNameJoin[{tmpDir, modPath}];
+      With[{dir = DirectoryName[localPath]},
+        If[!DirectoryQ[dir], CreateDirectory[dir]]];
+      Export[localPath, content, "Text", CharacterEncoding -> "UTF-8"];
+      (* Parse imports and queue them *)
+      imports = parseImports[content];
+      Do[
+        With[{impPath = StringReplace[imp, "." -> "/"] <> ".lean"},
+          If[!KeyExistsQ[downloaded, impPath],
+            AppendTo[queue, impPath]]],
+        {imp, imports}]];
+    (* Compile the target file *)
+    targetFile = FileNameJoin[{tmpDir, relPath}];
+    If[!FileExistsQ[targetFile],
+      Message[LeanLink::err, "Failed to download: " <> url];
+      Return[$Failed, Module]];
+    (* Also fetch lakefile.lean for Lake root detection *)
+    With[{lf = Quiet[Import[baseRaw <> "lakefile.lean", "Text"]]},
+      If[StringQ[lf],
+        Export[FileNameJoin[{tmpDir, "lakefile.lean"}], lf, "Text", CharacterEncoding -> "UTF-8"]]];
+    LeanImport[targetFile]];
+
 (* ============================================================================ *)
 (* Expression head formatting                                                   *)
 (* ============================================================================ *)
@@ -1276,16 +1352,24 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
         "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
         opts], Module]];
     (* Resolve the correct lean binary from the LeanLink project toolchain *)
+    (* Try: 1) dev mode Native/lean-toolchain, 2) paclet-bundled lean-toolchain *)
+    tcFile = None;
     If[StringQ[$DevProjectRoot],
-      tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}],
-      tcFile = None];
+      tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}]];
+    If[!FileExistsQ[tcFile],
+      (* Paclet-bundled lean-toolchain: in paclet root, cached at load time *)
+      tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]];
     If[FileExistsQ[tcFile],
       tcName = StringTrim[Import[tcFile, "Text"]];
       tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
       leanBin = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", tcName, "bin", "lean"}];
       leanLibDir = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", tcName, "lib", "lean"}],
-      leanBin = "lean";
-      leanLibDir = StringTrim[RunProcess[{"lean", "--print-libdir"}, "StandardOutput"]]];
+      (* No toolchain file at all: try elan default, then bare lean *)
+      leanBin = FileNameJoin[{$HomeDirectory, ".elan", "bin", "lean"}];
+      If[!FileExistsQ[leanBin], leanBin = "lean"];
+      leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
+      If[!StringQ[leanLibDir] || !DirectoryQ[leanLibDir],
+        leanLibDir = FileNameJoin[{DirectoryName[DirectoryName[leanBin]], "lib", "lean"}]]];
     (* Standalone file: compile via lean CLI subprocess *)
     modName = FileBaseName[absFile];
     tmpDir = FileNameJoin[{$TemporaryDirectory,
@@ -1293,7 +1377,14 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
     If[DirectoryQ[tmpDir], DeleteDirectory[tmpDir, DeleteContents -> True]];
     tmpDir = CreateDirectory[tmpDir];
     oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
-    result = RunProcess[{leanBin, "-o", oleanFile, "-R", DirectoryName[absFile], absFile}];
+    (* Auto-detect Lake project root by scanning upward for lakefile.lean *)
+    With[{rootDir = Module[{dir = DirectoryName[absFile]},
+      While[dir =!= DirectoryName[dir],
+        If[FileExistsQ[FileNameJoin[{dir, "lakefile.lean"}]],
+          Return[dir, Module]];
+        dir = DirectoryName[dir]];
+      DirectoryName[absFile]]},
+    result = RunProcess[{leanBin, "-o", oleanFile, "-R", rootDir, absFile}]];
     If[result["ExitCode"] =!= 0,
       Message[LeanLink::err, "lean compilation failed: " <> result["StandardError"]];
       DeleteDirectory[tmpDir, DeleteContents -> True];
@@ -1658,9 +1749,8 @@ LeanTactic /: MakeBoxes[t:LeanTactic[tactics_List], StandardForm] :=
 (* LeanToFunction / LeanCompile -- Lean defs -> FunctionCompile                   *)
 (* ============================================================================ *)
 
-LeanToFunction::notdef = "LeanToFunction requires a definition (kind \"def\"), got kind \"`1`\".";
 LeanToFunction::notype = "Cannot map Lean type `1` to a compiled WL type.";
-LeanToFunction::noterm = "Definition has no term body.";
+LeanToFunction::noterm = "Term has no definition body.";
 LeanToFunction::badexpr = "Cannot translate Lean expression to WL: `1`.";
 
 (* ---- Type mapping: Lean type expr -> WL TypeSpecifier string ---- *)
@@ -1882,8 +1972,7 @@ leanExprToWL[LeanLam[name_, type_, body_, _], ctx_List] :=
     tyWL = leanTypeToWL[type];
     b = leanExprToWL[body, Append[ctx, sym]];
     If[FailureQ[tyWL] || FailureQ[b], $Failed,
-      With[{s = sym, t = tyWL, bd = b},
-        Function[Typed[s, t], bd]]]];
+      Function @@ {Typed[sym, tyWL], b}]];
 
 (* MData wrapper -- pass through *)
 leanExprToWL[LeanMData[_, expr_], ctx_List] := leanExprToWL[expr, ctx];
@@ -1927,9 +2016,6 @@ peelLambdas[term_, paramTypes_List] := Module[
 LeanToFunction[term_LeanTerm] := Module[
   {data = term[[1]], kind, typeExpr, termExpr, sig, params, lambdaParams,
    body, ctx, bodyWL, argSpecs, handle, name},
-  kind = Lookup[data, "Kind", "?"];
-  If[kind =!= "def",
-    Message[LeanToFunction::notdef, kind]; Return[$Failed]];
   (* Get type and term *)
   handle = Lookup[data, "_Handle", None];
   name = Lookup[data, "Name", ""];
@@ -1968,7 +2054,7 @@ LeanCompile[env_LeanEnvironment] := Module[
   names = Select[Keys[data], !StringStartsQ[#, "_"] &];
   Do[
     With[{term = env[name]},
-      If[Head[term] === LeanTerm && Lookup[term[[1]], "Kind", ""] === "def",
+      If[Head[term] === LeanTerm,
         With[{cf = Quiet[LeanCompile[term]]},
           If[Head[cf] === CompiledCodeFunction,
             AssociateTo[results, name -> cf]]]]],
