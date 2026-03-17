@@ -188,6 +188,20 @@ VerificationTest[
   TestID -> "LeanExportString-Contains-Sorry"
 ]
 
+(* FFI-based pretty printing *)
+VerificationTest[
+  StringQ[LeanExportString[$filtered["LeanLink.Examples.modus_ponens"]]],
+  True,
+  TestID -> "LeanExportString-LeanTerm-FFI"
+]
+
+VerificationTest[
+  With[{pp = LeanExportString[$filtered["LeanLink.Examples.identity"]]},
+    StringQ[pp] && !StringContainsQ[pp, "sorry"]],
+  True,
+  TestID -> "LeanExportString-LeanTerm-NoSorry"
+]
+
 (* ================================================================ *)
 (* ProofToLean — roundtrip tests                                      *)
 (* ================================================================ *)
@@ -311,6 +325,16 @@ VerificationTest[
     KeyExistsQ[$importedEnv, "myT"],
   True,
   TestID -> "LeanImportString-CompileAndImport"
+]
+
+(* LeanImportString roundtrip with LeanExportString *)
+VerificationTest[
+  Module[{env, src},
+    env = LeanImportString["def myFn (n : Nat) : Nat := n + 1"];
+    src = LeanExportString[env];
+    StringQ[src] && StringContainsQ[src, "myFn"]],
+  True,
+  TestID -> "LeanImportString-ExportString-Roundtrip"
 ]
 
 (* ================================================================ *)
@@ -500,7 +524,6 @@ VerificationTest[
     Module[{env},
       env = LeanImport["Mathlib.FieldTheory.IsAlgClosed.Basic",
         "ProjectDir" -> $mathlibDir,
-        "Imports" -> {"Mathlib.FieldTheory.IsAlgClosed.Basic"},
         "Filter" -> "IsAlgClosed"];
       Head[env] === LeanEnvironment && Length[env] > 0 &&
         AnyTrue[Keys[env], StringContainsQ[#, "IsAlgClosed"] &]]],
@@ -514,7 +537,6 @@ VerificationTest[
     Module[{env, key},
       env = LeanImport["Mathlib.FieldTheory.IsAlgClosed.Basic",
         "ProjectDir" -> $mathlibDir,
-        "Imports" -> {"Mathlib.FieldTheory.IsAlgClosed.Basic"},
         "Filter" -> "IsAlgClosed"];
       key = SelectFirst[Keys[env], StringContainsQ[#, "IsAlgClosed"] &];
       StringQ[key] && StringQ[env[key]["TypeForm"]]]],
@@ -528,7 +550,6 @@ VerificationTest[
     Module[{env},
       env = LeanImport["Mathlib.Analysis.Complex.Polynomial.Basic",
         "ProjectDir" -> $mathlibDir,
-        "Imports" -> {"Mathlib.Analysis.Complex.Polynomial.Basic"},
         "Filter" -> "Complex"];
       Head[env] === LeanEnvironment &&
         AnyTrue[Keys[env], StringContainsQ[#, "isAlgClosed" | "IsAlgClosed"] &]]],

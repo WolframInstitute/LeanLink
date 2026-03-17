@@ -52,6 +52,7 @@ extern lean_object* leanlink_type_check(uint64_t handle, lean_object* exprWXF);
 extern lean_object* leanlink_open_goal(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_apply_tactic(uint64_t stateId, lean_object* tactic);
 extern lean_object* leanlink_open_goal_expr(uint64_t handle, lean_object* exprWXF);
+extern lean_object* leanlink_pp_expr(uint64_t handle, lean_object* exprWXF);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -489,5 +490,32 @@ DLLEXPORT int leanlink_wl_get_used_constants(
 
     lean_object* io_res = leanlink_get_used_constants(handle, name);
     /* name consumed by leanlink_get_used_constants */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * ppExpr(handle, exprWXF) -> MTensor (WXF string)
+ * Pretty-print an arbitrary WXF-encoded expression via Lean's PrettyPrinter.
+ */
+DLLEXPORT int leanlink_wl_pp_expr(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    MTensor wxf_tensor = MArgument_getMTensor(Args[1]);
+    mint* wxf_data = libData->MTensor_getIntegerData(wxf_tensor);
+    mint wxf_len = libData->MTensor_getFlattenedLength(wxf_tensor);
+
+    /* Build a Lean ByteArray from the MTensor integers */
+    lean_object* ba = lean_mk_empty_byte_array(lean_box(wxf_len));
+    for (mint i = 0; i < wxf_len; i++) {
+        ba = lean_byte_array_push(ba, (uint8_t)(wxf_data[i] & 0xFF));
+    }
+
+    lean_object* io_res = leanlink_pp_expr(handle, ba);
+    /* ba is consumed by leanlink_pp_expr */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }

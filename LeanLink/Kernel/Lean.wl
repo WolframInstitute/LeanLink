@@ -128,6 +128,8 @@ $applyTacticFn := $applyTacticFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_apply_tactic", {Integer, "UTF8String"}, {Integer, 1}];
 $openGoalExprFn := $openGoalExprFn = LibraryFunctionLoad[$ShimLib,
   "leanlink_wl_open_goal_expr", {Integer, {Integer, 1}}, {Integer, 1}];
+$ppExprFn := $ppExprFn = LibraryFunctionLoad[$ShimLib,
+  "leanlink_wl_pp_expr", {Integer, {Integer, 1}}, {Integer, 1}];
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]];
 
@@ -886,6 +888,15 @@ leanPP[other_, _] := ToString[Short[other, 1]];
 (* Unlike leanPP (display), this produces valid Lean 4 ASCII/Unicode syntax.   *)
 (* ============================================================================ *)
 
+
+(* ppExprFFI — pretty-print via Lean's PrettyPrinter when handle available *)
+ppExprFFI[handle_Integer, expr_] := Quiet[Module[{wxf, res},
+  wxf = BinarySerialize[expr, PerformanceGoal -> "Speed"];
+  res = $ppExprFn[handle, Normal[wxf]];
+  If[ListQ[res], decodeWXF[res], $Failed]
+], {LibraryFunction::cfsa}];
+ppExprFFI[_, _] := $Failed;
+
 (* LeanExportString — export LeanEnvironment to source string *)
 (* Proof environment with _DeclOrder — serialize declarations *)
 LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] :=
@@ -946,11 +957,20 @@ LeanExportString[env_LeanEnvironment] := Module[
   Do[
     With[{name = kv[[1]], term = kv[[2]]},
       AppendTo[lines, StringTemplate["theorem `1` : `2` := sorry"][
-        name, leanSource[term["Type"]]]]],
+        name, With[{handle = Lookup[env[[1]], "_Handle", None]},
+          If[IntegerQ[handle],
+            With[{pp = ppExprFFI[handle, term["Type"]]},
+              If[StringQ[pp], pp, leanSource[term["Type"]]]],
+            leanSource[term["Type"]]]]]]],
     {kv, terms}];
   StringRiffle[lines, "\n\n"]];
 
-LeanExportString[term_LeanTerm] := leanSource[term["Type"]];
+LeanExportString[term_LeanTerm] :=
+  With[{handle = Lookup[term[[1]], "_Handle", None]},
+    If[IntegerQ[handle],
+      With[{pp = ppExprFFI[handle, term["Type"]]},
+        If[StringQ[pp], pp, leanSource[term["Type"]]]],
+      leanSource[term["Type"]]]];
 LeanExportString[expr_] := leanSource[expr];
 
 (* LeanExport — write to file *)

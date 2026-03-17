@@ -264,6 +264,19 @@ def ppValueExport (handle : UInt64) (constName : @& String)
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+/-- Pretty-print an arbitrary WXF-encoded expression using Lean's formatter.
+    Returns WXF string with the formatted output. -/
+@[export leanlink_pp_expr]
+def ppExprExport (handle : UInt64) (exprWXF : @& ByteArray) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  match WXF.deserializeExpr exprWXF with
+  | none => return WXF.serialize (WXF.string "ERROR: failed to deserialize expression")
+  | some expr =>
+    let s ← ppExprInEnv env expr
+    return WXF.serialize (WXF.string s)
+
+
 /-- Type-check a WXF-encoded expression against an environment.
     Returns WXF with both the inferred type (as expr tree) and pretty-printed string. -/
 @[export leanlink_type_check]
