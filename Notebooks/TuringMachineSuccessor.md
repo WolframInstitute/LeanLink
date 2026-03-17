@@ -12,6 +12,10 @@ Get["LeanLink`"];
 Get["WolframInstitute`TuringMachine`"];
 ```
 
+```wolfram
+proofDir = FileNameJoin[{DirectoryName[PacletObject["WolframInstitute/TuringMachine"]["Location"]], "Proofs"}];
+```
+
 A one-sided Turing machine reads a binary-encoded natural number on its tape (LSB at position 0), executes transitions, and halts when the head moves past position 0 to the left. We ask: which TMs compute the successor function? And can we prove it for ALL inputs?
 
 ## Part 1: Formalizing the Machine
@@ -70,17 +74,14 @@ Rule 445 is the canonical (2,2) successor-computing TM.
 Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 3, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 15, 40, ImageSize -> 120, "LabelInput" -> True]}}, Spacings -> 2]
 ```
 
-## Part 4: Importing the Full Proof from GitHub
+## Part 4: Importing the Full Proof
 
-`LeanImport` downloads the file and all its dependencies, compiles the project with `lake build`, and loads every proven theorem:
-
-```wolfram
-plusOneEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/PlusOne.lean"]
-```
+We import the complete proof directly. `LeanImport` loads the compiled `.olean` environment with all proven theorems:
 
 ```wolfram
-Keys[plusOneEnv]
+plusOneEnv = LeanImport["OneSidedTM.PlusOne", "ProjectDir" -> proofDir]
 ```
+
 
 ### Machine-Checked Spot Checks via `native_decide`
 
@@ -131,7 +132,7 @@ plusOneEnv["rule445_computesSucc"]["ExprGraph"]
 ### Class B: Bounce-Back Scanback
 
 ```wolfram
-allEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/AllPlusOne.lean"]
+allEnv = LeanImport["OneSidedTM.AllPlusOne", "ProjectDir" -> proofDir]
 ```
 
 ```wolfram
@@ -171,7 +172,7 @@ The 3-state space introduces much richer algorithm diversity. Each class has a d
 ### ThreeState: Rule 146514
 
 ```wolfram
-threeEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ThreeState.lean"]
+threeEnv = LeanImport["OneSidedTM.ThreeState", "ProjectDir" -> proofDir]
 ```
 
 ```wolfram
@@ -189,7 +190,7 @@ threeEnv["rule146514_computesSucc"]["ExprGraph"]
 ### Class S: Self-Loop Clear
 
 ```wolfram
-classSEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassS.lean"]
+classSEnv = LeanImport["OneSidedTM.ClassS", "ProjectDir" -> proofDir]
 ```
 
 ```wolfram
@@ -213,7 +214,7 @@ classSEnv["classS_computesSucc"]["ExprGraph"]
 ### Class SX: Toggle + Drop + Self-Loop Variants
 
 ```wolfram
-classSXEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassSX.lean"]
+classSXEnv = LeanImport["OneSidedTM.ClassSX", "ProjectDir" -> proofDir]
 ```
 
 Three distinct clearback strategies, one proof framework:
@@ -251,7 +252,7 @@ classSXEnv["classSX_drop_computes"]["ExprGraph"]
 ### Class SB: Bouncing Clearback
 
 ```wolfram
-classSBEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassSB.lean"]
+classSBEnv = LeanImport["OneSidedTM.ClassSB", "ProjectDir" -> proofDir]
 ```
 
 ```wolfram
@@ -265,7 +266,7 @@ classSBEnv["classSB_computesSucc"]["ExprGraph"]
 ### Class D: Delegated Scan (DW + DS)
 
 ```wolfram
-classDEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassD.lean"]
+classDEnv = LeanImport["OneSidedTM.ClassD", "ProjectDir" -> proofDir]
 ```
 
 Two delegation variants -- walk-back and scan-back:
@@ -285,7 +286,7 @@ classDEnv["classDW_computesSucc"]["ExprGraph"]
 ### Class W: Walk Variants
 
 ```wolfram
-classWEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassW.lean"]
+classWEnv = LeanImport["OneSidedTM.ClassW", "ProjectDir" -> proofDir]
 ```
 
 Self, toggle, and drop clearback with walk:
@@ -299,7 +300,7 @@ classWEnv["exampleW17Toggle_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-classDEnv["classDS_computesSucc"]["ExprGraph"]
+classWEnv["exampleW8Self_computesSucc"]["ExprGraph"]
 ```
 
 ## Part 7: The Near-Miss -- Proving Incorrectness
