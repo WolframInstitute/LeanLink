@@ -15,13 +15,12 @@ Get["WolframInstitute`TuringMachine`"];
 ```wolfram
 proofDir = FileNameJoin[{DirectoryName[PacletObject["WolframInstitute/TuringMachine"]["Location"]], "Proofs"}];
 p = "OneSidedTM.";
+leanImport[mod_] := LeanImport[mod, "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
 ```
 
 A one-sided Turing machine reads a binary-encoded natural number on its tape (LSB at position 0), executes transitions, and halts when the head moves past position 0 to the left. We ask: which TMs compute the successor function? And can we prove it for ALL inputs?
 
 ## Part 1: Formalizing the Machine
-
-We import the foundational definitions. `LeanImportString` compiles Lean 4 source directly and returns a `LeanEnvironment` of inspectable terms.
 
 ```wolfram
 defsEnv = LeanImportString["
@@ -41,16 +40,12 @@ structure TM where
 ```
 
 ```wolfram
-Keys[defsEnv]
-```
-
-```wolfram
 defsEnv["TM"]["TypeForm"]
 ```
 
 ## Part 2: The Successor Predicate
 
-`ComputesSucc` says: for every n >= 1 there is enough fuel for the TM to halt with output n + 1.
+`ComputesSucc` says: for every n >= 1 there exists enough fuel for the TM to halt with output n + 1.
 
 ```wolfram
 succEnv = LeanImportString["
@@ -63,10 +58,6 @@ def ComputesSucc (run : Nat -> Nat -> Option Nat) : Prop :=
 succEnv["ComputesSucc"]["TypeForm"]
 ```
 
-```wolfram
-succEnv["ComputesSucc"]["Type"]
-```
-
 ## Part 3: Rule 445 -- The Machine
 
 Rule 445 is the canonical (2,2) successor-computing TM.
@@ -75,12 +66,10 @@ Rule 445 is the canonical (2,2) successor-computing TM.
 Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 3, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 15, 40, ImageSize -> 120, "LabelInput" -> True]}}, Spacings -> 2]
 ```
 
-## Part 4: Importing the Full Proof
-
-We import the complete proof directly. `LeanImport` loads the compiled `.olean` environment with all proven theorems:
+## Part 4: The Universal Proof
 
 ```wolfram
-plusOneEnv = LeanImport["OneSidedTM.PlusOne", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
+plusOneEnv = leanImport["OneSidedTM.PlusOne"]
 ```
 
 ### Machine-Checked Spot Checks via `native_decide`
@@ -89,19 +78,9 @@ plusOneEnv = LeanImport["OneSidedTM.PlusOne", "ProjectDir" -> proofDir, "Filter"
 plusOneEnv[p <> "rule445_succ_7"]["TypeForm"]
 ```
 
-```wolfram
-plusOneEnv[p <> "rule445_succ_255"]["TypeForm"]
-```
+### `rule445_computesSucc` -- Correctness for ALL inputs
 
-Bulk verification -- all inputs 1..65535 in a single `native_decide`:
-
-```wolfram
-plusOneEnv[p <> "rule445_succ_bulk"]["TypeForm"]
-```
-
-### The Universal Proof: `rule445_computesSucc`
-
-Proves Rule 445 computes successor for ALL inputs by structural induction on the binary representation:
+Structural induction on the binary representation. No finite enumeration -- true for every natural number:
 
 ```wolfram
 plusOneEnv[p <> "rule445_computesSucc"]["TypeForm"]
@@ -113,52 +92,30 @@ plusOneEnv[p <> "rule445_computesSucc"]["ExprGraph"]
 
 ## Part 5: All (2,2) Successor Rules by Class
 
-17 rules compute binary successor in the (2,2) space. They partition into 3 classes:
-
-```wolfram
-successorRules22 = OneSidedTuringMachineFind[{Range[2, 21]}, 200, {2, 2}]
-```
+17 rules compute binary successor in the (2,2) space, partitioned into 3 classes:
 
 ```wolfram
 Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 180, "LabelInput" -> True], Style["Rule 445 (Class A)", Bold, 11], Top], Labeled[OneSidedTuringMachinePlot[{453, 2, 2}, 7, 20, ImageSize -> 180, "LabelInput" -> True], Style["Rule 453 (Class B)", Bold, 11], Top], Labeled[OneSidedTuringMachinePlot[{1512, 2, 2}, 7, 20, ImageSize -> 180, "LabelInput" -> True], Style["Rule 1512 (Class C)", Bold, 11], Top]}}, Spacings -> 2]
 ```
 
-### Class A: Carry + Absorb + Scanback (Rule 445)
+### Class B: Bounce-Back Scanback (8 rules)
 
 ```wolfram
-plusOneEnv[p <> "rule445_computesSucc"]["ExprGraph"]
-```
-
-### Class B: Bounce-Back Scanback
-
-```wolfram
-allEnv = LeanImport["OneSidedTM.AllPlusOne", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
+allEnv = leanImport["OneSidedTM.AllPlusOne"]
 ```
 
 ```wolfram
 allEnv[p <> "classB_computesSucc"]["TypeForm"]
 ```
 
-Eight rules proven as cheap instances -- one structural predicate covers all:
-
-```wolfram
-allEnv[p <> "r453_succ"]["TypeForm"]
-```
-
 ```wolfram
 allEnv[p <> "classB_computesSucc"]["ExprGraph"]
 ```
 
-### Class C: Skip + Absorb + Clear-on-Return
+### Class C: Skip + Absorb + Clear-on-Return (8 rules)
 
 ```wolfram
 allEnv[p <> "classC_computesSucc"]["TypeForm"]
-```
-
-All 8 rules (1512-1519) via class instantiation:
-
-```wolfram
-allEnv[p <> "r1512_succ"]["TypeForm"]
 ```
 
 ```wolfram
@@ -167,12 +124,10 @@ allEnv[p <> "classC_computesSucc"]["ExprGraph"]
 
 ## Part 6: 3-State (3,2) Proof Classes
 
-The 3-state space introduces much richer algorithm diversity. Each class has a distinct clearback strategy.
-
 ### ThreeState: Rule 146514
 
 ```wolfram
-threeEnv = LeanImport["OneSidedTM.ThreeState", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
+threeEnv = leanImport["OneSidedTM.ThreeState"]
 ```
 
 ```wolfram
@@ -190,21 +145,11 @@ threeEnv[p <> "rule146514_computesSucc"]["ExprGraph"]
 ### Class S: Self-Loop Clear
 
 ```wolfram
-classSEnv = LeanImport["OneSidedTM.ClassS", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
+classSEnv = leanImport["OneSidedTM.ClassS"]
 ```
 
 ```wolfram
 classSEnv[p <> "classS_computesSucc"]["TypeForm"]
-```
-
-Self-loop clear with absState=2 and absState=3:
-
-```wolfram
-classSEnv[p <> "r651613_succ"]["TypeForm"]
-```
-
-```wolfram
-classSEnv[p <> "r727741_succ"]["TypeForm"]
 ```
 
 ```wolfram
@@ -214,45 +159,21 @@ classSEnv[p <> "classS_computesSucc"]["ExprGraph"]
 ### Class SX: Toggle + Drop + Self-Loop Variants
 
 ```wolfram
-classSXEnv = LeanImport["OneSidedTM.ClassSX", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
-```
-
-Three distinct clearback strategies, one proof framework:
-
-```wolfram
-classSXEnv[p <> "classSX_self_computes"]["TypeForm"]
+classSXEnv = leanImport["OneSidedTM.ClassSX"]
 ```
 
 ```wolfram
-classSXEnv[p <> "classSX_toggle_computes"]["TypeForm"]
-```
-
-```wolfram
-classSXEnv[p <> "classSX_drop_computes"]["TypeForm"]
-```
-
-Concrete instances:
-
-```wolfram
-classSXEnv[p <> "r658573_succ"]["TypeForm"]
-```
-
-```wolfram
-classSXEnv[p <> "r741517_succ"]["TypeForm"]
+{classSXEnv[p <> "classSX_self_computes"]["TypeForm"], classSXEnv[p <> "classSX_toggle_computes"]["TypeForm"], classSXEnv[p <> "classSX_drop_computes"]["TypeForm"]}
 ```
 
 ```wolfram
 classSXEnv[p <> "classSX_toggle_computes"]["ExprGraph"]
 ```
 
-```wolfram
-classSXEnv[p <> "classSX_drop_computes"]["ExprGraph"]
-```
-
 ### Class SB: Bouncing Clearback
 
 ```wolfram
-classSBEnv = LeanImport["OneSidedTM.ClassSB", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
+classSBEnv = leanImport["OneSidedTM.ClassSB"]
 ```
 
 ```wolfram
@@ -266,17 +187,11 @@ classSBEnv[p <> "classSB_computesSucc"]["ExprGraph"]
 ### Class D: Delegated Scan (DW + DS)
 
 ```wolfram
-classDEnv = LeanImport["OneSidedTM.ClassD", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
-```
-
-Two delegation variants -- walk-back and scan-back:
-
-```wolfram
-classDEnv[p <> "classDW_computesSucc"]["TypeForm"]
+classDEnv = leanImport["OneSidedTM.ClassD"]
 ```
 
 ```wolfram
-classDEnv[p <> "classDS_computesSucc"]["TypeForm"]
+{classDEnv[p <> "classDW_computesSucc"]["TypeForm"], classDEnv[p <> "classDS_computesSucc"]["TypeForm"]}
 ```
 
 ```wolfram
@@ -286,17 +201,11 @@ classDEnv[p <> "classDW_computesSucc"]["ExprGraph"]
 ### Class W: Walk Variants
 
 ```wolfram
-classWEnv = LeanImport["OneSidedTM.ClassW", "ProjectDir" -> proofDir, "Filter" -> "OneSidedTM"]
-```
-
-Self, toggle, and drop clearback with walk:
-
-```wolfram
-classWEnv[p <> "exampleW8Self_computesSucc"]["TypeForm"]
+classWEnv = leanImport["OneSidedTM.ClassW"]
 ```
 
 ```wolfram
-classWEnv[p <> "exampleW17Toggle_computesSucc"]["TypeForm"]
+{classWEnv[p <> "exampleW8Self_computesSucc"]["TypeForm"], classWEnv[p <> "exampleW17Toggle_computesSucc"]["TypeForm"]}
 ```
 
 ```wolfram
@@ -312,8 +221,6 @@ Grid[{{Labeled[OneSidedTuringMachinePlot[{156830, 3, 2}, 6, 50, ImageSize -> 200
 ```
 
 ## Summary: Proof Architecture
-
-The Lean 4 proof architecture (in `OneSidedTM/`) proceeds in layers:
 
 | Layer | Strategy | Coverage |
 |-------|----------|----------|
