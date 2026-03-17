@@ -64,13 +64,7 @@ succEnv["ComputesSucc"]["Type"]
 
 ## Part 3: Rule 445 -- The Machine
 
-Rule 445 is the canonical (2,2) successor-computing TM. Its transition table:
-
-```wolfram
-TuringMachineRuleCases[{445, 2, 2}]
-```
-
-The algorithm: carry phase scans left flipping 1 -> 0. On first 0: absorb (write 1), then scan back to position 0.
+Rule 445 is the canonical (2,2) successor-computing TM.
 
 ```wolfram
 Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 3, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 120, "LabelInput" -> True], OneSidedTuringMachinePlot[{445, 2, 2}, 15, 40, ImageSize -> 120, "LabelInput" -> True]}}, Spacings -> 2]
@@ -78,7 +72,7 @@ Grid[{{OneSidedTuringMachinePlot[{445, 2, 2}, 1, 20, ImageSize -> 120, "LabelInp
 
 ## Part 4: Importing the Full Proof from GitHub
 
-Instead of inlining code, we import the complete proof directly from GitHub. `LeanImport` automatically downloads the file and all its dependencies, compiles the project with `lake build`, and loads every proven theorem into a `LeanEnvironment`:
+`LeanImport` downloads the file and all its dependencies, compiles the project with `lake build`, and loads every proven theorem:
 
 ```wolfram
 plusOneEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/PlusOne.lean"]
@@ -90,8 +84,6 @@ Keys[plusOneEnv]
 
 ### Machine-Checked Spot Checks via `native_decide`
 
-The simplest proof strategy: Lean's kernel verifies the computation directly for specific inputs.
-
 ```wolfram
 plusOneEnv["rule445_succ_7"]["TypeForm"]
 ```
@@ -100,7 +92,7 @@ plusOneEnv["rule445_succ_7"]["TypeForm"]
 plusOneEnv["rule445_succ_255"]["TypeForm"]
 ```
 
-Bulk verification -- all inputs 1 through 65535 checked in a single `native_decide`:
+Bulk verification -- all inputs 1..65535 in a single `native_decide`:
 
 ```wolfram
 plusOneEnv["rule445_succ_bulk"]["TypeForm"]
@@ -108,99 +100,123 @@ plusOneEnv["rule445_succ_bulk"]["TypeForm"]
 
 ### The Universal Proof: `rule445_computesSucc`
 
-The crown jewel: a proof that Rule 445 computes successor for ALL inputs, by structural induction on the binary representation. No finite enumeration -- true for every natural number:
+Proves Rule 445 computes successor for ALL inputs by structural induction on the binary representation:
 
 ```wolfram
 plusOneEnv["rule445_computesSucc"]["TypeForm"]
 ```
 
 ```wolfram
-plusOneEnv["rule445_computesSucc"]["Type"]
-```
-
-### Inspecting the Proof Term
-
-The proof breaks execution into three phases: carry (flip 1->0 scanning left), absorb (write 1 at MSB), and scanback (verify tape). The `ExprGraph` shows the proof term's dependency structure:
-
-```wolfram
 plusOneEnv["rule445_computesSucc"]["ExprGraph"]
 ```
 
-## Part 5: All 17 Rules in the (2,2) Space
+## Part 5: All (2,2) Successor Rules by Class
 
-17 rules compute binary successor. They partition into classes by algorithm shape:
+17 rules compute binary successor in the (2,2) space. They partition into 3 classes:
 
 ```wolfram
 successorRules22 = OneSidedTuringMachineFind[{Range[2, 21]}, 200, {2, 2}]
 ```
 
 ```wolfram
-Length[successorRules22]
-```
-
-Visual comparison across classes:
-
-```wolfram
 Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 7, 20, ImageSize -> 180, "LabelInput" -> True], Style["Rule 445 (Class A)", Bold, 11], Top], Labeled[OneSidedTuringMachinePlot[{453, 2, 2}, 7, 20, ImageSize -> 180, "LabelInput" -> True], Style["Rule 453 (Class B)", Bold, 11], Top], Labeled[OneSidedTuringMachinePlot[{1512, 2, 2}, 7, 20, ImageSize -> 180, "LabelInput" -> True], Style["Rule 1512 (Class C)", Bold, 11], Top]}}, Spacings -> 2]
 ```
 
-## Part 6: Class C -- Carry + Absorb + Clear
-
-Class C machines skip past trailing 1-bits, absorb at the first 0, then clear on return. All 8 rules 1512-1519 are Class C:
+### Class A: Carry + Absorb + Scanback (Rule 445)
 
 ```wolfram
-classCEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassC.lean"]
+plusOneEnv["rule445_computesSucc"]["ExprGraph"]
 ```
 
-The structural predicate `IsClassC` captures the algorithm pattern:
+### Class B: Bounce-Back Scanback
 
 ```wolfram
-classCEnv["IsClassC"]["TypeForm"]
-```
-
-```wolfram
-classCEnv["IsClassC"]["Type"]
-```
-
-The main theorem: ANY TM matching this pattern computes successor:
-
-```wolfram
-classCEnv["classC_computesSucc"]["TypeForm"]
+allEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/AllPlusOne.lean"]
 ```
 
 ```wolfram
-classCEnv["classC_computesSucc"]["Type"]
+allEnv["classB_computesSucc"]["TypeForm"]
 ```
 
-## Part 7: Class B -- Bounce-Back Scanback
-
-Class B machines use a different return strategy: bouncing between states while clearing bits.
+Eight rules proven as cheap instances -- one structural predicate covers all:
 
 ```wolfram
-classBEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassB.lean"]
+allEnv["r453_succ"]["TypeForm"]
 ```
 
 ```wolfram
-classBEnv["IsClassB"]["TypeForm"]
+allEnv["classB_computesSucc"]["ExprGraph"]
+```
+
+### Class C: Skip + Absorb + Clear-on-Return
+
+```wolfram
+allEnv["classC_computesSucc"]["TypeForm"]
+```
+
+All 8 rules (1512-1519) via class instantiation:
+
+```wolfram
+allEnv["r1512_succ"]["TypeForm"]
 ```
 
 ```wolfram
-classBEnv["classB_computesSucc"]["TypeForm"]
+allEnv["classC_computesSucc"]["ExprGraph"]
 ```
 
-## Part 8: 3-State Proofs -- Extended Scan Variants
+## Part 6: 3-State (3,2) Proof Classes
 
-The 3-state space introduces toggle and drop clearback variants. `ClassSX` proves ALL three clearback strategies compute successor:
+The 3-state space introduces much richer algorithm diversity. Each class has a distinct clearback strategy.
+
+### ThreeState: Rule 146514
+
+```wolfram
+threeEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ThreeState.lean"]
+```
+
+```wolfram
+threeEnv["rule146514_computesSucc"]["TypeForm"]
+```
+
+```wolfram
+Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 31, 50, ImageSize -> 200, "LabelInput" -> True], Style["Rule 445 (2-state)", Bold, 12], Top], Labeled[OneSidedTuringMachinePlot[{146514, 3, 2}, 31, 200, ImageSize -> 200, "LabelInput" -> True], Style["Rule 146514 (3-state)", Bold, 12], Top]}}, Spacings -> 3]
+```
+
+```wolfram
+threeEnv["rule146514_computesSucc"]["ExprGraph"]
+```
+
+### Class S: Self-Loop Clear
+
+```wolfram
+classSEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassS.lean"]
+```
+
+```wolfram
+classSEnv["classS_computesSucc"]["TypeForm"]
+```
+
+Self-loop clear with absState=2 and absState=3:
+
+```wolfram
+classSEnv["r651613_succ"]["TypeForm"]
+```
+
+```wolfram
+classSEnv["r727741_succ"]["TypeForm"]
+```
+
+```wolfram
+classSEnv["classS_computesSucc"]["ExprGraph"]
+```
+
+### Class SX: Toggle + Drop + Self-Loop Variants
 
 ```wolfram
 classSXEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassSX.lean"]
 ```
 
-```wolfram
-Keys[classSXEnv]
-```
-
-Self-loop, toggle, and drop -- three different clearback strategies, one proof framework:
+Three distinct clearback strategies, one proof framework:
 
 ```wolfram
 classSXEnv["classSX_self_computes"]["TypeForm"]
@@ -214,17 +230,81 @@ classSXEnv["classSX_toggle_computes"]["TypeForm"]
 classSXEnv["classSX_drop_computes"]["TypeForm"]
 ```
 
-### 3-State Machine Visualization
-
-Rule 146514 is a genuine 3-state successor machine. 2352 rules share this step profile.
+Concrete instances:
 
 ```wolfram
-Grid[{{Labeled[OneSidedTuringMachinePlot[{445, 2, 2}, 31, 50, ImageSize -> 200, "LabelInput" -> True], Style["Rule 445 (2-state)", Bold, 12], Top], Labeled[OneSidedTuringMachinePlot[{146514, 3, 2}, 31, 200, ImageSize -> 200, "LabelInput" -> True], Style["Rule 146514 (3-state)", Bold, 12], Top]}}, Spacings -> 3]
+classSXEnv["r658573_succ"]["TypeForm"]
 ```
 
-## Part 9: The Near-Miss -- Proving Incorrectness
+```wolfram
+classSXEnv["r741517_succ"]["TypeForm"]
+```
 
-Rule 156830 correctly computes successor for inputs 1 through 6, then fails at n = 7 (outputs 9 instead of 8):
+```wolfram
+classSXEnv["classSX_toggle_computes"]["ExprGraph"]
+```
+
+```wolfram
+classSXEnv["classSX_drop_computes"]["ExprGraph"]
+```
+
+### Class SB: Bouncing Clearback
+
+```wolfram
+classSBEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassSB.lean"]
+```
+
+```wolfram
+classSBEnv["classSB_computesSucc"]["TypeForm"]
+```
+
+```wolfram
+classSBEnv["classSB_computesSucc"]["ExprGraph"]
+```
+
+### Class D: Delegated Scan (DW + DS)
+
+```wolfram
+classDEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassD.lean"]
+```
+
+Two delegation variants -- walk-back and scan-back:
+
+```wolfram
+classDEnv["classDW_computesSucc"]["TypeForm"]
+```
+
+```wolfram
+classDEnv["classDS_computesSucc"]["TypeForm"]
+```
+
+```wolfram
+classDEnv["classDW_computesSucc"]["ExprGraph"]
+```
+
+### Class W: Walk Variants
+
+```wolfram
+classWEnv = LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/OneSidedTM/ClassW.lean"]
+```
+
+Self, toggle, and drop clearback with walk:
+
+```wolfram
+classWEnv["exampleW8Self_computesSucc"]["TypeForm"]
+```
+
+```wolfram
+classWEnv["exampleW17Toggle_computesSucc"]["TypeForm"]
+```
+
+```wolfram
+classDEnv["classDS_computesSucc"]["ExprGraph"]
+```
+
+## Part 7: The Near-Miss -- Proving Incorrectness
+
+Rule 156830 correctly computes successor for inputs 1 through 6, then fails at n = 7:
 
 ```wolfram
 Grid[{{Labeled[OneSidedTuringMachinePlot[{156830, 3, 2}, 6, 50, ImageSize -> 200, "LabelInput" -> True], Style["n = 6 (correct)", Darker[Green], Bold, 12], Top], Labeled[OneSidedTuringMachinePlot[{156830, 3, 2}, 7, 50, ImageSize -> 200, "LabelInput" -> True], Style["n = 7 (FAILS: outputs 9)", Red, Bold, 12], Top]}}, Spacings -> 3]
@@ -234,9 +314,30 @@ Grid[{{Labeled[OneSidedTuringMachinePlot[{156830, 3, 2}, 6, 50, ImageSize -> 200
 
 The Lean 4 proof architecture (in `OneSidedTM/`) proceeds in layers:
 
-- `native_decide` bulk checks: verify correctness for all inputs in a finite range (e.g. 1..65535)
-- Structural induction via `sim_eval`: proves correctness for ALL inputs by decomposing TM execution into carry, absorb, and walkback phases
-- Class-level generalization: any TM matching the carry+absorb+walkback pattern computes successor -- individual rules are cheap instances
-- Extended variants (toggle, drop, delegation): cover the full 3-state search space
+| Layer | Strategy | Coverage |
+|-------|----------|----------|
+| `native_decide` | Kernel-verified computation | Finite range (1..65535) |
+| `sim_eval` induction | Structural binary induction | ALL inputs (∀ n ≥ 1) |
+| Class predicates | `IsClassB`, `IsClassC`, `IsClassS`, ... | Algorithm families |
+| Extended variants | Toggle, drop, delegation | Full 3-state space |
+
+### (2,2) Classes
+
+| Class | Algorithm | Rules | Proof |
+|-------|-----------|-------|-------|
+| A | Carry + absorb + scanback | 445 | `rule445_computesSucc` |
+| B | Bounce-back scanback | 453, 461, 469, 477, 485, 493, 501, 509 | `classB_computesSucc` |
+| C | Skip + absorb + clear | 1512-1519 | `classC_computesSucc` |
+
+### (3,2) Classes
+
+| Class | Algorithm | Example Rules | Proof |
+|-------|-----------|---------------|-------|
+| ThreeState | Direct 3-state | 146514 | `rule146514_computesSucc` |
+| S | Self-loop clear | 651613, 727741 | `classS_computesSucc` |
+| SB | Bouncing clear | — | `classSB_computesSucc` |
+| SX | Toggle/drop/self variants | 658573, 741517 | `classSX_*_computes` |
+| D | Delegated scan (DW/DS) | — | `classDW/DS_computesSucc` |
+| W | Walk variants | 145872, 146453 | `exampleW*_computesSucc` |
 
 All proofs compile with zero `sorry`s on Lean v4.29.0-rc6. Source: [WolframInstitute/TuringMachine/Proofs](https://github.com/WolframInstitute/TuringMachine/tree/main/Proofs)

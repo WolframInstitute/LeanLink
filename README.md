@@ -72,6 +72,7 @@ Uploads `.nb` notebooks to Wolfram Cloud.
 
 - [LeanLinkIntro](https://www.wolframcloud.com/obj/nikm/LeanLink/LeanLinkIntro.nb) — Getting started with LeanLink
 - [MathlibExamples](https://www.wolframcloud.com/obj/nikm/LeanLink/MathlibExamples.nb) — Exploring Mathlib from Wolfram Language
+- [TuringMachineSuccessor](https://www.wolframcloud.com/obj/nikm/LeanLink/TuringMachineSuccessor.nb) — Proving Turing machines compute successor, with proof term graphs for every class in (2,2) and (3,2)
 
 ## Architecture
 
