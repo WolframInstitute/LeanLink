@@ -14,10 +14,8 @@ Get["WolframInstitute`TuringMachine`"];
 
 ```wolfram
 p = "OneSidedTM.";
-With[{pd = FileNameJoin[{PacletObject["WolframInstitute/TuringMachine"]["Location"], "Proofs"}]},
-  If[DirectoryQ[FileNameJoin[{pd, ".lake"}]],
-    leanImport[file_] := LeanImport[FileNameJoin[{pd, file}], "Filter" -> "OneSidedTM"],
-    leanImport[file_] := LeanImport["https://github.com/WolframInstitute/TuringMachine/blob/main/Proofs/" <> file, "Filter" -> "OneSidedTM"]]]
+proofDir = FileNameJoin[{PacletObject["WolframInstitute/TuringMachine"]["Location"], "Proofs"}];
+leanImport[file_] := LeanImport[FileNameJoin[{proofDir, file}], "Filter" -> "OneSidedTM"]
 ```
 
 A one-sided Turing machine reads a binary-encoded natural number on its tape (LSB at position 0), executes transitions, and halts when the head moves past position 0 to the left. We ask: which TMs compute the successor function? And can we prove it for ALL inputs?
