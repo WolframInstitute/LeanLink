@@ -6,10 +6,10 @@ BeginPackage["LeanLink`"];
 Begin["`Private`"];
 
 (* ====== UNICODE CONSTANTS ====== *)
-$ptl$rarr = FromCharacterCode[8594];     (* → *)
-$ptl$larr = FromCharacterCode[8592];     (* ← *)
-$ptl$check = FromCharacterCode[10003];   (* ✓ *)
-$ptl$cdot = FromCharacterCode[11037];    (* ⬝ *)
+$ptl$rarr = FromCharacterCode[8594];     (* -> *)
+$ptl$larr = FromCharacterCode[8592];     (* <- *)
+$ptl$check = FromCharacterCode[10003];   (* check *)
+$ptl$cdot = FromCharacterCode[11037];    (* cdot *)
 
 (* ====== EXPRESSION TREE BUILDERS ====== *)
 (* Convert WL expressions to LeanTerm expression trees *)
@@ -21,7 +21,7 @@ ptlCleanExpr[expr_] := Module[{uf},
   (expr /. s_Symbol :> RuleCondition[uf[s]]) //. 
     {Verbatim[Pattern][s_, Verbatim[Blank][]] :> s}];
 
-(* Expression → LeanTerm tree *)
+(* Expression -> LeanTerm tree *)
 ptlToExpr[expr_] := ptlToExprI[ptlCleanExpr[expr]];
 
 ptlToExprI[CenterDot[a_, b_]] :=
@@ -31,7 +31,7 @@ ptlToExprI[f_Symbol[args___]] :=
 ptlToExprI[s_Symbol] := LeanConst[ToString[s], {}];
 ptlToExprI[x_] := LeanConst[ToString[x], {}];
 
-(* Equation → @Eq U lhs rhs *)
+(* Equation -> @Eq U lhs rhs *)
 ptlMakeEq[lhs_, rhs_] :=
   LeanApp[LeanApp[LeanApp[
     LeanConst["Eq", {LeanLevelSucc[LeanLevelZero[]]}],
@@ -40,7 +40,7 @@ ptlMakeEq[lhs_, rhs_] :=
 ptlEqToExpr[eq:Inactive[Equal][_, _]] := Module[{c = ptlCleanExpr[eq]},
   ptlMakeEq[ptlToExprI[c[[1]]], ptlToExprI[c[[2]]]]];
 
-(* Wrap expression in ∀ binders: ∀ (x : U) (y : U), body *)
+(* Wrap expression in forall binders: forall (x : U) (y : U), body *)
 ptlWrapForall[{}, body_] := body;
 ptlWrapForall[vars_List, body_] :=
   Fold[LeanForall[#2, LeanConst["U", {}], #1, "default"] &,
@@ -155,7 +155,7 @@ ptlPosToConvList[pos_List] := Module[{first, rest},
 (* ====== STEP PROCESSOR ====== *)
 Clear[ptlProcessStep];
 
-(* Axiom/Hypothesis definition — builds type expression tree *)
+(* Axiom/Hypothesis definition -- builds type expression tree *)
 ptlProcessStep[HoldComplete[Set[tag_[n_Integer], eq:Inactive[Equal][_, _]]], st_] := Module[
   {tagStr = ptlAbbrev[tag, n], vars = ptlGetVarsFromEq[eq, st["sharedConstants"]],
    typeExpr},
@@ -312,10 +312,10 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
       {None, {}}];
 
     (* Build body tactic:
-       case 1: pos + rwRule → conv at h => nav; simp only [name]
-       case 2: no pos + preamble → rw [sr] at h
-       case 3: no pos + bare     → nth_rewrite 1 [rwRule] at h
-       case 4: no rwRule → exact srcExpr *)
+       case 1: pos + rwRule -> conv at h => nav; simp only [name]
+       case 2: no pos + preamble -> rw [sr] at h
+       case 3: no pos + bare     -> nth_rewrite 1 [rwRule] at h
+       case 4: no rwRule -> exact srcExpr *)
     Module[{bodyTac, srName},
       bodyTac = If[rwRuleExpr =!= None && st["pendingPos"] =!= None,
         (* Case 1: conv + simp only with bare name for positional rewrite *)
@@ -329,16 +329,16 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq:Inactive[Equal][_, _]]], s
            LeanTactic["exact", LeanConst["h", {}]]}],
         If[rwRuleExpr =!= None,
           If[Length[tacSteps] > 0,
-            (* Case 2: preamble, no position → rw [sr] at h *)
+            (* Case 2: preamble, no position -> rw [sr] at h *)
             Join[tacSteps, {
               LeanTactic["have", "h", srcExpr],
               LeanTactic["rw", {rwRuleExpr}, "h"],
               LeanTactic["exact", LeanConst["h", {}]]}],
-            (* Case 3: bare, no position → nth_rewrite 1 [rwRule] at h *)
+            (* Case 3: bare, no position -> nth_rewrite 1 [rwRule] at h *)
             {LeanTactic["have", "h", srcExpr],
              LeanTactic["nth_rewrite", 1, {rwRuleExpr}, "h"],
              LeanTactic["exact", LeanConst["h", {}]]}],
-          (* Case 4: no rwRule → exact srcExpr *)
+          (* Case 4: no rwRule -> exact srcExpr *)
           {LeanTactic["exact", srcExpr]}]];
       If[Length[vars] > 0,
         bodyTac = Prepend[bodyTac, LeanTactic["intro", vars]]];
@@ -386,7 +386,7 @@ ProofToLean[proof_] := Module[
 
   pf = proof["ProofFunction"];
 
-  (* State — bare symbol with DownValues for mutation *)
+  (* State -- bare symbol with DownValues for mutation *)
   st["currentSR"] = None; st["pendingSource"] = None; st["pendingPos"] = None;
   st["finalLemma"] = "sorry"; st["finalLemmaTypeExpr"] = None; st["finalLemmaVars"] = {};
   st["sharedConstants"] = {};
@@ -396,7 +396,7 @@ ProofToLean[proof_] := Module[
   (* Check if UnformalizeSymbols is available *)
   $ptlHasUnformalize = Quiet@Check[ResourceFunction["UnformalizeSymbols"]; True, False];
 
-  (* Detect operators — any applied symbol that's not a Lean/WL builtin *)
+  (* Detect operators -- any applied symbol that's not a Lean/WL builtin *)
   opArities = Association[];
   hasCenterDot = Length[Cases[pf, _CenterDot, Infinity]] > 0;
   With[{excluded = {"Blank", "Pattern", "Inactive", "Equal", "ReplaceAll", "Rule",
@@ -459,7 +459,7 @@ ProofToLean[proof_] := Module[
   env = LeanEnvironment[envData];
   src = LeanExportString[env];
   envData["_Source"] = src;
-  (* Source is stored — native compilation deferred to LeanState on demand *)
+  (* Source is stored -- native compilation deferred to LeanState on demand *)
 
   LeanEnvironment[envData]];
 

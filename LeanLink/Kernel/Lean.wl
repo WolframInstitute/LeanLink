@@ -62,6 +62,10 @@ LeanExport::usage = "LeanExport[file, env] exports a LeanEnvironment to a .lean 
 LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...].";
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment.";
 
+(* Compilation *)
+LeanToFunction::usage = "LeanToFunction[term] converts a Lean definition (LeanTerm of kind \"def\") to a Function with Typed arguments suitable for FunctionCompile.";
+LeanCompile::usage = "LeanCompile[term] compiles a Lean definition to native code via FunctionCompile. LeanCompile[env] compiles all eligible definitions in a LeanEnvironment.";
+
 Begin["`Private`"];
 
 (* ============================================================================ *)
@@ -154,7 +158,7 @@ resolveSearchPath[projDir_String] := Module[{buildLib, leanLib, pkgDirs, paths},
   buildLib = With[{v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
                    v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]},
     If[DirectoryQ[v5], v5, v4]];
-  (* Discover lake package build directories — prefer lib/lean/ (v5), fallback lib/ (v4) *)
+  (* Discover lake package build directories -- prefer lib/lean/ (v5), fallback lib/ (v4) *)
   pkgDirs = Module[{pkgsRoot = FileNameJoin[{projDir, ".lake", "packages"}]},
     If[DirectoryQ[pkgsRoot],
       Select[
@@ -215,7 +219,7 @@ $kindColor = <|
   "quot" -> GrayLevel[0.45]
 |>;
 
-(* Call graph node colors — match code.lean DOT output *)
+(* Call graph node colors -- match code.lean DOT output *)
 $callNodeColor = <|
   "theorem" -> RGBColor @@ ({200, 230, 201} / 255.),   (* #c8e6c9 *)
   "def" -> RGBColor @@ ({187, 222, 251} / 255.),       (* #bbdefb *)
@@ -269,7 +273,7 @@ fetchField[handle_Integer, name_String, "TermRefs"] :=
     fetchField[handle, name, "TypeRefs"];
     Lookup[$termCache, Key[{handle, name, "TermRefs"}], {}]];
 
-(* Unfold-level fetch — not cached (level-dependent) *)
+(* Unfold-level fetch -- not cached (level-dependent) *)
 fetchUnfolded[handle_Integer, name_String, "Type", level_Integer] :=
   With[{r = Quiet[decodeWXF[$getTypeUnfoldedFn[handle, name, level]]]},
     If[isFFIError[r], $Failed, r]];
@@ -280,7 +284,7 @@ fetchUnfolded[handle_Integer, name_String, "Term", level_Integer] :=
       If[StringQ[r] && StringStartsQ[r, "No value"], LeanNoValue[], r]]];
 
 (* ============================================================================ *)
-(* Constructable LeanTerm — build from WL expression heads                      *)
+(* Constructable LeanTerm -- build from WL expression heads                      *)
 (* ============================================================================ *)
 
 (* Wrap a bare expression into a LeanTerm *)
@@ -290,7 +294,7 @@ LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
 
 
 
-(* Constructor with env — binds handle for type-checking *)
+(* Constructor with env -- binds handle for type-checking *)
 LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar |
                 _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj,
           env_LeanEnvironment] :=
@@ -335,7 +339,7 @@ peelForalls[_, "Params"] := {};
 peelForalls[LeanForall[_, _, body_, _], "Body"] := peelForalls[body, "Body"];
 peelForalls[body_, "Body"] := body;
 
-(* Property access — lazy fetch from handle *)
+(* Property access -- lazy fetch from handle *)
 (* Second arg: integer unfold level for Type/Term/TypeForm/TermForm, or Rule opts *)
 (* Level 0 = no unfolding (default). Level N = unfold definitions N times. *)
 LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
@@ -404,7 +408,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] :=
 (* Expression Graph                                                             *)
 (* ============================================================================ *)
 
-(* Expr graph node background colors — match code.lean exprKindColor exactly *)
+(* Expr graph node background colors -- match code.lean exprKindColor exactly *)
 $headColor = <|
   LeanApp     -> RGBColor @@ ({225, 190, 231} / 255.),  (* #e1bee7 *)
   LeanLam     -> RGBColor @@ ({255, 249, 196} / 255.),  (* #fff9c4 *)
@@ -656,7 +660,7 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Module[
     {
       If[name =!= sn, BoxForm`SummaryItem[{"Full name: ", name}], Nothing],
       BoxForm`SummaryItem[{"Type: ",
-        If[StringQ[typePP], Style[typePP, "Input"], "—"]}],
+        If[StringQ[typePP], Style[typePP, "Input"], "--"]}],
       If[StringQ[termPP] && termPP =!= "<pp error>",
         BoxForm`SummaryItem[{"Term: ", Style[Short[termPP, 1], "Input"]}],
         Nothing],
@@ -680,7 +684,7 @@ iBox[expr_, displayBoxes_] :=
 
 (* ============================================================================ *)
 (* Lean-style pretty-printer (string form)                                      *)
-(* leanPP — fallback pretty-printer for expressions without a handle.          *)
+(* leanPP -- fallback pretty-printer for expressions without a handle.          *)
 (* Lean's native PrettyPrinter.ppExpr is used when a handle is available.      *)
 
 (* Proper de Bruijn substitution: replace BVar[cutoff] with FreeVar[name],
@@ -751,7 +755,7 @@ leanPP[LeanMVar[_], _] := "?_";
 leanPP[LeanLitNat[n_Integer], _] := ToString[n];
 leanPP[LeanLitStr[s_String], _] := "\"" <> s <> "\"";
 
-(* Forall / Pi — collect consecutive binders *)
+(* Forall / Pi -- collect consecutive binders *)
 leanPP[e : LeanForall[_, _, _, _], d_Integer] := Module[
   {binders = {}, body = e, name, dom, bi, nm},
   While[MatchQ[body, LeanForall[_, _, _, _]] && d - Length[binders] > 0,
@@ -790,7 +794,7 @@ leanPP[LeanLet[name_String, type_, val_, body_], d_Integer] :=
   "let " <> cleanName[name] <> " : " <> leanPP[type, d - 1] <>
   " := " <> leanPP[val, d - 1] <> "; " <> leanPP[body, d - 1];
 
-(* Application — notation-aware rules then generic fallback *)
+(* Application -- notation-aware rules then generic fallback *)
 
 (* Flatten app chain: LeanApp[LeanApp[f,a],b] -> {f, a, b} *)
 flattenApp[e_LeanApp] := Module[{fn = e, args = {}},
@@ -803,7 +807,7 @@ appHeadName[e_LeanApp] := With[{fa = flattenApp[e]},
   If[MatchQ[fa[[1]], LeanConst[_String, _]], fa[[1, 1]], None]];
 appHeadName[_] := None;
 
-(* Infix helper — last 2 args *)
+(* Infix helper -- last 2 args *)
 leanPPInfix[e_LeanApp, d_Integer, op_String] :=
   With[{args = flattenApp[e][[2]]},
     If[Length[args] >= 2,
@@ -822,7 +826,7 @@ leanPP[e_LeanApp, d_Integer] /;
   With[{args = flattenApp[e][[2]]},
     leanPP[args[[-2]], d - 1] <> " \[NotEqual] " <> leanPP[args[[-1]], d - 1]];
 
-(* Neg.neg / HNeg.hNeg — unary prefix *)
+(* Neg.neg / HNeg.hNeg -- unary prefix *)
 leanPP[e_LeanApp, d_Integer] /;
   MatchQ[appHeadName[e], "Neg.neg" | "HNeg.hNeg" | "instHNeg.hNeg"] :=
   "-" <> leanPP[Last[flattenApp[e][[2]]], d - 1];
@@ -853,7 +857,7 @@ leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Exists" :=
       "\[Exists] " <> cleanName[Last[args][[1]]] <> ", " <> leanPP[Last[args][[3]], d - 1],
       "Exists " <> StringRiffle[leanPP[#, d - 1] & /@ args, " "]]];
 
-(* OfNat.ofNat — render as literal number *)
+(* OfNat.ofNat -- render as literal number *)
 leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "OfNat.ofNat" :=
   With[{args = flattenApp[e][[2]]},
     If[Length[args] >= 2, leanPP[args[[2]], d - 1],
@@ -884,12 +888,12 @@ leanPP[$Failed, _] := "(failed)";
 leanPP[other_, _] := ToString[Short[other, 1]];
 
 (* ============================================================================ *)
-(* leanSource — Lean 4 source-safe pretty-printer                               *)
+(* leanSource -- Lean 4 source-safe pretty-printer                               *)
 (* Unlike leanPP (display), this produces valid Lean 4 ASCII/Unicode syntax.   *)
 (* ============================================================================ *)
 
 
-(* ppExprFFI — pretty-print via Lean's PrettyPrinter when handle available *)
+(* ppExprFFI -- pretty-print via Lean's PrettyPrinter when handle available *)
 ppExprFFI[handle_Integer, expr_] := Quiet[Module[{wxf, res},
   wxf = BinarySerialize[expr, PerformanceGoal -> "Speed"];
   res = $ppExprFn[handle, Normal[wxf]];
@@ -897,8 +901,8 @@ ppExprFFI[handle_Integer, expr_] := Quiet[Module[{wxf, res},
 ], {LibraryFunction::cfsa}];
 ppExprFFI[_, _] := $Failed;
 
-(* LeanExportString — export LeanEnvironment to source string *)
-(* Proof environment with _DeclOrder — serialize declarations *)
+(* LeanExportString -- export LeanEnvironment to source string *)
+(* Proof environment with _DeclOrder -- serialize declarations *)
 LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] :=
   Module[{data = env[[1]], preamble, decls, lines = {}},
     preamble = Lookup[data, "_Preamble", <||>];
@@ -950,37 +954,28 @@ LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] :=
 LeanExportString[env_LeanEnvironment] /; StringQ[Lookup[env[[1]], "_Source", None]] :=
   env[[1]]["_Source"];
 
-(* Generic environment — generate theorems *)
+(* Generic environment -- generate theorems *)
 LeanExportString[env_LeanEnvironment] := Module[
   {terms, lines = {}},
   terms = Select[Normal[env[[1]]], Head[#[[2]]] === LeanTerm &];
   Do[
     With[{name = kv[[1]], term = kv[[2]]},
       AppendTo[lines, StringTemplate["theorem `1` : `2` := sorry"][
-        name, With[{handle = Lookup[env[[1]], "_Handle", None]},
-          If[IntegerQ[handle],
-            With[{pp = ppExprFFI[handle, term["Type"]]},
-              If[StringQ[pp], pp, leanSource[term["Type"]]]],
-            leanSource[term["Type"]]]]]]],
+        name, leanSource[term["Type"]]]]],
     {kv, terms}];
   StringRiffle[lines, "\n\n"]];
 
-LeanExportString[term_LeanTerm] :=
-  With[{handle = Lookup[term[[1]], "_Handle", None]},
-    If[IntegerQ[handle],
-      With[{pp = ppExprFFI[handle, term["Type"]]},
-        If[StringQ[pp], pp, leanSource[term["Type"]]]],
-      leanSource[term["Type"]]]];
+LeanExportString[term_LeanTerm] := leanSource[term["Type"]];
 LeanExportString[expr_] := leanSource[expr];
 
-(* LeanExport — write to file *)
+(* LeanExport -- write to file *)
 LeanExport[file_String, env_LeanEnvironment] :=
   Export[file, LeanExportString[env], "Text", CharacterEncoding -> "UTF-8"];
 
 leanSource[expr_] := leanSource[expr, 20];
 leanSource[e_, 0] := "_";
 
-(* Sugar: LeanConst["name"] ↔ LeanConst["name", {}] *)
+(* Sugar: LeanConst["name"] <-> LeanConst["name", {}] *)
 LeanConst[name_String] := LeanConst[name, {}];
 
 leanSource[LeanConst[name_String, _List], _Integer] := name;
@@ -1033,7 +1028,7 @@ leanSource[LeanLet[name_String, type_, val_, body_], d_Integer] :=
   "let " <> cleanName[name] <> " : " <> leanSource[type, d - 1] <>
   " := " <> leanSource[val, d - 1] <> "; " <> leanSource[body, d - 1];
 
-(* Eq infix: @Eq α lhs rhs → lhs = rhs *)
+(* Eq infix: @Eq a lhs rhs -> lhs = rhs *)
 leanSource[LeanApp[LeanApp[LeanApp[LeanConst["Eq", _], _], lhs_], rhs_], d_Integer] :=
   leanSource[lhs, d - 1] <> " = " <> leanSource[rhs, d - 1];
 
@@ -1054,7 +1049,7 @@ leanSource[$Failed, _] := "sorry";
 leanSource[other_, _] := "sorry /- " <> ToString[Short[other, 1]] <> " -/";
 
 (* ============================================================================ *)
-(* LeanImportString — compile source string to env                              *)
+(* LeanImportString -- compile source string to env                              *)
 (* ============================================================================ *)
 
 LeanImportString[src_String] := Module[
@@ -1063,7 +1058,7 @@ LeanImportString[src_String] := Module[
   tmpFile = FileNameJoin[{$TemporaryDirectory, modName <> ".lean"}];
   Export[tmpFile, src, "Text", CharacterEncoding -> "UTF-8"];
   result = LeanImport[tmpFile];
-  (* Cleanup the .lean source — olean kept for lazy queries *)
+  (* Cleanup the .lean source -- olean kept for lazy queries *)
   If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
   result];
 
@@ -1311,7 +1306,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
         Message[LeanLink::err, "Failed to load compiled file"];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Module]];
-      (* Extract names from source for filtering — these are unqualified *)
+      (* Extract names from source for filtering -- these are unqualified *)
       content = Import[absFile, "Text"];
       srcNames = StringCases[content,
         RegularExpression["(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.]*)"] :> "$1"];
@@ -1325,7 +1320,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
         Function[{name, kind},
           name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
         kinds], "_Handle" -> handle]];
-      (* Don't delete tmpDir — olean needed for lazy queries *)
+      (* Don't delete tmpDir -- olean needed for lazy queries *)
       res]];
 
 (* LeanImport[opts] -- base form: instant lazy loading *)
@@ -1375,10 +1370,10 @@ LeanListConstants[opts : OptionsPattern[]] :=
     OptionValue["Imports"]];
 
 (* ============================================================================ *)
-(* LeanEnvironment — typed collection of LeanTerms                              *)
+(* LeanEnvironment -- typed collection of LeanTerms                              *)
 (* ============================================================================ *)
 
-(* Property/key access — env[key] returns LeanTerm with env handle injected *)
+(* Property/key access -- env[key] returns LeanTerm with env handle injected *)
 LeanEnvironment /: LeanEnvironment[data_Association][key_String] :=
   Module[{val = data[key], handle},
     If[Head[val] === LeanTerm,
@@ -1396,7 +1391,7 @@ LeanEnvironment /: Length[LeanEnvironment[data_Association]] :=
 LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key];
 LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data;
 
-(* Information protocol — no collision with term names *)
+(* Information protocol -- no collision with term names *)
 $leanEnvProperties = {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"};
 
 LeanEnvironment /: Information[env : LeanEnvironment[data_Association], "Properties"] :=
@@ -1413,7 +1408,7 @@ LeanEnvironment /: Information[env : LeanEnvironment[data_Association], prop_Str
     _, Missing["UnknownProperty", prop]];
 
 
-(* MakeBoxes for LeanEnvironment — summary box *)
+(* MakeBoxes for LeanEnvironment -- summary box *)
 LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardForm] :=
   Module[{n, kinds, handle, hasSource, icon},
     n = Length[Select[data, Head[#] === LeanTerm &]];
@@ -1443,7 +1438,7 @@ LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardFo
       "Interpretable" -> Automatic]];
 
 (* ============================================================================ *)
-(* LeanState — interactive proof state                                          *)
+(* LeanState -- interactive proof state                                          *)
 (* ============================================================================ *)
 
 (* Constructor: LeanState[term_LeanTerm] opens a proof goal *)
@@ -1474,7 +1469,7 @@ LeanState[term_LeanTerm] :=
         "goals" -> {LeanGoal[<|"target" -> leanSource[typeExpr], "context" -> {}|>]},
         "goalCount" -> 1,
         "_Symbolic" -> True|>];
-      (* If tactic exists, the proof is known — mark complete *)
+      (* If tactic exists, the proof is known -- mark complete *)
       If[Head[tactic] === LeanTactic,
         state = LeanState[<|
           "stateId" -> 0,
@@ -1566,10 +1561,10 @@ LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] :=
       ToBoxes[Interpretation[display, LeanGoal[data]]]]];
 
 (* ============================================================================ *)
-(* LeanTactic — structured tactic objects                                        *)
+(* LeanTactic -- structured tactic objects                                        *)
 (* ============================================================================ *)
 
-(* ---- tacticSource: serialize structured LeanTactic → string ---- *)
+(* ---- tacticSource: serialize structured LeanTactic -> string ---- *)
 
 tacticSource[LeanTactic["exact", term_]] := "  exact " <> leanSource[term];
 tacticSource[LeanTactic["have", name_String, term_]] := "  have " <> name <> " := " <> leanSource[term];
@@ -1590,7 +1585,7 @@ tacticSourceInline[LeanTactic["rw", rules_List]] := "rw [" <> StringRiffle[rwRul
 tacticSourceInline[LeanTactic["simp", rules_List]] := "simp only [" <> StringRiffle[rwRuleSource /@ rules, ", "] <> "]";
 tacticSourceInline[t_LeanTactic] := StringTrim[tacticSource[t]];
 
-(* Rewrite rule source — detect Eq.symm wrapping and emit ← *)
+(* Rewrite rule source -- detect Eq.symm wrapping and emit <- *)
 rwRuleSource[LeanApp[LeanConst["Eq.symm", _], rule_]] := "\[LeftArrow] " <> leanSource[rule];
 rwRuleSource[rule_] := leanSource[rule];
 
@@ -1609,7 +1604,7 @@ LeanExportString[tac_LeanTactic] := tacticSource[tac];
 LeanTactic /: LeanTactic[tac_String][state_LeanState] :=
   applyTacticStr[tac, state];
 
-(* Structured form: LeanTactic["exact", term][state] — serialize first *)
+(* Structured form: LeanTactic["exact", term][state] -- serialize first *)
 LeanTactic /: LeanTactic[tag_String, args___][state_LeanState] :=
   applyTacticStr[StringTrim[tacticSource[LeanTactic[tag, args]]], state];
 
@@ -1658,6 +1653,327 @@ LeanTactic /: MakeBoxes[t:LeanTactic[tactics_List], StandardForm] :=
     Style[StringTrim[#], "Input"] & /@ (tacticSource /@ tactics),
     Spacings -> 0.2]},
     ToBoxes[Interpretation[display, t]]];
+
+(* ============================================================================ *)
+(* LeanToFunction / LeanCompile -- Lean defs -> FunctionCompile                   *)
+(* ============================================================================ *)
+
+LeanToFunction::notdef = "LeanToFunction requires a definition (kind \"def\"), got kind \"`1`\".";
+LeanToFunction::notype = "Cannot map Lean type `1` to a compiled WL type.";
+LeanToFunction::noterm = "Definition has no term body.";
+LeanToFunction::badexpr = "Cannot translate Lean expression to WL: `1`.";
+
+(* ---- Type mapping: Lean type expr -> WL TypeSpecifier string ---- *)
+
+leanTypeToWL[LeanConst["Nat", _List]] := "MachineInteger";
+leanTypeToWL[LeanConst["Nat", _List], "Literal"] := "MachineInteger";
+leanTypeToWL[LeanConst["Int", _List]] := "Integer64";
+leanTypeToWL[LeanConst["Float", _List]] := "Real64";
+leanTypeToWL[LeanConst["Bool", _List]] := "Boolean";
+leanTypeToWL[LeanConst["String", _List]] := "String";
+leanTypeToWL[LeanConst["UInt8", _List]] := "UnsignedInteger8";
+leanTypeToWL[LeanConst["UInt16", _List]] := "UnsignedInteger16";
+leanTypeToWL[LeanConst["UInt32", _List]] := "UnsignedInteger32";
+leanTypeToWL[LeanConst["UInt64", _List]] := "UnsignedInteger64";
+
+(* Arrow type: forall _ : A, B  (non-dependent) -> {A'} -> B' *)
+leanTypeToWL[LeanForall[name_, dom_, body_, "default"]] :=
+  Module[{domTy, bodyTy},
+    domTy = leanTypeToWL[dom];
+    bodyTy = leanTypeToWL[body];
+    If[FailureQ[domTy] || FailureQ[bodyTy], $Failed,
+      {domTy} -> bodyTy]];
+
+(* Fallback *)
+leanTypeToWL[other_] := $Failed;
+
+(* Collect all explicit parameter types and return type from a forall chain *)
+collectFunctionSignature[type_] := Module[
+  {params = {}, body = type, name, dom, bi, domTy},
+  While[MatchQ[body, LeanForall[_, _, _, _]],
+    {name, dom, body, bi} = List @@ body;
+    (* Only collect explicit ("default") binders as function params *)
+    If[bi === "default",
+      domTy = leanTypeToWL[dom];
+      If[FailureQ[domTy], Return[$Failed, Module]];
+      AppendTo[params, {cleanName[name], domTy}],
+      (* Skip implicit/instance binders -- these are type-level, not runtime *)
+      Continue[]]];
+  With[{retTy = leanTypeToWL[body]},
+    If[FailureQ[retTy], $Failed,
+      <|"Params" -> params, "ReturnType" -> retTy|>]]];
+
+(* ---- Expression translation: Lean term -> WL expression ---- *)
+(* ctx is a List of variable names, index 0 = last element *)
+
+(* de Bruijn variable lookup -- ctx contains actual symbols *)
+leanExprToWL[LeanBVar[i_Integer], ctx_List] :=
+  If[i < Length[ctx], ctx[[Length[ctx] - i]], $Failed];
+
+(* Literals *)
+leanExprToWL[LeanLitNat[n_Integer], _List] := n;
+leanExprToWL[LeanLitStr[s_String], _List] := s;
+
+(* Named constants -- value-level *)
+leanExprToWL[LeanConst["Nat.zero", _], _List] := 0;
+leanExprToWL[LeanConst["Bool.true", _], _List] := True;
+leanExprToWL[LeanConst["Bool.false", _], _List] := False;
+
+(* Nat.succ n -> n + 1 *)
+leanExprToWL[LeanApp[LeanConst["Nat.succ", _], arg_], ctx_List] :=
+  With[{a = leanExprToWL[arg, ctx]}, If[FailureQ[a], $Failed, a + 1]];
+
+(* OfNat.ofNat -- extract the literal *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  appHeadName[e] === "OfNat.ofNat" && Length[flattenApp[e][[2]]] >= 2 :=
+  leanExprToWL[flattenApp[e][[2, 2]], ctx];
+
+(* Arithmetic: HAdd.hAdd _ _ _ _ a b -> a + b (last 2 args) *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "HAdd.hAdd" | "instHAdd.hAdd"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, a + b]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "HSub.hSub" | "instHSub.hSub"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, a - b]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "HMul.hMul" | "instHMul.hMul"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, a * b]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "HDiv.hDiv" | "instHDiv.hDiv"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, Quotient[a, b]]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "HMod.hMod" | "instHMod.hMod"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, Mod[a, b]]],
+      $Failed]];
+
+(* Negation *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "Neg.neg" | "HNeg.hNeg" | "instHNeg.hNeg"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 1,
+      With[{a = leanExprToWL[Last[args], ctx]},
+        If[FailureQ[a], $Failed, -a]],
+      $Failed]];
+
+(* Comparisons: last 2 args *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "BEq.beq" | "instBEq.beq" | "Nat.beq" | "instBEqNat.beq"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, Equal[a, b]]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  StringEndsQ[Replace[appHeadName[e], None -> ""], ".le" | ".ble"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, LessEqual[a, b]]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  StringEndsQ[Replace[appHeadName[e], None -> ""], ".lt" | ".blt"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, Less[a, b]]],
+      $Failed]];
+
+(* decide / Decidable.decide -- just pass through to the predicate comparison *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "decide" | "Decidable.decide"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 1,
+      leanExprToWL[args[[1]], ctx],
+      $Failed]];
+
+(* GT.gt -- a > b: last 2 args *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "GT.gt" | "instGT.gt" | "Nat.blt"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, Greater[a, b]]],
+      $Failed]];
+
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "GE.ge" | "instGE.ge"] :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 2,
+      With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
+        If[FailureQ[a] || FailureQ[b], $Failed, GreaterEqual[a, b]]],
+      $Failed]];
+
+(* if-then-else: ite _ cond _ thenBranch elseBranch *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  MatchQ[appHeadName[e], "ite" | "instDecidableIte" | "Bool.bne"] :=
+  With[{args = flattenApp[e][[2]]},
+    (* ite has args: type, cond, decidableInst, thenBranch, elseBranch *)
+    If[Length[args] >= 5,
+      With[{c = leanExprToWL[args[[2]], ctx],
+            t = leanExprToWL[args[[4]], ctx],
+            f = leanExprToWL[args[[5]], ctx]},
+        If[FailureQ[c] || FailureQ[t] || FailureQ[f], $Failed,
+          If[c, t, f]]],
+      (* Bool if -- 4 args *)
+      If[Length[args] >= 4,
+        With[{c = leanExprToWL[args[[1]], ctx],
+              t = leanExprToWL[args[[3]], ctx],
+              f = leanExprToWL[args[[4]], ctx]},
+          If[FailureQ[c] || FailureQ[t] || FailureQ[f], $Failed,
+            If[c, t, f]]],
+        $Failed]]];
+
+(* dite -- decidable if-then-else (dependent): dite type cond inst thenLam elseLam *)
+leanExprToWL[e_LeanApp, ctx_List] /;
+  appHeadName[e] === "dite" :=
+  With[{args = flattenApp[e][[2]]},
+    If[Length[args] >= 5,
+      With[{c = leanExprToWL[args[[2]], ctx]},
+        Module[{thenBody, elseBody},
+          (* thenLam/elseLam are lambdas -- extract body, push dummy name *)
+          thenBody = If[MatchQ[args[[4]], LeanLam[_, _, _, _]],
+            leanExprToWL[args[[4, 3]], Append[ctx, "_h"]], 
+            leanExprToWL[args[[4]], ctx]];
+          elseBody = If[MatchQ[args[[5]], LeanLam[_, _, _, _]],
+            leanExprToWL[args[[5, 3]], Append[ctx, "_h"]],
+            leanExprToWL[args[[5]], ctx]];
+          If[FailureQ[c] || FailureQ[thenBody] || FailureQ[elseBody], $Failed,
+            If[c, thenBody, elseBody]]]],
+      $Failed]];
+
+(* Let binding *)
+leanExprToWL[LeanLet[name_String, _, val_, body_], ctx_List] :=
+  Module[{sym = Unique[cleanName[name]], v, b},
+    v = leanExprToWL[val, ctx];
+    b = leanExprToWL[body, Append[ctx, sym]];
+    If[FailureQ[v] || FailureQ[b], $Failed,
+      (* Build: With[{sym = v}, b] using injection *)
+      With[{s = sym, val0 = v, body0 = b},
+        Hold[With][Hold[{s = val0}], Hold[body0]] // ReleaseHold]]];
+
+(* Lambda in body -- nested function *)
+leanExprToWL[LeanLam[name_, type_, body_, _], ctx_List] :=
+  Module[{sym = Unique[cleanName[name]], tyWL, b},
+    tyWL = leanTypeToWL[type];
+    b = leanExprToWL[body, Append[ctx, sym]];
+    If[FailureQ[tyWL] || FailureQ[b], $Failed,
+      With[{s = sym, t = tyWL, bd = b},
+        Function[Typed[s, t], bd]]]];
+
+(* MData wrapper -- pass through *)
+leanExprToWL[LeanMData[_, expr_], ctx_List] := leanExprToWL[expr, ctx];
+
+(* Generic application fallback -- try to translate head + args *)
+leanExprToWL[e_LeanApp, ctx_List] :=
+  Module[{head, args, headWL, argsWL},
+    {head, args} = flattenApp[e];
+    headWL = leanExprToWL[head, ctx];
+    argsWL = leanExprToWL[#, ctx] & /@ args;
+    If[FailureQ[headWL] || AnyTrue[argsWL, FailureQ],
+      $Failed,
+      headWL @@ argsWL]];
+
+(* Named constant fallback -- return as-is; won't be compilable but captures structure *)
+leanExprToWL[LeanConst[name_String, _], _List] := 
+  With[{sn = shortName[name]}, Symbol[sn]];
+
+(* Fallbacks *)
+leanExprToWL[LeanNoValue[], _] := $Failed;
+leanExprToWL[_, _] := $Failed;
+
+(* ---- Peel lambda binders from term body, collecting explicit params ---- *)
+(* Returns {paramList, body} where paramList = {{sym, wlType}, ...} *)
+(* sym is a unique WL symbol created for each param *)
+peelLambdas[term_, paramTypes_List] := Module[
+  {params = {}, body = term, name, type, bi, remaining = paramTypes, sym},
+  While[MatchQ[body, LeanLam[_, _, _, _]] && Length[remaining] > 0,
+    {name, type, body, bi} = {body[[1]], body[[2]], body[[3]], body[[4]]};
+    If[bi === "default",
+      sym = Unique[cleanName[name]];
+      AppendTo[params, {sym, First[remaining][[2]]}];
+      remaining = Rest[remaining],
+      (* implicit binder -- skip, don't consume from paramTypes *)
+      Null];
+    ];
+  {params, body}];
+
+(* ---- Main API: LeanToFunction ---- *)
+
+LeanToFunction[term_LeanTerm] := Module[
+  {data = term[[1]], kind, typeExpr, termExpr, sig, params, lambdaParams,
+   body, ctx, bodyWL, argSpecs, handle, name},
+  kind = Lookup[data, "Kind", "?"];
+  If[kind =!= "def",
+    Message[LeanToFunction::notdef, kind]; Return[$Failed]];
+  (* Get type and term *)
+  handle = Lookup[data, "_Handle", None];
+  name = Lookup[data, "Name", ""];
+  typeExpr = term["Type"];
+  termExpr = term["Term"];
+  If[MatchQ[typeExpr, _Missing | $Failed],
+    Message[LeanToFunction::notype, "(unavailable)"]; Return[$Failed]];
+  If[MatchQ[termExpr, _Missing | $Failed | LeanNoValue[]],
+    Message[LeanToFunction::noterm]; Return[$Failed]];
+  (* Extract function signature from type *)
+  sig = collectFunctionSignature[typeExpr];
+  If[FailureQ[sig],
+    Message[LeanToFunction::notype, Short[typeExpr]]; Return[$Failed]];
+  params = sig["Params"];
+  (* Peel lambda binders from term body -- creates unique symbols *)
+  {lambdaParams, body} = peelLambdas[termExpr, params];
+  (* Build variable context: list of actual symbols for de Bruijn resolution *)
+  ctx = lambdaParams[[All, 1]];
+  (* Translate body *)
+  bodyWL = leanExprToWL[body, ctx];
+  If[FailureQ[bodyWL],
+    Message[LeanToFunction::badexpr, Short[body]]; Return[$Failed]];
+  (* Build Function[{Typed[sym, "Type"], ...}, body] *)
+  argSpecs = Typed[#[[1]], #[[2]]] & /@ lambdaParams;
+  If[Length[argSpecs] === 1,
+    Function @@ {argSpecs[[1]], bodyWL},
+    Function @@ {argSpecs, bodyWL}]];
+
+(* ---- LeanCompile: convenience for FunctionCompile ---- *)
+
+LeanCompile[term_LeanTerm] := Module[{fn = LeanToFunction[term]},
+  If[FailureQ[fn], $Failed, FunctionCompile[fn]]];
+
+LeanCompile[env_LeanEnvironment] := Module[
+  {data = env[[1]], names, results = <||>},
+  names = Select[Keys[data], !StringStartsQ[#, "_"] &];
+  Do[
+    With[{term = env[name]},
+      If[Head[term] === LeanTerm && Lookup[term[[1]], "Kind", ""] === "def",
+        With[{cf = Quiet[LeanCompile[term]]},
+          If[Head[cf] === CompiledCodeFunction,
+            AssociateTo[results, name -> cf]]]]],
+    {name, names}];
+  results];
 
 End[];
 EndPackage[];
