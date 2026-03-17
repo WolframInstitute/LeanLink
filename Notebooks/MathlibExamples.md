@@ -42,8 +42,7 @@ In Lean 4 (and Mathlib), every expression has a *type*. Propositions live in `Pr
 
 ```wolfram
 algEnv = LeanImport["Mathlib.Algebra.Group.Basic",
-  "ProjectDir" -> mathlibDir,
-  "Imports" -> {"Mathlib.Algebra.Group.Basic"}]
+  "ProjectDir" -> mathlibDir]
 ```
 
 ```wolfram
@@ -138,8 +137,7 @@ algEnv["AddGroup"]["TypeForm"]
 
 ```wolfram
 logicEnv = LeanImport["Mathlib.Logic.Basic",
-  "ProjectDir" -> mathlibDir,
-  "Imports" -> {"Mathlib.Logic.Basic"}]
+  "ProjectDir" -> mathlibDir]
 ```
 
 ### The law of excluded middle
@@ -213,7 +211,6 @@ The FTA states that $\mathbb{C}$ is algebraically closed: every non-constant pol
 ```wolfram
 ftaEnv = LeanImport["Mathlib.FieldTheory.IsAlgClosed.Basic",
   "ProjectDir" -> mathlibDir,
-  "Imports" -> {"Mathlib.FieldTheory.IsAlgClosed.Basic"},
   "Filter" -> "IsAlgClosed"]
 ```
 

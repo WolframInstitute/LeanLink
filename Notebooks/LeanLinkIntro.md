@@ -230,7 +230,6 @@ mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 If[DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
   mathEnv = LeanImport["Mathlib.Tactic.Ring",
     "ProjectDir" -> mathlibDir,
-    "Imports" -> {"Mathlib.Tactic.Ring"},
     "Filter" -> "Ring"];
   Length[mathEnv],
   "Mathlib not built — run in mathlib4/: lake exe cache get && lake build Mathlib.Tactic.Ring"]

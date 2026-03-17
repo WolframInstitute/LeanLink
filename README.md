@@ -19,8 +19,7 @@ Wolfram Language paclet for native integration with [Lean 4](https://lean-lang.o
 
 (* Import Mathlib algebra *)
 env = LeanImport["Mathlib.Algebra.Group.Basic",
-  "ProjectDir" -> "~/src/mathlib4",
-  "Imports" -> {"Mathlib.Algebra.Group.Basic"}];
+  "ProjectDir" -> "~/src/mathlib4"];
 
 env["mul_comm"]["TypeForm"]
 (* "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" *)
