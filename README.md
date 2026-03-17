@@ -67,7 +67,7 @@ wolframscript -f run_tests.wls
 wolframscript -f publish_notebooks.wls
 ```
 
-Converts markdown sources to `.nb`, evaluates all cells, uploads to Wolfram Cloud.
+Converts `.md` → `.nb`, evaluates all cells (via headless `MathematicaServer`), uploads to Wolfram Cloud.
 
 ## Notebooks
 

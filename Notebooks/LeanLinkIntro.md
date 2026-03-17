@@ -3,18 +3,21 @@
 ## Setup
 
 ```wolfram
-PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];
+(*PacletDirectoryLoad[NotebookDirectory[] // ParentDirectory];*)
+PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVersionInstall -> True]
+```
+
+```wolfram
 Get["LeanLink`"];
-nativeDir = FileNameJoin[{PacletObject["LeanLink"]["Location"], "Native"}];
 ```
 
 ## Importing a Lean Environment
 
+Load the bundled Examples file:
+
 ```wolfram
-env = LeanImport["LeanLink.Examples",
-  "ProjectDir" -> nativeDir,
-  "Imports" -> {"LeanLink"},
-  "Filter" -> "Examples"]
+env = LeanImportString[
+  Import[PacletObject["LeanLink"]["AssetLocation", "Examples"], "Text"]]
 ```
 
 ```wolfram
@@ -24,21 +27,21 @@ Keys[env]
 ## Inspecting Types and Terms
 
 ```wolfram
-env["LeanLink.Examples.identity"]["TypeForm"]
+env["id_proof"]["TypeForm"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.identity"]["Type"]
+env["id_proof"]["Type"]
 ```
 
 ```wolfram
-env["LeanLink.Examples.Vec.head"]["TypeForm", 1]
+env["Vec.head"]["TypeForm", 1]
 ```
 
 ## Expression Graphs
 
 ```wolfram
-env["LeanLink.Examples.modus_ponens"]["ExprGraph"]
+env["modus_ponens"]["ExprGraph"]
 ```
 
 ## Constructing Expressions
@@ -64,7 +67,7 @@ LeanTerm[LeanForall["n", LeanConst["Nat"], LeanConst["Nat"], "default"], env]["T
 ### Identity: $\forall P : \text{Prop},\; P \to P$
 
 ```wolfram
-s0 = LeanState[env["LeanLink.Examples.identity"]]
+s0 = LeanState[env["id_proof"]]
 ```
 
 ```wolfram
@@ -82,7 +85,7 @@ s3 = LeanTactic["exact h"][s2]
 ### Modus Ponens: $P \to (P \to Q) \to Q$
 
 ```wolfram
-s0 = LeanState[env["LeanLink.Examples.modus_ponens"]]
+s0 = LeanState[env["modus_ponens"]]
 ```
 
 ```wolfram
@@ -92,7 +95,7 @@ LeanTactic[{"intro P Q hP hPQ", "exact hPQ hP"}][s0]
 ### Contrapositive: $(P \to Q) \to (\neg Q \to \neg P)$
 
 ```wolfram
-s0 = LeanState[env["LeanLink.Examples.contrapositive"]]
+s0 = LeanState[env["contrapositive"]]
 ```
 
 ```wolfram
@@ -102,7 +105,7 @@ LeanTactic[{"intro P Q hPQ hnQ hP", "apply hnQ", "exact hPQ hP"}][s0]
 ### And Commutativity: $P \land Q \to Q \land P$
 
 ```wolfram
-s0 = LeanState[env["LeanLink.Examples.and_comm"]]
+s0 = LeanState[env["and_comm_proof"]]
 ```
 
 ```wolfram
@@ -116,7 +119,7 @@ s2 = LeanTactic["constructor"][s1]
 ### Accessing Goal Properties
 
 ```wolfram
-s0 = LeanState[env["LeanLink.Examples.identity"]];
+s0 = LeanState[env["id_proof"]];
 s0["Goals"]
 ```
 
@@ -134,7 +137,7 @@ s0["Complete"]
 
 ## LeanEnvironment
 
-`LeanImport` returns a `LeanEnvironment` — a typed wrapper around `<|name → LeanTerm, ...|>`:
+`LeanImportString` returns a `LeanEnvironment` — a typed wrapper around `<|name → LeanTerm, ...|>`:
 
 ```wolfram
 Head[env]
@@ -145,7 +148,7 @@ Length[env]
 ```
 
 ```wolfram
-env["LeanLink.Examples.identity"]
+env["id_proof"]
 ```
 
 ```wolfram
@@ -157,7 +160,7 @@ Information[env, "Kinds"]
 ### Single term
 
 ```wolfram
-LeanExportString[env["LeanLink.Examples.identity"]]
+LeanExportString[env["id_proof"]]
 ```
 
 ### Full environment to file
@@ -254,7 +257,7 @@ LeanTactic[{
 Apply structured tactics to proof states:
 
 ```wolfram
-s0 = LeanState[env["LeanLink.Examples.identity"]];
+s0 = LeanState[env["id_proof"]];
 s1 = LeanTactic["intro", {"P"}][s0];
 s2 = LeanTactic["intro", {"h"}][s1];
 s3 = LeanTactic["exact", LeanConst["h"]][s2];
