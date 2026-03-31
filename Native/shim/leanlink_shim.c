@@ -25,9 +25,14 @@ extern void lean_io_mark_end_initialization(void);
 extern void lean_initialize_thread(void);
 
 /* Ensure current thread is registered with Lean runtime.
-   WL may call LibraryLink functions from different threads. */
+   WL may call LibraryLink functions from different threads.
+   Use thread-local guard to avoid repeated initialization. */
+static _Thread_local int g_thread_initialized = 0;
 static void ensure_thread(void) {
-    lean_initialize_thread();
+    if (!g_thread_initialized) {
+        lean_initialize_thread();
+        g_thread_initialized = 1;
+    }
 }
 
 /* Lean module initializer (v4.29: no world token, package-prefixed name) */
@@ -66,13 +71,23 @@ static WolframLibraryData g_libData = NULL;
    - other tags (e.g. sarray): treat as direct ByteArray
    Checks AbortQ() periodically during the byte copy loop. */
 static int io_bytearray_to_mtensor(WolframLibraryData libData, lean_object* result, MArgument* Res) {
+    /* Guard against NULL result (Lean panic/abort) */
+    if (!result) {
+        return LIBRARY_FUNCTION_ERROR;
+    }
+
     lean_object* ba;
     lean_object* to_free;
     unsigned tag = lean_obj_tag(result);
 
     if (tag == 0) {
         /* Except.ok — unwrap inner value */
-        ba = lean_ctor_get(result, 0);
+        lean_object* inner = lean_ctor_get(result, 0);
+        if (!inner) {
+            lean_dec_ref(result);
+            return LIBRARY_FUNCTION_ERROR;
+        }
+        ba = inner;
         to_free = result;
     } else if (tag == 1) {
         /* Except.error — operation failed */
@@ -82,6 +97,12 @@ static int io_bytearray_to_mtensor(WolframLibraryData libData, lean_object* resu
         /* Direct value (ByteArray = sarray, tag >= 245) — use as-is */
         ba = result;
         to_free = result;
+    }
+
+    /* Verify ba is actually a scalar array before accessing */
+    if (!lean_is_sarray(ba)) {
+        lean_dec_ref(to_free);
+        return LIBRARY_FUNCTION_ERROR;
     }
 
     size_t n = lean_sarray_size(ba);
@@ -187,6 +208,11 @@ DLLEXPORT int leanlink_wl_load_env(
 
     lean_object* io_res = leanlink_load_env(imports, path);
     /* imports and path consumed by leanlink_load_env */
+
+    if (!io_res) {
+        MArgument_setInteger(Res, 0);
+        return LIBRARY_FUNCTION_ERROR;
+    }
 
     if (lean_obj_tag(io_res) == 1) {
         /* Except.error */

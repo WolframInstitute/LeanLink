@@ -1,8 +1,8 @@
 (* ProofToLean.wl -- Transpile ProofObject -> LeanEnvironment *)
 (* Types are LeanTerm expression trees; tactic proofs are strings. *)
-(* Loaded by LeanLink.wl; operates within LeanLink` context. *)
+(* Loaded by LeanLink.wl; operates within Wolfram`LeanLink` context. *)
 
-BeginPackage["LeanLink`"];
+BeginPackage["Wolfram`LeanLink`"];
 Begin["`Private`"];
 
 (* ====== UNICODE CONSTANTS ====== *)

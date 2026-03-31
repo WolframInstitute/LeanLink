@@ -8,7 +8,7 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/TuringMachine.paclet", Forc
 ```
 
 ```wolfram
-Get["LeanLink`"];
+Get["Wolfram`LeanLink`"];
 Get["WolframInstitute`TuringMachine`"];
 ```
 

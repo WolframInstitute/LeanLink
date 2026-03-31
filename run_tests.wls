@@ -7,7 +7,7 @@ $testDir = FileNameJoin[{$pacletDir, "Tests"}];
 
 (* Set globals for test files *)
 PacletDirectoryLoad[$pacletDir];
-Needs["LeanLink`"];
+Needs["Wolfram`LeanLink`"];
 
 (* LeanLink Native build dir -- self-contained test environment *)
 $LeanLinkTestProjectDir = ExpandFileName[FileNameJoin[{$rootDir, "Native"}]];

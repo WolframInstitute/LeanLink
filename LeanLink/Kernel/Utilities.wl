@@ -2,7 +2,7 @@
 (* Utilities.wl -- General-purpose helpers (ImportDOT, etc.)      *)
 (* Kept for reference -- not loaded by default in LeanLink 0.2+   *)
 
-BeginPackage["LeanLink`"];
+BeginPackage["Wolfram`LeanLink`"];
 
 ImportDOT::usage = "ImportDOT[\"file.dot\"] imports a DOT digraph file as a Graph with colors, labels, and edge styles.";
 

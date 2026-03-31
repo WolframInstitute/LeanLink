@@ -4,7 +4,7 @@
 (* Load ImportDOT from Utilities.wl before main package *)
 Get[FileNameJoin[{DirectoryName[$InputFileName], "Utilities.wl"}]];
 
-BeginPackage["LeanLink`"];
+BeginPackage["Wolfram`LeanLink`"];
 
 (* Subprocess graph API *)
 LeanExprGraph::usage = "LeanExprGraph[root, opts] generates an expression graph for a Lean constant via subprocess. Options: \"Files\", \"Imports\", \"ProjectDir\", \"ConstDepth\", etc.";
@@ -21,7 +21,7 @@ Begin["`Private`"];
 $ElanBin = FileNameJoin[{$HomeDirectory, ".elan", "bin"}];
 $LakeBin = FileNameJoin[{$ElanBin, "lake"}];
 $LeanBin = FileNameJoin[{$ElanBin, "lean"}];
-$CodeLean = PacletObject["LeanLink"]["AssetLocation", "CodeLean"];
+$CodeLean = PacletObject["Wolfram/LeanLink"]["AssetLocation", "CodeLean"];
 
 (* RunProcess reads stdout as Latin-1; re-encode to UTF-8 *)
 decodeUTF8[s_String] := FromCharacterCode[ToCharacterCode[s, "ISO8859-1"], "UTF-8"];
@@ -176,6 +176,7 @@ End[];
 EndPackage[];
 
 (* Load Utilities (ImportDOT) and native WXF-based Lean integration *)
-Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "Utilities.wl"}]];
-Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "Lean.wl"}]];
-Get[FileNameJoin[{PacletObject["LeanLink"]["Location"], "Kernel", "ProofToLean.wl"}]];
+Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Utilities.wl"}]];
+Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Lean.wl"}]];
+Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "ProofToLean.wl"}]];
+Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Compiler.wl"}]];

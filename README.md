@@ -15,7 +15,7 @@ Wolfram Language paclet for native integration with [Lean 4](https://lean-lang.o
 ## Quick Start
 
 ```wolfram
-<< LeanLink`
+<< Wolfram`LeanLink`
 
 (* Import Mathlib algebra *)
 env = LeanImport["Mathlib.Algebra.Group.Basic",

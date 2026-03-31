@@ -30,7 +30,7 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVers
 ```
 
 ```wolfram
-Get["LeanLink`"];
+Get["Wolfram`LeanLink`"];
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 ```
 

@@ -61,7 +61,7 @@ def rule : ByteArray := ⟨#[45]⟩
 
 def serialize (body : ByteArray) : ByteArray := header ++ body
 
-def wlSymbol (name : String) : ByteArray := symbol ("LeanLink`" ++ name)
+def wlSymbol (name : String) : ByteArray := symbol ("Wolfram`LeanLink`" ++ name)
 
 def wlFunction (head : ByteArray) (args : Array ByteArray) : ByteArray :=
   function args.size ++ head ++ args.foldl (· ++ ·) ByteArray.empty

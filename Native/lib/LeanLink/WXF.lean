@@ -92,7 +92,7 @@ def serialize (body : ByteArray) : ByteArray :=
 -- High-level builders
 -- ============================================================================
 
-/-- Build a WL symbol like "LeanLink`LeanConst" -/
+/-- Build a WL symbol like "Wolfram`LeanLink`LeanConst" -/
 def wlSymbol (ctx : String) (name : String) : ByteArray :=
   symbol (ctx ++ "`" ++ name)
 
@@ -116,7 +116,7 @@ def wlAssociation (entries : Array (ByteArray × ByteArray)) : ByteArray :=
 -- Lean-specific serializers
 -- ============================================================================
 
-def ctx := "LeanLink"
+def ctx := "Wolfram`LeanLink"
 
 /-- Serialize a Lean Name to WXF string -/
 def nameToWXF (n : Lean.Name) : ByteArray :=
@@ -340,15 +340,15 @@ partial def parseWVal (s : ParseState) : Option (WVal × ParseState) :=
 
 /-- Convert parsed WVal to Lean Level -/
 partial def wvalToLevel : WVal → Option Lean.Level
-  | .fn "LeanLink`LeanLevelZero" _ => some .zero
-  | .fn "LeanLink`LeanLevelSucc" #[inner] => do
+  | .fn "Wolfram`LeanLink`LeanLevelZero" _ => some .zero
+  | .fn "Wolfram`LeanLink`LeanLevelSucc" #[inner] => do
     let l ← wvalToLevel inner; return .succ l
-  | .fn "LeanLink`LeanLevelMax" #[a, b] => do
+  | .fn "Wolfram`LeanLink`LeanLevelMax" #[a, b] => do
     let la ← wvalToLevel a; let lb ← wvalToLevel b; return .max la lb
-  | .fn "LeanLink`LeanLevelIMax" #[a, b] => do
+  | .fn "Wolfram`LeanLink`LeanLevelIMax" #[a, b] => do
     let la ← wvalToLevel a; let lb ← wvalToLevel b; return .imax la lb
-  | .fn "LeanLink`LeanLevelParam" #[.str name] => some (.param name.toName)
-  | .fn "LeanLink`LeanLevelMVar" #[.str name] => some (.mvar ⟨name.toName⟩)
+  | .fn "Wolfram`LeanLink`LeanLevelParam" #[.str name] => some (.param name.toName)
+  | .fn "Wolfram`LeanLink`LeanLevelMVar" #[.str name] => some (.mvar ⟨name.toName⟩)
   | _ => none
 
 /-- Convert parsed WVal to BinderInfo -/
@@ -360,28 +360,28 @@ def wvalToBinderInfo : WVal → Lean.BinderInfo
 
 /-- Convert parsed WVal to Lean Expr -/
 partial def wvalToExpr : WVal → Option Lean.Expr
-  | .fn "LeanLink`LeanBVar" #[.int idx] => some (.bvar idx.toNat)
-  | .fn "LeanLink`LeanFVar" #[.str name] => some (.fvar ⟨name.toName⟩)
-  | .fn "LeanLink`LeanMVar" #[.str name] => some (.mvar ⟨name.toName⟩)
-  | .fn "LeanLink`LeanSort" #[lvl] => do
+  | .fn "Wolfram`LeanLink`LeanBVar" #[.int idx] => some (.bvar idx.toNat)
+  | .fn "Wolfram`LeanLink`LeanFVar" #[.str name] => some (.fvar ⟨name.toName⟩)
+  | .fn "Wolfram`LeanLink`LeanMVar" #[.str name] => some (.mvar ⟨name.toName⟩)
+  | .fn "Wolfram`LeanLink`LeanSort" #[lvl] => do
     let l ← wvalToLevel lvl; return .sort l
-  | .fn "LeanLink`LeanConst" #[.str name, .list levels] => do
+  | .fn "Wolfram`LeanLink`LeanConst" #[.str name, .list levels] => do
     let ls ← levels.mapM wvalToLevel
     return .const name.toName ls.toList
-  | .fn "LeanLink`LeanApp" #[fn, arg] => do
+  | .fn "Wolfram`LeanLink`LeanApp" #[fn, arg] => do
     let f ← wvalToExpr fn; let a ← wvalToExpr arg; return .app f a
-  | .fn "LeanLink`LeanForall" #[.str name, dom, body, bi] => do
+  | .fn "Wolfram`LeanLink`LeanForall" #[.str name, dom, body, bi] => do
     let d ← wvalToExpr dom; let b ← wvalToExpr body
     return .forallE name.toName d b (wvalToBinderInfo bi)
-  | .fn "LeanLink`LeanLam" #[.str name, ty, body, bi] => do
+  | .fn "Wolfram`LeanLink`LeanLam" #[.str name, ty, body, bi] => do
     let t ← wvalToExpr ty; let b ← wvalToExpr body
     return .lam name.toName t b (wvalToBinderInfo bi)
-  | .fn "LeanLink`LeanLet" #[.str name, ty, val, body] => do
+  | .fn "Wolfram`LeanLink`LeanLet" #[.str name, ty, val, body] => do
     let t ← wvalToExpr ty; let v ← wvalToExpr val; let b ← wvalToExpr body
     return .letE name.toName t v b false
-  | .fn "LeanLink`LeanLitNat" #[.int n] => some (.lit (.natVal n.toNat))
-  | .fn "LeanLink`LeanLitStr" #[.str s] => some (.lit (.strVal s))
-  | .fn "LeanLink`LeanProj" #[.str name, .int idx, struct] => do
+  | .fn "Wolfram`LeanLink`LeanLitNat" #[.int n] => some (.lit (.natVal n.toNat))
+  | .fn "Wolfram`LeanLink`LeanLitStr" #[.str s] => some (.lit (.strVal s))
+  | .fn "Wolfram`LeanLink`LeanProj" #[.str name, .int idx, struct] => do
     let s ← wvalToExpr struct; return .proj name.toName idx.toNat s
   | _ => none
 

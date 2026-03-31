@@ -8,7 +8,7 @@ PacletInstall["https://www.wolframcloud.com/obj/nikm/LeanLink.paclet", ForceVers
 ```
 
 ```wolfram
-Get["LeanLink`"];
+Get["Wolfram`LeanLink`"];
 ```
 
 ## Importing a Lean Environment

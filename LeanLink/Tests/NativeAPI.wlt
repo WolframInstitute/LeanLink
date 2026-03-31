@@ -1,5 +1,5 @@
 (* NativeAPI.wlt -- Comprehensive LeanLink tests *)
-(* Requires: $LeanLinkTestProjectDir and LeanLink` set by run_tests.wls *)
+(* Requires: $LeanLinkTestProjectDir and Wolfram`LeanLink` set by run_tests.wls *)
 
 BeginTestSection["NativeAPI"]
 
@@ -64,7 +64,7 @@ VerificationTest[
 
 (* Standalone file import *)
 VerificationTest[
-  $standalone = LeanImport[PacletObject["LeanLink"]["AssetLocation", "Examples"]];
+  $standalone = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
   Head[$standalone] === LeanEnvironment && Length[$standalone] > 10,
   True,
   TestID -> "LeanImport-Standalone-Returns-Env"
@@ -555,6 +555,71 @@ VerificationTest[
         AnyTrue[Keys[env], StringContainsQ[#, "isAlgClosed" | "IsAlgClosed"] &]]],
   True,
   TestID -> "Mathlib-Complex-FTA"
+]
+
+(* ================================================================ *)
+(* LeanToFunction / LeanCompile                                       *)
+(* ================================================================ *)
+
+(* Simple def: n + 1 *)
+VerificationTest[
+  Module[{env, fn},
+    env = LeanImportString["def myFn (n : Nat) : Nat := n + 1"];
+    fn = LeanToFunction[env["myFn"]];
+    Head[fn] === Function],
+  True,
+  TestID -> "LeanToFunction-SimpleDef-Returns-Function"
+]
+
+(* FunctionCompile the simple def *)
+VerificationTest[
+  Module[{env, fn, cf},
+    env = LeanImportString["def myFn (n : Nat) : Nat := n + 1"];
+    fn = LeanToFunction[env["myFn"]];
+    If[Head[fn] =!= Function, Return[False, Module]];
+    cf = Quiet[FunctionCompile[fn]];
+    Head[cf] === CompiledCodeFunction && cf[5] === 6],
+  True,
+  TestID -> "LeanCompile-SimpleDef-Executes"
+]
+
+(* Multi-arg def *)
+VerificationTest[
+  Module[{env, cf},
+    env = LeanImportString["def add (m n : Nat) : Nat := m + n"];
+    cf = LeanCompile[env["add"]];
+    Head[cf] === CompiledCodeFunction && cf[3, 4] === 7],
+  True,
+  TestID -> "LeanCompile-MultiArg-Add"
+]
+
+(* Multiplication *)
+VerificationTest[
+  Module[{env, cf},
+    env = LeanImportString["def double (n : Nat) : Nat := n * 2"];
+    cf = LeanCompile[env["double"]];
+    Head[cf] === CompiledCodeFunction && cf[7] === 14],
+  True,
+  TestID -> "LeanCompile-Multiply"
+]
+
+(* Non-compilable type rejection (Prop-based theorem) *)
+VerificationTest[
+  Module[{env},
+    env = LeanImportString["theorem myT : 1 + 1 = 2 := rfl"];
+    Quiet[LeanToFunction[env["myT"]]]],
+  $Failed,
+  TestID -> "LeanToFunction-RejectsNonCompilable"
+]
+
+(* LeanCompile on environment *)
+VerificationTest[
+  Module[{env, compiled},
+    env = LeanImportString["def f1 (n : Nat) : Nat := n + 1\ndef f2 (n : Nat) : Nat := n * 2\ntheorem t : 1 = 1 := rfl"];
+    compiled = Quiet[LeanCompile[env]];
+    AssociationQ[compiled] && Length[compiled] >= 2],
+  True,
+  TestID -> "LeanCompile-Environment-MultiDef"
 ]
 
 EndTestSection[]

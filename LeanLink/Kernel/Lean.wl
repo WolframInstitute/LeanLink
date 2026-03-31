@@ -1,7 +1,7 @@
 (* ::Package:: *)
 (* Lean.wl -- Native Lean integration via LibraryLink *)
 
-BeginPackage["LeanLink`"];
+BeginPackage["Wolfram`LeanLink`"];
 
 (* ============================================================================ *)
 (* Expression heads                                                             *)
@@ -80,7 +80,7 @@ $ShimLib := $ShimLib = Module[{loc, pacletDir, devDir, libName, sysDir},
     _, "libLeanLinkShim.so"];
   sysDir = $SystemID;
   (* Standard paclet location: LibraryResources inside paclet *)
-  pacletDir = Quiet[PacletObject["LeanLink"]["Location"]];
+  pacletDir = Quiet[PacletObject["Wolfram/LeanLink"]["Location"]];
   If[StringQ[pacletDir],
     loc = FileNameJoin[{pacletDir, "LibraryResources", sysDir, libName}];
     If[FileExistsQ[loc], Return[loc, Module]]];
@@ -1766,6 +1766,29 @@ leanTypeToWL[LeanConst["UInt16", _List]] := "UnsignedInteger16";
 leanTypeToWL[LeanConst["UInt32", _List]] := "UnsignedInteger32";
 leanTypeToWL[LeanConst["UInt64", _List]] := "UnsignedInteger64";
 
+(* Parameterized types: Array α, List α → PackedArray *)
+leanTypeToWL[LeanApp[LeanConst["Array" | "List", _], elemType_]] :=
+  With[{et = leanTypeToWL[elemType]},
+    If[FailureQ[et], $Failed, "PackedArray"[et, 1]]];
+
+(* Vector α n → "Vector"[elemType, size] (dependent) *)
+leanTypeToWL[LeanApp[LeanApp[LeanConst["Vector", _], elemType_], sizeExpr_]] :=
+  With[{et = leanTypeToWL[elemType]},
+    If[FailureQ[et], $Failed,
+      With[{sz = leanTypeToWLSize[sizeExpr]},
+        "Vector"[et, sz]]]];
+
+(* Option α → MaybeValue *)
+leanTypeToWL[LeanApp[LeanConst["Option", _], elemType_]] :=
+  With[{et = leanTypeToWL[elemType]},
+    If[FailureQ[et], $Failed, "MaybeValue"[et]]];
+
+(* Size expression helper: extract literal or variable name from Lean size expr *)
+leanTypeToWLSize[LeanLitNat[n_Integer]] := n;
+leanTypeToWLSize[LeanBVar[i_Integer]] := "n" <> ToString[i];  (* placeholder *)
+leanTypeToWLSize[LeanConst[name_String, _]] := name;
+leanTypeToWLSize[_] := "?";
+
 (* Arrow type: forall _ : A, B  (non-dependent) -> {A'} -> B' *)
 leanTypeToWL[LeanForall[name_, dom_, body_, "default"]] :=
   Module[{domTy, bodyTy},
@@ -2044,9 +2067,27 @@ LeanToFunction[term_LeanTerm] := Module[
     Function @@ {argSpecs[[1]], bodyWL},
     Function @@ {argSpecs, bodyWL}]];
 
+(* ---- Dependent type detection ---- *)
+
+(* Check if a Lean type expression has any dependent forall binder.
+   A forall is dependent when the bound variable (LeanBVar[0] at that depth)
+   appears free in the body — i.e., the return type depends on the argument. *)
+hasDependentBinderQ[LeanForall[_, _, body_, "default"]] :=
+  !FreeQ[body, LeanBVar[0]] || hasDependentBinderQ[body];
+hasDependentBinderQ[LeanForall[_, _, body_, _]] :=
+  hasDependentBinderQ[body];
+hasDependentBinderQ[_] := False;
+
 (* ---- LeanCompile: convenience for FunctionCompile ---- *)
 
-LeanCompile[term_LeanTerm] := Module[{fn = LeanToFunction[term]},
+LeanCompile[term_LeanTerm] := Module[{typeExpr, fn},
+  (* If the type has dependent binders, use the TypePi-aware path *)
+  typeExpr = term["Type"];
+  If[!MatchQ[typeExpr, _Missing | $Failed] && hasDependentBinderQ[typeExpr],
+    With[{cf = Quiet[LeanCompileTyped[term]]},
+      If[Head[cf] === CompiledCodeFunction, Return[cf]]]];
+  (* Fallback: simple path *)
+  fn = LeanToFunction[term];
   If[FailureQ[fn], $Failed, FunctionCompile[fn]]];
 
 LeanCompile[env_LeanEnvironment] := Module[
