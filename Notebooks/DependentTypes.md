@@ -4,7 +4,7 @@
 
 ```wolfram
 PacletDirectoryLoad[FileNameJoin[{NotebookDirectory[] // ParentDirectory, "LeanLink"}]];
-Get["LeanLink`"];
+Get["Wolfram`LeanLink`"];
 ```
 
 ## Arrow Types and Currying

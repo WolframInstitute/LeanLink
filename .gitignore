@@ -15,15 +15,14 @@
 _agents/
 .claude/
 
-# IDE caches
-Native/shim/.cache/
-
 # Lean build
 Native/.lake/
-
-# Native shim
-Native/shim/build/
+Native/shim/.cache/
+Native/shim/build*/
 Native/shim/compile_commands.json
 
 # Built libraries (output by CMake into paclet)
 LeanLink/LibraryResources/
+
+# Paclet build
+LeanLink/build/

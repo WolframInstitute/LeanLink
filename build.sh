@@ -25,9 +25,9 @@ download_sysroot() {
     local ext_dir="${CACHE_DIR}/lean-${LEAN_VER_NUM}-${platform}"
     
     if [ ! -d "$ext_dir" ]; then
-        echo "--> Downloading Lean ${LEAN_VER_TAG} for ${platform}..."
-        curl -L -f -s "$url" -o "$zipname" || { echo "Failed to download $url"; exit 1; }
-        echo "--> Extracting ${zipname}..."
+        echo "--> Downloading Lean ${LEAN_VER_TAG} for ${platform}..." >&2
+        curl -L -f -s "$url" -o "$zipname" || { echo "Failed to download $url" >&2; exit 1; }
+        echo "--> Extracting ${zipname}..." >&2
         unzip -q "$zipname"
         rm -f "$zipname"
     fi
@@ -35,6 +35,7 @@ download_sysroot() {
 }
 
 LINUX_SYSROOT="$(download_sysroot "linux")"
+LINUX_ARM_SYSROOT="$(download_sysroot "linux_aarch64")"
 WINDOWS_SYSROOT="$(download_sysroot "windows")"
 DARWIN_X86_SYSROOT="$(download_sysroot "darwin")"
 DARWIN_ARM_SYSROOT="$(download_sysroot "darwin_aarch64")"
@@ -71,12 +72,15 @@ build_target() {
     mkdir -p "$build_dir"
     cd "$build_dir"
     
-    local CMAKE_CMD=("cmake" "-DLEAN_HOME=${lean_home}" "-DWL_INCLUDE=${WL_INCLUDE}" "-DCMAKE_C_COMPILER=${cc}")
+    local CMAKE_CMD=("cmake" "-DLEAN_HOME=${lean_home}" "-DWL_INCLUDE=${WL_INCLUDE}" "-DCMAKE_C_COMPILER=${cc}" "-DWL_SYSID=${sysid}")
     
     if [[ "$sysid" == *"Windows"* ]]; then
         CMAKE_CMD+=("-DCMAKE_SYSTEM_NAME=Windows")
     elif [[ "$sysid" == *"Linux"* ]]; then
         CMAKE_CMD+=("-DCMAKE_SYSTEM_NAME=Linux")
+        if [[ "$sysid" == *"ARM"* ]]; then
+            CMAKE_CMD+=("-DCMAKE_SYSTEM_PROCESSOR=aarch64")
+        fi
     fi
 
     if [ -n "$osx_arch" ]; then
@@ -97,7 +101,10 @@ build_target "MacOSX-x86-64" "$DARWIN_X86_SYSROOT" "clang" "x86_64"
 # 3. Linux x86_64
 build_target "Linux-x86-64" "$LINUX_SYSROOT" "x86_64-linux-gnu-gcc" ""
 
-# 4. Windows x86_64
+# 4. Linux ARM64
+build_target "Linux-ARM64" "$LINUX_ARM_SYSROOT" "aarch64-linux-gnu-gcc" ""
+
+# 5. Windows x86_64
 build_target "Windows-x86-64" "$WINDOWS_SYSROOT" "x86_64-w64-mingw32-gcc" ""
 
 echo "=== Done ==="
