@@ -1,11 +1,15 @@
+(* ::Package:: *)
+
 PacletObject[
   <|
     "Name" -> "Wolfram/LeanLink",
-    "Description" -> "Lean 4 proof graph visualizer. Generates expression and call graphs from Lean theorems.",
-    "PublisherID" -> "Wolfram",
+    "Description" -> "Native link between Wolfram Language and Lean 4",
     "Creator" -> "Nik Murzin",
-    "Version" -> "1.0.0",
+    "License" -> "MIT",
+    "PublisherID" -> "Wolfram",
+    "Version" -> "1.0.1",
     "WolframVersion" -> "14.0+",
+    "PrimaryContext" -> "Wolfram`LeanLink`",
     "Extensions" -> {
       {
         "Kernel",

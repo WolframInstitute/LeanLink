@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.20)
 project(LeanLinkShim C)
 
 # --- Lean SDK ---
-set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.29.0-rc6")
+set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.29.0-rc6" CACHE PATH "Path to Lean installation")
 
 # --- Wolfram LibraryLink ---
-set(WL_INCLUDE "/Applications/Wolfram 15.0.app/Contents/SystemFiles/IncludeFiles/C")
+set(WL_INCLUDE "/Applications/Wolfram 15.0.app/Contents/SystemFiles/IncludeFiles/C" CACHE PATH "Path to Wolfram LibraryLink headers")
 
 # --- Generated IR from Lake build ---
 set(NATIVE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -13,26 +13,22 @@ set(IR_DIR "${NATIVE_DIR}/.lake/build/ir")
 
 # --- Paclet LibraryResources output ---
 set(PACLET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../LeanLink")
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-        set(WL_SYSID "MacOSX-ARM64")
-    else()
-        set(WL_SYSID "MacOSX-x86-64")
+if(NOT DEFINED WL_SYSID)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" OR CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+            set(WL_SYSID "MacOSX-ARM64")
+        else()
+            set(WL_SYSID "MacOSX-x86-64")
+        endif()
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+            set(WL_SYSID "Linux-ARM64")
+        else()
+            set(WL_SYSID "Linux-x86-64")
+        endif()
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        set(WL_SYSID "Windows-x86-64")
     endif()
-    set(SHIM_LIB_NAME "libLeanLinkShim.dylib")
-    set(LEAN_SHARED_NAME "libleanshared.dylib")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-        set(WL_SYSID "Linux-ARM64")
-    else()
-        set(WL_SYSID "Linux-x86-64")
-    endif()
-    set(SHIM_LIB_NAME "libLeanLinkShim.so")
-    set(LEAN_SHARED_NAME "libleanshared.so")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(WL_SYSID "Windows-x86-64")
-    set(SHIM_LIB_NAME "LeanLinkShim.dll")
-    set(LEAN_SHARED_NAME "leanshared.dll")
 endif()
 
 set(LIB_RES_DIR "${PACLET_DIR}/LibraryResources/${WL_SYSID}")
@@ -59,7 +55,12 @@ target_include_directories(LeanLinkShim PRIVATE
 )
 
 target_link_directories(LeanLinkShim PRIVATE ${LEAN_HOME}/lib/lean)
-target_link_libraries(LeanLinkShim PRIVATE leanshared)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(DEFAULT_LIBS ${CMAKE_SOURCE_DIR}/libgnu_lean_thunks.a ${LEAN_HOME}/bin/libleanshared.dll ${LEAN_HOME}/bin/libleanshared_1.dll ${LEAN_HOME}/bin/libleanshared_2.dll)
+    target_link_libraries(LeanLinkShim PRIVATE -Wl,--enable-auto-import ${DEFAULT_LIBS})
+else()
+    target_link_libraries(LeanLinkShim PRIVATE leanshared)
+endif()
 
 # Post-build: fix dylib paths (macOS) and copy libleanshared
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")

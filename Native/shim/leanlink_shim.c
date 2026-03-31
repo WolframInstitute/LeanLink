@@ -24,6 +24,19 @@ extern lean_object* lean_initialize_runtime_module(void);
 extern void lean_io_mark_end_initialization(void);
 extern void lean_initialize_thread(void);
 
+#ifdef _WIN32
+static int portable_setenv(const char *name, const char *value, int overwrite) {
+    if (!overwrite && getenv(name) != NULL) {
+        return 0;
+    }
+    return _putenv_s(name, value);
+}
+#else
+static int portable_setenv(const char *name, const char *value, int overwrite) {
+    return setenv(name, value, overwrite);
+}
+#endif
+
 /* Ensure current thread is registered with Lean runtime.
    WL may call LibraryLink functions from different threads.
    Use thread-local guard to avoid repeated initialization. */
@@ -143,7 +156,7 @@ static int lazy_lean_init(void) {
     if (g_lean_initialized) return LIBRARY_NO_ERROR;
 
 #ifdef LEAN_LIB_DIR
-    setenv("LEAN_PATH", LEAN_LIB_DIR, 0);
+    portable_setenv("LEAN_PATH", LEAN_LIB_DIR, 0);
 #endif
     lean_object* res = lean_initialize_runtime_module();
     if (lean_io_result_is_error(res)) {
@@ -201,7 +214,7 @@ DLLEXPORT int leanlink_wl_load_env(
 
     /* Lean 4.29: importModules reads LEAN_PATH via IO.getEnv internally.
        Without it, module loading panics. Set it from the search path. */
-    setenv("LEAN_PATH", path_cstr, 1);
+    portable_setenv("LEAN_PATH", path_cstr, 1);
 
     lean_object* imports = lean_mk_string(imports_cstr);
     lean_object* path = lean_mk_string(path_cstr);
