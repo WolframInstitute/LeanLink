@@ -1320,18 +1320,29 @@ LeanImport[module_String, opts : OptionsPattern[]] /;
         FileNameDrop[#, FileNameDepth[buildLib]] & /@ oleans,
         {".olean" -> "", "/" -> "."}];
       If[subModules =!= {},
-        (* For directory-based modules, use first available sub-module's env *)
-        Module[{h, kinds},
-          h = Quiet[getOrLoadEnv[projDir, Take[subModules, 1]]];
-          If[IntegerQ[h] && h > 0,
-            kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
-            If[AssociationQ[kinds],
-              If[!TrueQ[OptionValue["IncludeInternal"]],
-                kinds = KeySelect[kinds, !isInternalName[#] &]];
-              results = LeanEnvironment[Append[Association @ KeyValueMap[
-                Function[{n, k},
-                  n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]],
-                kinds], "_Handle" -> h]]]]];
+        (* Load ALL discovered sub-modules so the full environment is available.
+           Load them individually to avoid module clash failures. *)
+        Module[{envAssoc = <||>, handles = {}, kinds},
+          Do[
+            With[{h = Quiet[getOrLoadEnv[projDir, {imp}]]},
+              If[IntegerQ[h] && h > 0,
+                AppendTo[handles, h];
+                kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
+                If[AssociationQ[kinds],
+                  If[!TrueQ[OptionValue["IncludeInternal"]],
+                    kinds = KeySelect[kinds, !isInternalName[#] &]];
+                  AssociateTo[envAssoc, Association @ KeyValueMap[
+                    Function[{n, k},
+                      n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]],
+                    kinds]];
+                ];
+              ];
+            ],
+            {imp, subModules}
+          ];
+          If[Length[envAssoc] === 0, Return[$Failed, Module]];
+          results = LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]];
+        ];
         Return[results, Module]]];
     LeanImport["Imports" -> {module}, opts]];
 
@@ -1415,20 +1426,47 @@ LeanImport[file_String, opts : OptionsPattern[]] /;
       res]];
 
 (* LeanImport[opts] -- base form: instant lazy loading *)
-LeanImport[opts : OptionsPattern[]] := Module[{handle, kinds},
+(* When Imports is empty, auto-discover all project modules (like LeanImport[""] would) *)
+LeanImport[opts : OptionsPattern[]] := Module[{handle, kinds, imports, projDir},
   If[$ShimLib === $Failed, Message[LeanLink::nolib]; Return[$Failed]];
-  handle = getOrLoadEnv[resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"]];
-  If[handle === $Failed, Return[$Failed]];
-  kinds = decodeWXF[$listConstantKindsFn[handle, OptionValue["Filter"]]];
-  If[!AssociationQ[kinds], Return[$Failed]];
-  (* Filter out internal/generated names *)
-  If[!TrueQ[OptionValue["IncludeInternal"]],
-    kinds = KeySelect[kinds, !isInternalName[#] &]];
-  (* Build lazy LeanTerms: only Name + Kind + _Handle, no Type/Term yet *)
-  LeanEnvironment[Append[Association @ KeyValueMap[
-    Function[{name, kind},
-      name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]],
-    kinds], "_Handle" -> handle]]];
+  imports = OptionValue["Imports"];
+  projDir = resolveProjDir[OptionValue["ProjectDir"]];
+  (* Auto-discover all project modules when no imports specified *)
+  If[imports === {},
+    Module[{buildLib, oleans, subModules},
+      buildLib = With[{v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
+                       v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]},
+        If[DirectoryQ[v5], v5, v4]];
+      If[DirectoryQ[buildLib],
+        oleans = FileNames["*.olean", buildLib, Infinity];
+        subModules = StringReplace[
+          FileNameDrop[#, FileNameDepth[buildLib]] & /@ oleans,
+          {".olean" -> "", "/" -> "."}];
+        If[subModules =!= {}, imports = subModules]]]];
+  (* If user requested a list of imports, load them together.
+     If we auto-discovered them, load them individually to prevent Lean module clash failures *)
+  Module[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}],
+          envAssoc = <||>, handles = {}},
+    Do[
+      With[{h = Quiet[getOrLoadEnv[projDir, batch]]},
+        If[IntegerQ[h] && h > 0,
+          AppendTo[handles, h];
+          kinds = Quiet[decodeWXF[$listConstantKindsFn[h, OptionValue["Filter"]]]];
+          If[AssociationQ[kinds],
+            If[!TrueQ[OptionValue["IncludeInternal"]],
+              kinds = KeySelect[kinds, !isInternalName[#] &]];
+            (* Build lazy LeanTerms: Name + Kind + _Handle. Each symbol remembers its specific handle! *)
+            AssociateTo[envAssoc, Association @ KeyValueMap[
+              Function[{name, kind},
+                name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> h|>]],
+              kinds]];
+          ];
+        ];
+      ],
+      {batch, loadBatches}
+    ];
+    If[Length[envAssoc] === 0, Message[LeanLink::err, "Failed to load environment"]; Return[$Failed]];
+    LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]]]];
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
 
