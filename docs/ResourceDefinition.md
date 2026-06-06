@@ -21,7 +21,7 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[leanprover/lean4 (
 ## Details & Options
 
 - LeanLink is a high-performance **native bridge** between the Wolfram Language and the [Lean 4](https://lean-lang.org/) theorem prover. It embeds the Lean runtime directly through a compiled [LibraryLink]() shim - there is no subprocess per call and no text-protocol round-trip for the core API.
-- A loaded environment is a [LeanEnvironment](), a typed wrapper over <code>[Association]()[name -> [LeanTerm](), ...]</code>. [LeanImport]() loads constants from a compiled Lean module (Mathlib included); [LeanImportString]() compiles a Lean source string on the fly.
+- A loaded environment is a [LeanEnvironment](), a typed wrapper over <code>[Association]()[name -> [LeanTerm](), …]</code>. [LeanImport]() loads constants from a compiled Lean module (Mathlib included); [LeanImportString]() compiles a Lean source string on the fly.
 - Every Lean expression is a symbolic tree built from a small set of CIC heads - [LeanConst](), [LeanApp](), [LeanForall](), [LeanLam](), [LeanBVar](), [LeanSort](), [LeanLitNat](), ... - each carrying box formatting so it displays in Lean-source notation.
 - A [LeanTerm]() exposes `"Type"` / `"Term"` (expression trees), `"TypeForm"` / `"TermForm"` (pretty-printed source), `"Parameters"` (the unfolded binder chain), and `"ExprGraph"` / `"CallGraph"` (native [Graph]() visualizations).
 - [LeanState]() and [LeanTactic]() drive **interactive tactic proofs** step by step; [ProofToLean]() transpiles a Wolfram [ProofObject]() into a checkable [LeanEnvironment](); [LeanCompile]() and [LeanToFunction]() lower a Lean definition to a [FunctionCompile]() function.
@@ -175,7 +175,7 @@ cf[3, 4]
 
 ## Properties and Relations
 
-[LeanImportString]() round-trips with [LeanExportString](): import a source string, query it, and export an environment back to Lean source.
+[LeanImportString]() round-trips with [LeanExportString](): import a source string, query it, and export an environment back to Lean source:
 
 ```wl
 imported = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
