@@ -11,6 +11,7 @@ MainGuide: Documentation/English/Guides/LeanLink.nb
 License: MIT
 WolframVersion: 14.0+
 Categories: [External Interfaces & Connections, Higher Mathematical Computation, Graphs & Networks]
+Disclosures: [WLSystemSymbols]
 Sources: ["Leonardo de Moura, Sebastian Ullrich, *The Lean 4 Theorem Prover and Programming Language*, CADE 28, 2021"]
 SourceControlURL: https://github.com/WolframInstitute/LeanLink
 RelatedResources: [MetamathImport]
