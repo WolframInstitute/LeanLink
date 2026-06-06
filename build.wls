@@ -1,9 +1,10 @@
 #!/usr/bin/env wolframscript
-
 name = "LeanLink"
+
 pacletDir = FileNameJoin[{Directory[], name}]
 
 PacletDirectoryLoad[pacletDir]
+
 paclet = PacletObject[name]
 
 pacletFile = CreatePacletArchive[pacletDir]
@@ -14,4 +15,6 @@ PacletDirectoryUnload[pacletDir]
 
 PacletInstall[pacletFile, ForceVersionInstall -> True]
 
-CopyFile[pacletFile, Echo @ CloudObject[name <> ".paclet", Permissions -> "Public"], OverwriteTarget -> True]
+CopyFile[
+    pacletFile, Echo @ CloudObject[name <> ".paclet", Permissions -> "Public"], OverwriteTarget -> True
+]

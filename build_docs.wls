@@ -33,7 +33,7 @@ PacletDirectoryLoad[pacletDir]
 
 Quiet @ Needs["Wolfram`LeanLink`"]
 
-If[ !NameQ["Wolfram`LeanLink`LeanImport"],
+If[ ! NameQ["Wolfram`LeanLink`LeanImport"],
     Print["FATAL: Wolfram`LeanLink` failed to load (LeanImport undefined)."];
     Exit[1]
 ]
@@ -42,18 +42,11 @@ If[ !NameQ["Wolfram`LeanLink`LeanImport"],
    build needs a cloud connection. A headless `wl` session does not connect
    automatically; CloudConnect[] reconnects silently from cached credentials. *)
 
-Quiet @
-    Check[
-        If[ !TrueQ[$CloudConnected],
-            CloudConnect[]
-        ]
-        ,
-        Null
-    ]
+Quiet @ Check[If[! TrueQ[$CloudConnected], CloudConnect[]], Null]
 
 mtn = ResourceFunction["https://www.wolframcloud.com/obj/nikm/DeployedResources/Function/MarkdownToNotebook"]
 
-If[ !MatchQ[mtn, _ResourceFunction],
+If[ ! MatchQ[mtn, _ResourceFunction],
     Print["FATAL: could not load the deployed MarkdownToNotebook resource."];
     Print["  Run `wolframscript -c CloudConnect` once to cache credentials, then retry."];
     Exit[1]
@@ -72,14 +65,8 @@ subdir = <|
    depend on any particular MarkdownToNotebook "Association" output mode. *)
 
 frontmatterTemplate[srcFile_String] := Block[{text = Import[srcFile, "Text"], m},
-    m
-    =
-    StringCases[text, StartOfLine ~~ "Template:" ~~ Whitespace... ~~ v : Except["\n"].. :> StringTrim[v], 1];
-    If[ m === {},
-        Missing[]
-        ,
-        First[m]
-    ]
+    m = StringCases[text, StartOfLine ~~ "Template:" ~~ Whitespace... ~~ v : Except["\n"].. :> StringTrim[v], 1];
+    If[m === {}, Missing[], First[m]]
 ]
 
 (* Tutorials thread state across sections (a LeanEnvironment imported in one
@@ -93,12 +80,12 @@ buildDoc[srcFile_String] := Block[
     ,
 (* Skip plain-markdown files with no YAML frontmatter (DOC_GUIDE.md is a
    house-style guide for authors, not a doc page). *)
-    If[ !StringStartsQ[StringTrim @ Import[srcFile, "Text"], "---"],
+    If[ ! StringStartsQ[StringTrim @ Import[srcFile, "Text"], "---"],
         Print["  (skip ", FileNameTake[srcFile], ": no frontmatter)"];
         Return[]
     ];
     tmpl = frontmatterTemplate[srcFile];
-    If[ !KeyExistsQ[subdir, tmpl],
+    If[ ! KeyExistsQ[subdir, tmpl],
         Print["  (skip ", FileNameTake[srcFile], ": template ", tmpl, " not a doc page)"];
         Return[]
     ];
