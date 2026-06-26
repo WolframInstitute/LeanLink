@@ -184,20 +184,23 @@ structure ExprGraphData where
   edges : Array ExprEdge
   expanded : Std.HashSet Name
 
+-- Canonical metamathematics palette (Language`EquationalProofDump`
+-- MetamathematicsStyleData), matching the Wolfram-side $headColor.
 def exprKindColor : String → String
-  | "app"     => "#e1bee7"
-  | "lam"     => "#fff9c4"
-  | "forallE" => "#ffe0b2"
-  | "letE"    => "#b2dfdb"
-  | "const"   => "#bbdefb"
-  | "bvar"    => "#f5f5f5"
-  | "fvar"    => "#f5f5f5"
-  | "mvar"    => "#ffcdd2"
-  | "sort"    => "#d7ccc8"
-  | "lit"     => "#c8e6c9"
-  | "proj"    => "#b3e5fc"
-  | "mdata"   => "#e0e0e0"
-  | _         => "#e0e0e0"
+  | "app"     => "#e0c2ff"
+  | "lam"     => "#d8e0a2"
+  | "forallE" => "#ffe3af"
+  | "letE"    => "#caf2ef"
+  | "const"   => "#dbf2ca"
+  | "bvar"    => "#f2f2f2"
+  | "fvar"    => "#f2f2f2"
+  | "mvar"    => "#f7cbc5"
+  | "sort"    => "#ffc2ff"
+  | "level"   => "#ffc2ff"
+  | "lit"     => "#f7cbc5"
+  | "proj"    => "#dbf2ca"
+  | "mdata"   => "#e6e6e6"
+  | _         => "#e6e6e6"
 
 structure WalkCfg where
   env : Environment
@@ -275,7 +278,7 @@ partial def walkExpr (cfg : WalkCfg) (e : Expr) (gd : ExprGraphData)
         match ci.value? with
         | some val =>
           let id := gd.nodes.size
-          let node : ExprNode := { id, label := s!"{sn}", kind := "const", color := "#90caf9" }
+          let node : ExprNode := { id, label := s!"{sn}", kind := "const", color := "#a6de7a" }
           let gd := { gd with nodes := gd.nodes.push node, expanded := gd.expanded.insert name }
           let (gd, bodyId) := if depth == 0 then mkExprLeaf gd val
                               else walkExpr cfg val gd (depth - 1) (cd - 1)
@@ -285,7 +288,7 @@ partial def walkExpr (cfg : WalkCfg) (e : Expr) (gd : ExprGraphData)
         | none => mkLeaf gd s!"{sn}" "const" (exprKindColor "const")
       | none => mkLeaf gd s!"{sn}" "const" (exprKindColor "const")
     else
-      let col := if gd.expanded.contains name then "#e3f2fd" else exprKindColor "const"
+      let col := if gd.expanded.contains name then "#edf8e4" else exprKindColor "const"
       if cfg.showLevels && !levels.isEmpty then
         let id := gd.nodes.size
         let gd := { gd with nodes := gd.nodes.push { id, label := s!"{sn}", kind := "const", color := col } }
@@ -549,21 +552,21 @@ def buildCallGraph (env : Environment) (roots : Array Name)
 
 def callNodeColor (kind : String) : String :=
   match kind with
-  | "theorem" => "#c8e6c9"
-  | "def" => "#bbdefb"
-  | "structure" => "#fff9c4"
-  | "constructor" => "#e1bee7"
-  | "axiom" => "#ffcdd2"
-  | "recursor" => "#ffe0b2"
-  | _ => "#e0e0e0"
+  | "theorem" => "#caf2ef"
+  | "def" => "#ffe3af"
+  | "structure" => "#d8e0a2"
+  | "inductive" => "#e0c2ff"
+  | "constructor" => "#f7cbc5"
+  | "axiom" => "#dbf2ca"
+  | _ => "#ebebeb"
 
 def callEdgeColor (label : String) : String :=
   match label with
-  | "term" => "#333333"
+  | "term" => "#404040"
   | "type" => "#999999"
-  | "term+type" => "#1565c0"
-  | "ref" => "#666666"
-  | _ => "#333333"
+  | "term+type" => "#4f908c"
+  | "ref" => "#737373"
+  | _ => "#404040"
 
 def callGraphToDot (graphName : String) (gd : CallGraphData) : String := Id.run do
   let mut lines : Array String := #[s!"digraph \"{graphName}\" \{"]

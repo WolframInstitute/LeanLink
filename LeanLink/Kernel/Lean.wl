@@ -306,46 +306,65 @@ resolveProjDir[pd_] := Replace[
 
 (* ============================================================================ *)
 
+(* Canonical metamathematics palette, from
+   Language`EquationalProofDump`MetamathematicsStyleData: theorem (teal), axiom
+   (green), hypothesis (olive), substitution (amber), bisubstitution (salmon),
+   and equationalized axiom / hypothesis (magenta / purple). *)
+
+$mmTheorem = Hue[0.49, 0.45, 0.87]
+
+$mmAxiom = Hue[0.26, 0.45, 0.87]
+
+$mmHypothesis = Hue[0.19, 0.87, 0.7]
+
+$mmSubstitution = RGBColor[1., 0.722, 0.22]
+
+$mmBisubstitution = RGBColor[0.922, 0.494, 0.431]
+
+$mmEqAxiom = RGBColor[1., 0.4, 1.]
+
+$mmEqHypothesis = RGBColor[0.698, 0.4, 1.]
+
+(* Foreground (summary icon + kind label): the role colour darkened for legible
+   text on white. Background (graph nodes): the role colour lightened so the
+   auto-contrast dark text stays readable. *)
+
+mmFg[c_] := Darker[c, 0.35]
+
+mmBg[c_] := Lighter[c, 0.6]
+
 (* Colors for LeanTerm summary icon *)
 
 $kindColor = <|
-    "theorem" -> RGBColor[0.25, 0.45, 0.85],
-    "def" -> RGBColor[0.2, 0.65, 0.35],
-    "axiom" -> RGBColor[0.85, 0.25, 0.2],
-    "inductive" -> RGBColor[0.55, 0.3, 0.75],
-    "constructor" -> RGBColor[0.85, 0.5, 0.15],
+    "theorem" -> mmFg[$mmTheorem],
+    "def" -> mmFg[$mmSubstitution],
+    "axiom" -> mmFg[$mmAxiom],
+    "inductive" -> mmFg[$mmEqHypothesis],
+    "constructor" -> mmFg[$mmBisubstitution],
     "recursor" -> GrayLevel[0.45],
     "opaque" -> GrayLevel[0.45],
     "quot" -> GrayLevel[0.45]
 |>
 
-(* Call graph node colors -- match code.lean DOT output *)
+(* Call graph node backgrounds, by constant kind *)
 
 $callNodeColor = <|
-    "theorem" -> RGBColor @@ ({200, 230, 201} / 255.)
-    ,(* #c8e6c9 *)
-    "def" -> RGBColor @@ ({187, 222, 251} / 255.)
-    ,(* #bbdefb *)
-    "structure" -> RGBColor @@ ({255, 249, 196} / 255.)
-    ,(* #fff9c4 *)
-    "inductive" -> RGBColor @@ ({255, 249, 196} / 255.)
-    ,
-    "constructor" -> RGBColor @@ ({225, 190, 231} / 255.)
-    ,(* #e1bee7 *)
-    "axiom" -> RGBColor @@ ({255, 205, 210} / 255.)
-    ,(* #ffcdd2 *)
-    "recursor" -> RGBColor @@ ({255, 224, 178} / 255.)
-    ,(* #ffe0b2 *)
-    "opaque" -> GrayLevel[0.88]
-    ,
-    "quot" -> GrayLevel[0.88]
+    "theorem" -> mmBg[$mmTheorem],
+    "def" -> mmBg[$mmSubstitution],
+    "structure" -> mmBg[$mmHypothesis],
+    "inductive" -> mmBg[$mmEqHypothesis],
+    "constructor" -> mmBg[$mmBisubstitution],
+    "axiom" -> mmBg[$mmAxiom],
+    "recursor" -> GrayLevel[0.92],
+    "opaque" -> GrayLevel[0.92],
+    "quot" -> GrayLevel[0.92]
 |>
 
 $callEdgeColor = <|
-    "term" -> RGBColor @@ ({51, 51, 51} / 255.),
-    "type" -> RGBColor @@ ({153, 153, 153} / 255.),
-    "term+type" -> RGBColor @@ ({21, 101, 192} / 255.),
-    "ref" -> RGBColor @@ ({102, 102, 102} / 255.)
+    "term" -> GrayLevel[0.25],
+    "type" -> GrayLevel[0.6],
+    "term+type" -> mmFg[$mmTheorem],
+    "ref" -> GrayLevel[0.45]
 |>
 
 (* --- Lazy fetch cache: keyed by {handle, name, field} --- *)
@@ -678,35 +697,21 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
 
 (* ============================================================================ *)
 
-(* Expr graph node background colors -- match code.lean exprKindColor exactly *)
+(* Expr graph node backgrounds, by Lean expression head *)
 
 $headColor = <|
-    LeanApp -> RGBColor @@ ({225, 190, 231} / 255.)
-    ,(* #e1bee7 *)
-    LeanLam -> RGBColor @@ ({255, 249, 196} / 255.)
-    ,(* #fff9c4 *)
-    LeanForall -> RGBColor @@ ({255, 224, 178} / 255.)
-    ,(* #ffe0b2 *)
-    LeanLet -> RGBColor @@ ({178, 223, 219} / 255.)
-    ,(* #b2dfdb *)
-    LeanConst -> RGBColor @@ ({187, 222, 251} / 255.)
-    ,(* #bbdefb *)
-    LeanBVar -> RGBColor @@ ({245, 245, 245} / 255.)
-    ,(* #f5f5f5 *)
-    LeanSort -> RGBColor @@ ({215, 204, 200} / 255.)
-    ,(* #d7ccc8 *)
-    LeanLitNat -> RGBColor @@ ({200, 230, 201} / 255.)
-    ,(* #c8e6c9 *)
-    LeanLitStr -> RGBColor @@ ({200, 230, 201} / 255.)
-    ,(* #c8e6c9 *)
-    LeanProj -> RGBColor @@ ({179, 229, 252} / 255.)
-    ,(* #b3e5fc *)
-    LeanTruncated -> RGBColor @@ ({224, 224, 224} / 255.)
-    ,(* #e0e0e0 *)
-    LeanNoValue -> RGBColor @@ ({224, 224, 224} / 255.)(* #e0e0e0 
-            
-            
-            *)
+    LeanApp -> mmBg[$mmEqHypothesis],
+    LeanLam -> mmBg[$mmHypothesis],
+    LeanForall -> mmBg[$mmSubstitution],
+    LeanLet -> mmBg[$mmTheorem],
+    LeanConst -> mmBg[$mmAxiom],
+    LeanBVar -> GrayLevel[0.95],
+    LeanSort -> mmBg[$mmEqAxiom],
+    LeanLitNat -> mmBg[$mmBisubstitution],
+    LeanLitStr -> mmBg[$mmBisubstitution],
+    LeanProj -> mmBg[$mmAxiom],
+    LeanTruncated -> GrayLevel[0.9],
+    LeanNoValue -> GrayLevel[0.9]
 |>
 
 exprToGraph[expr_] := Block[{id = 0, verts, edges, lbls = <||>, cols = <||>, kinds = <||>, walk, reaped},
@@ -839,15 +844,15 @@ exprNodeInfo[LeanSort[l_]] := {"Sort", $headColor[LeanSort], {l}, {"level"}}
 
 (* Level nodes *)
 
-exprNodeInfo[LeanLevelZero[]] := {"zero", RGBColor @@ ({215, 204, 200} / 255.), {}, {}}
+exprNodeInfo[LeanLevelZero[]] := {"zero", $headColor[LeanSort], {}, {}}
 
-exprNodeInfo[LeanLevelSucc[l_]] := {"succ", RGBColor @@ ({215, 204, 200} / 255.), {l}, {"level"}}
+exprNodeInfo[LeanLevelSucc[l_]] := {"succ", $headColor[LeanSort], {l}, {"level"}}
 
-exprNodeInfo[LeanLevelMax[a_, b_]] := {"max", RGBColor @@ ({215, 204, 200} / 255.), {a, b}, {"left", "right"}}
+exprNodeInfo[LeanLevelMax[a_, b_]] := {"max", $headColor[LeanSort], {a, b}, {"left", "right"}}
 
-exprNodeInfo[LeanLevelIMax[a_, b_]] := {"imax", RGBColor @@ ({215, 204, 200} / 255.), {a, b}, {"left", "right"}}
+exprNodeInfo[LeanLevelIMax[a_, b_]] := {"imax", $headColor[LeanSort], {a, b}, {"left", "right"}}
 
-exprNodeInfo[LeanLevelParam[n_]] := {n, RGBColor @@ ({215, 204, 200} / 255.), {}, {}}
+exprNodeInfo[LeanLevelParam[n_]] := {n, $headColor[LeanSort], {}, {}}
 
 exprNodeInfo[LeanLet[n_, type_, val_, body_]] := {"let " <> cleanName[n], $headColor[LeanLet], {type, val, body}, {"type", "val", "body"}}
 
