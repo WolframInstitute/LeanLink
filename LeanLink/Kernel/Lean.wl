@@ -129,13 +129,101 @@ $ShimLib := $ShimLib = Block[
     pacletDir = Quiet[PacletObject["Wolfram/LeanLink"]["Location"]];
     If[ StringQ[pacletDir],
         loc = FileNameJoin[{pacletDir, "LibraryResources", sysDir, libName}];
-        If[FileExistsQ[loc], Return[loc, Block]]
+        If[FileExistsQ[loc] && provisionLeanRuntime[loc], Return[loc, Block]]
     ];
-(* Dev fallback: Native/ is sibling of the LeanLink/ paclet dir 
+(* Dev fallback: Native/ is sibling of the LeanLink/ paclet dir
     *)
     devDir = DirectoryName[DirectoryName[$InputFileName]];
     loc = FileNameJoin[{DirectoryName[devDir], "Native", ".lake", "build", "lib", libName}];
-    If[FileExistsQ[loc], loc, $Failed]
+    If[FileExistsQ[loc] && provisionLeanRuntime[loc], loc, $Failed]
+]
+
+(* --- Lean runtime provisioning --------------------------------------------- *)
+
+(* The shim references libleanshared via @loader_path (macOS), its soname
+   (Linux), or by name (Windows), so the ~190 MB Lean runtime is NOT bundled in
+   the paclet. At load we link (or copy, on Windows) the runtime libraries from
+   the user's installed Lean toolchain next to the shim. This keeps the paclet
+   small but requires the toolchain the shim was built against to be installed
+   via elan. *)
+
+$LeanToolchainVersion = "v4.29.0-rc6";(* must match Native/lean-toolchain *)
+
+leanToolchainDir[] := With[
+    {
+        dir = FileNameJoin[
+            {
+                Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]],
+                "toolchains",
+                "leanprover--lean4---" <> $LeanToolchainVersion
+            }
+        ]
+    },
+    If[DirectoryQ[dir], dir, $Failed]
+]
+
+(* {runtime library filenames, toolchain subdirectory that holds them} *)
+
+leanRuntimeLibs[] := Switch[ $SystemID,
+    "Windows-x86-64",
+        {{"libleanshared.dll", "libleanshared_1.dll", "libleanshared_2.dll"}, {"bin"}}
+    ,
+    "MacOSX-ARM64" | "MacOSX-x86-64",
+        {{"libleanshared.dylib", "libleanshared_1.dylib", "libleanshared_2.dylib", "libInit_shared.dylib", "libLake_shared.dylib"}, {"lib", "lean"}}
+    ,
+    _,
+        {{"libleanshared.so", "libleanshared_1.so", "libleanshared_2.so", "libInit_shared.so", "libLake_shared.so"}, {"lib", "lean"}}
+]
+
+provisionLeanRuntime[shimPath_String] := Module[
+    {libDir = DirectoryName[shimPath], libs, sub, tc, srcDir, primary}
+    ,
+    {libs, sub} = leanRuntimeLibs[];
+    primary = FileNameJoin[{libDir, First[libs]}];
+(* Already provisioned (or a self-contained build): just expose the directory. *)
+    If[ FileExistsQ[primary],
+        addRuntimeSearchPath[libDir];
+        Return[True]
+    ];
+    tc = leanToolchainDir[];
+    If[tc === $Failed, Return[False]];
+    srcDir = FileNameJoin[Prepend[sub, tc]];
+    Scan[
+        With[{src = FileNameJoin[{srcDir, #}], dst = FileNameJoin[{libDir, #}]},
+            If[ FileExistsQ[src] && ! FileExistsQ[dst],
+                If[ $OperatingSystem === "Windows",
+                    Quiet[CopyFile[src, dst]]
+                    ,
+                    Quiet[RunProcess[{"ln", "-sf", src, dst}]]
+                ]
+            ]
+        ]&
+        ,
+        libs
+    ];
+    addRuntimeSearchPath[libDir];
+    FileExistsQ[primary]
+]
+
+(* macOS resolves the runtime via @loader_path; Linux and Windows need its
+   directory on the dynamic loader's search path. *)
+
+addRuntimeSearchPath[libDir_String] := Module[{var, sep, cur},
+    {var, sep} = Switch[ $OperatingSystem,
+        "Windows",
+            {"PATH", ";"}
+        ,
+        "Unix",
+            {"LD_LIBRARY_PATH", ":"}
+        ,
+        _,
+            {None, None}
+    ];
+    If[var === None, Return[]];
+    cur = Environment[var];
+    If[ ! StringQ[cur] || ! StringContainsQ[cur, libDir],
+        SetEnvironment[var -> libDir <> If[StringQ[cur] && cur =!= "", sep <> cur, ""]]
+    ]
 ]
 
 (* Dev project root: set only when Native/ exists as sibling (dev mode) *)
@@ -148,11 +236,20 @@ $DevProjectRoot = With[{candidate = DirectoryName[DirectoryName[DirectoryName[$I
 
 $PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
 
-LeanLink::nolib = "Shim library not found. Run 'lake build' in the Native/ directory first."
+(* Define the package error messages on each public entry point, so a failure is
+   reported under the symbol the user actually called (LeanImport::err,
+   LeanTactic::abort, ...) rather than a private placeholder. The native helpers
+   below (callNative, getOrLoadEnv, applyTacticStr) take the calling head. *)
 
-LeanLink::err = "Lean error: `1`"
-
-LeanLink::abort = "Native call aborted: `1`"
+Scan[
+    Function[sym,
+        sym::nolib = "Lean shim could not be loaded. Install the Lean toolchain it was built against (leanprover/lean4:" <> $LeanToolchainVersion <> ") with elan, or run 'lake build' in the Native/ directory for a development build.";
+        sym::err = "Lean error: `1`";
+        sym::abort = "Native call aborted: `1`"
+    ]
+    ,
+    {LeanImport, LeanExpr, LeanValue, LeanConstantInfo, LeanListConstants, LeanTactic}
+]
 
 $loadEnvFn := $loadEnvFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_load_env", {"UTF8String", "UTF8String"}, Integer]
 
@@ -267,25 +364,25 @@ resolveSearchPath[projDir_String] := Block[
 
 $envCache = <||>
 
-getOrLoadEnv[projDir_String, imports_List] := Block[{key, searchPath, handle},
+getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, searchPath, handle},
     key = {projDir, imports};
     If[KeyExistsQ[$envCache, key], Return[$envCache[key]]];
     searchPath = resolveSearchPath[projDir];
     handle = $loadEnvFn[StringRiffle[imports, ","], searchPath];
     If[ handle === 0 || ! IntegerQ[handle],
-        Message[LeanLink::err, "Failed to load environment"];
+        Message[head::err, "Failed to load environment"];
         Return[$Failed]
     ];
     $envCache[key] = handle;
     handle
 ]
 
-callNative[fn_, args_List, projDir_, imports_] := Block[{handle, result},
+callNative[fn_, args_List, projDir_, imports_, head_ : LeanImport] := Block[{handle, result},
     If[ $ShimLib === $Failed,
-        Message[LeanLink::nolib];
+        Message[head::nolib];
         Return[$Failed]
     ];
-    handle = getOrLoadEnv[projDir, imports];
+    handle = getOrLoadEnv[projDir, imports, head];
     If[handle === $Failed, Return[$Failed]];
     result = fn @@ Prepend[args, handle];
     decodeWXF[result]
@@ -1928,7 +2025,7 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
         (* Non-GitHub URL: simple download *)
         content = Quiet[Import[githubRawURL[url], "Text"]];
         If[ ! StringQ[content],
-            Message[LeanLink::err, "Failed to download: " <> url];
+            Message[LeanImport::err, "Failed to download: " <> url];
             Return[$Failed, Block]
         ];
         Return[LeanImportString[content], Block]
@@ -1973,7 +2070,7 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
     (* Compile the target file *)
     targetFile = FileNameJoin[{tmpDir, relPath}];
     If[ ! FileExistsQ[targetFile],
-        Message[LeanLink::err, "Failed to download: " <> url];
+        Message[LeanImport::err, "Failed to download: " <> url];
         Return[$Failed, Block]
     ];
     (* Also fetch lakefile.lean for Lake root detection *)
@@ -2374,7 +2471,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         result = RunProcess[{leanBin, "-o", oleanFile, "-R", rootDir, absFile}]
     ];
     If[ result["ExitCode"] =!= 0,
-        Message[LeanLink::err, "lean compilation failed: " <> result["StandardError"]];
+        Message[LeanImport::err, "lean compilation failed: " <> result["StandardError"]];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Block]
     ];
@@ -2383,7 +2480,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     Block[{handle, kinds, srcNames, res},
         handle = $loadEnvFn[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
-            Message[LeanLink::err, "Failed to load compiled file"];
+            Message[LeanImport::err, "Failed to load compiled file"];
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
         ];
@@ -2430,7 +2527,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
 
 LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
     If[ $ShimLib === $Failed,
-        Message[LeanLink::nolib];
+        Message[LeanImport::nolib];
         Return[$Failed]
     ];
     imports = OptionValue["Imports"];
@@ -2492,7 +2589,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             {batch, loadBatches}
         ];
         If[ Length[envAssoc] === 0,
-            Message[LeanLink::err, "Failed to load environment"];
+            Message[LeanImport::err, "Failed to load environment"];
             Return[$Failed]
         ];
         LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]]
@@ -2507,7 +2604,8 @@ LeanExpr[name_String, opts : OptionsPattern[]] := callNative[
     $getTypeFn,
     {name, OptionValue["Depth"]},
     resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"]
+    OptionValue["Imports"],
+    LeanExpr
 ]
 
 Options[LeanValue] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Depth" -> 100}
@@ -2516,12 +2614,13 @@ LeanValue[name_String, opts : OptionsPattern[]] := callNative[
     $getValueFn,
     {name, OptionValue["Depth"]},
     resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"]
+    OptionValue["Imports"],
+    LeanValue
 ]
 
 Options[LeanConstantInfo] = {"ProjectDir" -> Automatic, "Imports" -> {}}
 
-LeanConstantInfo[name_String, opts : OptionsPattern[]] := callNative[$getConstantFn, {name}, resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"]]
+LeanConstantInfo[name_String, opts : OptionsPattern[]] := callNative[$getConstantFn, {name}, resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"], LeanConstantInfo]
 
 Options[LeanListConstants] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> ""}
 
@@ -2529,7 +2628,8 @@ LeanListConstants[opts : OptionsPattern[]] := callNative[
     $listTheoremsFn,
     {OptionValue["Filter"]},
     resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"]
+    OptionValue["Imports"],
+    LeanListConstants
 ]
 
 (* ============================================================================ *)
@@ -2897,13 +2997,13 @@ LeanTactic /: LeanTactic[tactics_List][state_LeanState] := Fold[If[MatchQ[#1, _L
 
 $LeanTacticTimeout = 30;(* seconds; override to Infinity to disable *)
 
-applyTacticStr[tac_String, state_LeanState] := Block[{data = state[[1]], stateId, handle, result},
+applyTacticStr[tac_String, state_LeanState, head_ : LeanTactic] := Block[{data = state[[1]], stateId, handle, result},
     stateId = Lookup[data, "stateId", None];
     handle = Lookup[data, "_Handle", None];
     If[! IntegerQ[stateId], Return[$Failed]];
     result = TimeConstrained[Quiet[decodeWXF[$applyTacticFn[stateId, tac]]], $LeanTacticTimeout, $Aborted];
     If[ result === $Aborted,
-        Message[LeanLink::abort, "Tactic timed out: " <> tac];
+        Message[head::abort, "Tactic timed out: " <> tac];
         Return[$Failed]
     ];
     If[ ! AssociationQ[result],

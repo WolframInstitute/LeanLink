@@ -188,7 +188,7 @@ imported["myT"]["TypeForm"]
 
 ## Possible Issues
 
-- The native bridge needs the platform dylib under `LeanLink/LibraryResources/`. Mathlib import and the out-of-process graph functions ([LeanExprGraph](), [LeanCallGraph]()) additionally need `elan` / `lake` on `PATH` and a **built** project - `LeanImport` of an unbuilt module returns an empty environment.
+- The native bridge needs the platform shim under `LeanLink/LibraryResources/` **and** the Lean toolchain it was built against (`leanprover/lean4:v4.29.0-rc6`) installed via [elan](https://github.com/leanprover/elan): the ~190 MB Lean runtime is not bundled, so on first use LeanLink links `libleanshared` from that toolchain next to the shim. Install it with `elan toolchain install leanprover/lean4:v4.29.0-rc6`. Mathlib import and the out-of-process graph functions ([LeanExprGraph](), [LeanCallGraph]()) additionally need `lake` on `PATH` and a **built** project - `LeanImport` of an unbuilt module returns an empty environment.
 - [LeanCompile]()'s **dependent-type** path (Vector-sized signatures via `TypePi`) requires a forked Wolfram compiler; the non-dependent path works against the stock compiler.
 - A type shown in isolation can print an unresolved bound variable as `#0` / `#1`; the full-theorem `"TypeForm"` resolves binder names.
 

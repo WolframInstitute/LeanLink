@@ -23,6 +23,22 @@ defNb = FileNameJoin[{pacletDir, "ResourceDefinition.nb"}]
 
 PacletDirectoryLoad[pacletDir]
 
+(* The kernel provisions the Lean runtime (libleanshared + siblings) next to each
+   shim at load, from the user's toolchain. Strip any such provisioned copies so
+   the archive ships only the small shims, not the ~190 MB runtime. *)
+
+Scan[
+    DeleteFile
+    ,
+    FileNames[
+        {"libleanshared*", "libInit_shared*", "libLake_shared*"}
+        ,
+        FileNameJoin[{pacletDir, "LibraryResources"}]
+        ,
+        2
+    ]
+]
+
 pacletFile = CreatePacletArchive[pacletDir]
 
 Print[StringTemplate["Paclet `` has size ``"][pacletFile, FileSize[pacletFile]]]

@@ -62,14 +62,29 @@ else()
     target_link_libraries(LeanLinkShim PRIVATE leanshared)
 endif()
 
-# Post-build: fix dylib paths (macOS) and copy libleanshared
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+# Portable runtime linkage: reference libleanshared relative to the shim so the
+# packaged paclet carries no absolute build paths. The kernel provisions
+# libleanshared (+ siblings) next to the shim at load, from the user's installed
+# Lean toolchain. Do NOT bake an absolute toolchain path here.
+if(APPLE)
+    set_target_properties(LeanLinkShim PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@loader_path"
+    )
     add_custom_command(TARGET LeanLinkShim POST_BUILD
         COMMAND install_name_tool -change @rpath/libleanshared.dylib
-            ${LEAN_HOME}/lib/lean/libleanshared.dylib $<TARGET_FILE:LeanLinkShim>
-        COMMENT "Fixing libleanshared.dylib path for WolframKernel"
+            @loader_path/libleanshared.dylib $<TARGET_FILE:LeanLinkShim>
+        COMMENT "Linking libleanshared via @loader_path for a portable paclet"
+    )
+elseif(UNIX)
+    # Linux already NEEDs libleanshared.so by soname; resolve it next to the shim.
+    set_target_properties(LeanLinkShim PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "$ORIGIN"
     )
 endif()
+# Windows imports libleanshared*.dll by name; Windows searches the shim's own
+# directory, so the kernel-provisioned DLLs resolve with no link-time change.
 
 # Standalone test
 add_executable(test_lean_proper test_lean_proper.c
