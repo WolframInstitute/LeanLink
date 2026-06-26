@@ -147,7 +147,7 @@ $ShimLib := $ShimLib = Block[
    small but requires the toolchain the shim was built against to be installed
    via elan. *)
 
-$LeanToolchainVersion = "v4.29.0-rc6";(* must match Native/lean-toolchain *)
+$LeanToolchainVersion = "v4.30.0";(* must match Native/lean-toolchain *)
 
 leanToolchainDir[] := With[
     {

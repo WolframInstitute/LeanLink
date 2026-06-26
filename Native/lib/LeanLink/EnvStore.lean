@@ -6,6 +6,10 @@ import Lean
 import LeanLink.WXF
 
 set_option linter.deprecated false
+-- Lean 4.30+ errors on @[export] decls whose params carry @& (borrow)
+-- annotations. The C shim treats these args as owned (consumed), so ignore the
+-- annotations to keep that ABI -- the same behaviour rc6 generated.
+set_option compiler.ignoreBorrowAnnotation true
 open Lean
 
 namespace LeanLink
@@ -129,7 +133,7 @@ def getValueExport (handle : UInt64) (constName : @& String) (depth : UInt32) : 
   let name := constName.toName
   match env.find? name with
   | some ci =>
-    match ci.value? with
+    match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
     | some v => return WXF.serialize (WXF.exprToWXF v depth.toNat)
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
@@ -148,7 +152,7 @@ private def unfoldHead (env : Environment) (e : Expr) : Expr :=
   | .const name _ =>
     match env.find? name with
     | some ci =>
-      match ci.value? with
+      match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
       | some v => (Lean.mkAppN v args).headBeta
       | none => e
     | none => e
@@ -199,7 +203,7 @@ def getValueUnfoldedExport (handle : UInt64) (constName : @& String)
   let name := constName.toName
   match env.find? name with
   | some ci =>
-    match ci.value? with
+    match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
     | some v =>
       let v' := unfoldExpr env v unfoldLevel.toNat
       return WXF.serialize (WXF.exprToWXF v')
@@ -254,7 +258,7 @@ def ppValueExport (handle : UInt64) (constName : @& String)
   let name := constName.toName
   match env.find? name with
   | some ci =>
-    match ci.value? with
+    match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
     | some v =>
       let v' := if unfoldLevel.toNat > 0
         then unfoldExpr env v unfoldLevel.toNat
@@ -332,7 +336,7 @@ def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteAr
   | some ci =>
     let typeNames := ci.type.getUsedConstants
     let typeConsts := typeNames.map fun n => WXF.string n.toString
-    let valueNames := match ci.value? with
+    let valueNames := match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
       | some v => v.getUsedConstants
       | none => #[]
     let valueConsts := valueNames.map fun n => WXF.string n.toString

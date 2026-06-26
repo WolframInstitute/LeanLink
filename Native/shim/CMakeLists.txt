@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(LeanLinkShim C)
 
 # --- Lean SDK ---
-set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.29.0-rc6" CACHE PATH "Path to Lean installation")
+set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.30.0" CACHE PATH "Path to Lean installation")
 
 # --- Wolfram LibraryLink ---
 set(WL_INCLUDE "/Applications/Wolfram 15.0.app/Contents/SystemFiles/IncludeFiles/C" CACHE PATH "Path to Wolfram LibraryLink headers")
