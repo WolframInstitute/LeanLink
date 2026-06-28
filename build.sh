@@ -42,7 +42,9 @@ DARWIN_ARM_SYSROOT="$(download_sysroot "darwin_aarch64")"
 
 # MacOS uses the local `.elan` toolchain via `lean --print-prefix`
 MAC_SYSROOT="$(lean --print-prefix 2>/dev/null || echo '')"
-WL_INCLUDE="$(wolframscript -c 'Print[FileNameJoin[{$InstallationDirectory, "SystemFiles", "IncludeFiles", "C"}]]' 2>/dev/null | tail -n 1 || echo '')"
+# Print puts the path on the FIRST stdout line; wolframscript then echoes the
+# expression's "Null" result on a trailing line, so take head -n 1 (not tail).
+WL_INCLUDE="$(wolframscript -c 'Print[FileNameJoin[{$InstallationDirectory, "SystemFiles", "IncludeFiles", "C"}]]' 2>/dev/null | head -n 1 || echo '')"
 
 if [ -z "$WL_INCLUDE" ]; then
     echo "ERROR: wolframscript not found to detect WL_INCLUDE."
