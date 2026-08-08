@@ -20,7 +20,10 @@
 #include <string.h>
 
 /* Lean FFI init (not in lean.h but exported from libleanshared) */
-extern lean_object* lean_initialize_runtime_module(void);
+/* Returns void as of Lean 4.30 (it did return an IO result earlier). Reading a
+   lean_object* here picks up whatever the return register held, and the first
+   dereference - lean_io_result_is_error - segfaults the host process. */
+extern void lean_initialize_runtime_module(void);
 extern void lean_io_mark_end_initialization(void);
 extern void lean_initialize_thread(void);
 
@@ -158,12 +161,9 @@ static int lazy_lean_init(void) {
 #ifdef LEAN_LIB_DIR
     portable_setenv("LEAN_PATH", LEAN_LIB_DIR, 0);
 #endif
-    lean_object* res = lean_initialize_runtime_module();
-    if (lean_io_result_is_error(res)) {
-        lean_dec_ref(res);
-        return LIBRARY_FUNCTION_ERROR;
-    }
-    lean_dec_ref(res);
+    lean_initialize_runtime_module();
+
+    lean_object* res;
 
     res = initialize_leanlink_LeanLink(1);
     if (lean_io_result_is_error(res)) {
