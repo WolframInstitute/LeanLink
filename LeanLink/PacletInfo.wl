@@ -7,7 +7,7 @@ PacletObject[
     "Creator" -> "Nik Murzin",
     "License" -> "MIT",
     "PublisherID" -> "Wolfram",
-    "Version" -> "1.0.6",
+    "Version" -> "1.0.9",
     "WolframVersion" -> "14.0+",
     "PrimaryContext" -> "Wolfram`LeanLink`",
     "Categories" -> {"Mathematics", "Logic"},
@@ -76,6 +76,14 @@ PacletObject[
         "Documentation",
         "Language" -> "English",
         "MainPage" -> "Guides/LeanLink"
+      },
+      (* The repository builds the published paclet from its DECLARED extensions,
+         so without this the per-platform shims are dropped: the paclet installs
+         and loads, then dies at the first Lean call. That is how 1.0.6 and 1.0.7
+         shipped. *)
+      {
+        "LibraryLink",
+        "Root" -> "LibraryResources"
       }
     },
     "Keywords" -> {
