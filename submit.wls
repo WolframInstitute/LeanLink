@@ -55,6 +55,27 @@ If[ stale =!= {},
 
 Needs["DefinitionNotebookClient`"]
 
+(* ---- repair the paclet file tree before validating ----
+   MarkdownToNotebook writes the file-manager tree with CellID -> 0 on every
+   cell, and the repository scraper keys file entries by CellID, so the whole
+   tree collapses to one entry and the check fails with NoPacletInfoFileCell.
+   The entries also store paths relative to the notebook, resolved through
+   NotebookDirectory, which needs a saved notebook. So: turn on CreateCellID
+   so regenerated cells get real ids, save, rebuild the tree from the paclet
+   directory, and save again. The repair lands in the .nb on disk, so the
+   check and submission below (which each reopen the file) see valid cells. *)
+
+Needs["PacletResource`DefinitionNotebook`"]
+
+UsingFrontEnd @ Block[{nb},
+    nb = NotebookOpen[nbFile, Visible -> False];
+    SetOptions[nb, CreateCellID -> True];
+    NotebookSave[nb];
+    PacletResource`DefinitionNotebook`RefreshNotebookPacletFiles[nb];
+    NotebookSave[nb];
+    NotebookClose[nb]
+]
+
 (* Submit as an account authorized for this paclet's PublisherID - the repository
    rejects anyone else ("You are not authorized to use the given PublisherID"),
    and a kernel carrying a cached connection from other work will happily try as
