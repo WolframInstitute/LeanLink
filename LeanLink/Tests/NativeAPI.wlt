@@ -158,6 +158,42 @@ VerificationTest[
     TestID -> "Property-Axioms-IsList"
 ]
 
+(* LeanBuild: the pinned toolchain's lake; Success, or a Failure carrying lake's
+   output; never a toolchain download. *)
+
+$lbProject[pin_String, src_String] := Module[{d = CreateDirectory[]},
+    Export[FileNameJoin[{d, "lakefile.toml"}], "name = \"probe\"\n[[lean_lib]]\nname = \"Probe\"\n", "Text"];
+    Export[FileNameJoin[{d, "lean-toolchain"}], pin, "Text"];
+    Export[FileNameJoin[{d, "Probe.lean"}], src, "Text"];
+    d
+]
+
+VerificationTest[
+    Head[LeanBuild[$LeanLinkTestProjectDir, {"LeanLink.Examples"}]]
+    ,
+    Success
+    ,
+    TestID -> "LeanBuild-UpToDate"
+]
+
+VerificationTest[
+    With[{r = LeanBuild[$lbProject["leanprover/lean4:v4.30.0", "theorem bad : 1 = 2 := rfl\n"], {"Probe"}]},
+        {r["Tag"], StringContainsQ[r["Output"], "error"]}
+    ]
+    ,
+    {"LeanBuildFailed", True}
+    ,
+    TestID -> "LeanBuild-ErrorCarried"
+]
+
+VerificationTest[
+    LeanBuild[$lbProject["leanprover/lean4:v4.0.0-not-installed", "theorem ok : 1 = 1 := rfl\n"], {"Probe"}]["Tag"]
+    ,
+    "ToolchainNotInstalled"
+    ,
+    TestID -> "LeanBuild-ToolchainNotInstalled"
+]
+
 (* TypeForm is #check output: Lean's own delaborator via the lean frontend,
    with notation (not raw applications) and "Open" -> {ns} shortening names. *)
 

@@ -92,6 +92,10 @@ LeanExportString::usage = "LeanExportString[env] converts a LeanEnvironment to a
 
 LeanExport::usage = "LeanExport[file, env] exports a LeanEnvironment to a .lean file."
 
+LeanBuild::usage = "LeanBuild[dir, {\"Module1\", ...}] builds those modules of the Lake project in dir with the lake of the toolchain its lean-toolchain file pins, and returns Success or a Failure carrying lake's output. LeanBuild[dir] builds the project's default targets."
+
+LeanBuild::version = "The project pins `1` but LeanLink's runtime is `2`: LeanImport cannot load what this builds."
+
 LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
 
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment."
@@ -487,6 +491,61 @@ isFFIError[r_] := StringQ[r] && StringStartsQ[r, "ERROR"]
    open, sent to the shim comma-separated. *)
 
 openNamespaces[opts_List] := StringRiffle[Select[Flatten[{Lookup[opts, "Open", {}]}], StringQ], ","]
+
+(* ---- LeanBuild ----
+   Builds with the lake of the toolchain the project pins, called directly: the
+   elan proxy would download a missing toolchain, and a build must never do that. *)
+
+projectToolchain[dir_String] := Module[{tcFile = FileNameJoin[{dir, "lean-toolchain"}], pin},
+    pin = If[FileExistsQ[tcFile], StringTrim[Import[tcFile, "Text"]], "leanprover/lean4:" <> $LeanToolchainVersion];
+    <|"Pin" -> pin, "Dir" -> FileNameJoin[{elanHome[], "toolchains", StringReplace[pin, {"/" -> "--", ":" -> "---"}]}]|>
+]
+
+LeanBuild[dir_String, module_String] := LeanBuild[dir, {module}]
+
+LeanBuild[dir_String, modules : {___String} : {}] := Module[
+    {root = ExpandFileName[dir], tc, lake, res, out}
+    ,
+    If[ ! DirectoryQ[root],
+        Return[Failure["NoProject", <|"MessageTemplate" -> "No such directory: `1`", "MessageParameters" -> {root}|>], Module]
+    ];
+    tc = projectToolchain[root];
+    lake = FileNameJoin[{tc["Dir"], "bin", "lake"}];
+    If[ ! FileExistsQ[lake],
+        Return[
+            Failure["ToolchainNotInstalled", <|
+                "MessageTemplate" -> "The project pins `1`, which is not installed. Install it with: elan toolchain install `1`",
+                "MessageParameters" -> {tc["Pin"]},
+                "Toolchain" -> tc["Pin"]
+            |>],
+            Module
+        ]
+    ];
+    If[ StringReplace[tc["Pin"], StartOfString ~~ ___ ~~ ":" -> ""] =!= $LeanToolchainVersion,
+        Message[LeanBuild::version, tc["Pin"], "leanprover/lean4:" <> $LeanToolchainVersion]
+    ];
+    res = RunProcess[{lake, "build", Sequence @@ ("+" <> #& /@ modules)}, ProcessDirectory -> root];
+    out = StringTrim @ Quiet @ Check[
+        FromCharacterCode[ToCharacterCode[res["StandardOutput"] <> "\n" <> res["StandardError"], "ISO8859-1"], "UTF-8"],
+        res["StandardOutput"] <> "\n" <> res["StandardError"]
+    ];
+(* A build replaces the project's oleans: drop its cached environments so the
+   next LeanImport loads the new ones instead of returning stale constants. *)
+    $envCache = KeySelect[$envCache, ! (StringQ[First[#]] && ExpandFileName[First[#]] === root)&];
+    If[ res["ExitCode"] === 0,
+        Success["Built", <|
+            "MessageTemplate" -> "Built `1` in `2`",
+            "MessageParameters" -> {If[modules === {}, "the default targets", StringRiffle[modules, ", "]], root},
+            "ProjectDir" -> root, "Modules" -> modules, "Output" -> out
+        |>]
+        ,
+        Failure["LeanBuildFailed", <|
+            "MessageTemplate" -> "lake build failed with exit code `1`",
+            "MessageParameters" -> {res["ExitCode"]},
+            "ExitCode" -> res["ExitCode"], "ProjectDir" -> root, "Modules" -> modules, "Output" -> out
+        |>]
+    ]
+]
 
 (* ---- #check-style TypeForm from the lean frontend ----
    The embedded runtime imports an environment without its extensions: building

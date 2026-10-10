@@ -20,6 +20,7 @@ PacletObject[
           "Wolfram`LeanLink`ImportDOT",
           "Wolfram`LeanLink`LeanApp",
           "Wolfram`LeanLink`LeanBVar",
+          "Wolfram`LeanLink`LeanBuild",
           "Wolfram`LeanLink`LeanCallGraph",
           "Wolfram`LeanLink`LeanCompile",
           "Wolfram`LeanLink`LeanCompileTyped",
