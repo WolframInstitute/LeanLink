@@ -24,7 +24,10 @@ Begin["`Private`"];
 
 (* ============================================================================ *)
 
-$ElanBin = FileNameJoin[{$HomeDirectory, ".elan", "bin"}]
+(* Honor ELAN_HOME (containers relocate elan, e.g. /opt/elan). Inlined rather
+   than calling Lean.wl's elanHome[]: this is evaluated at load, before Lean.wl. *)
+
+$ElanBin = FileNameJoin[{Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]], "bin"}]
 
 $LakeBin = FileNameJoin[{$ElanBin, "lake"}]
 

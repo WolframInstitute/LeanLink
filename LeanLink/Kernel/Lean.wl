@@ -149,11 +149,17 @@ $ShimLib := $ShimLib = Block[
 
 $LeanToolchainVersion = "v4.30.0";(* must match Native/lean-toolchain *)
 
+(* elan's root: ELAN_HOME when set, else ~/.elan. Containers commonly relocate
+   it (ELAN_HOME=/opt/elan with no ~/.elan at all), so every path built from the
+   elan tree must go through this rather than assuming $HomeDirectory. *)
+
+elanHome[] := Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]]
+
 leanToolchainDir[] := With[
     {
         dir = FileNameJoin[
             {
-                Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]],
+                elanHome[],
                 "toolchains",
                 "leanprover--lean4---" <> $LeanToolchainVersion
             }
@@ -352,7 +358,7 @@ resolveSearchPath[projDir_String] := Block[
             If[ FileExistsQ[tc],
                 version = StringTrim[Import[tc, "Text"]];
                 toolchainDir = StringReplace[version, {"/" -> "--", ":" -> "---"}];
-                Return[FileNameJoin[{$HomeDirectory, ".elan", "toolchains", toolchainDir, "lib", "lean"}], Block]
+                Return[FileNameJoin[{elanHome[], "toolchains", toolchainDir, "lib", "lean"}], Block]
             ];
             dir = DirectoryName[dir]
         ];
@@ -2435,12 +2441,12 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     If[ FileExistsQ[tcFile],
         tcName = StringTrim[Import[tcFile, "Text"]];
         tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
-        leanBin = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", tcName, "bin", "lean"}];
-        leanLibDir = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", tcName, "lib", "lean"}]
+        leanBin = FileNameJoin[{elanHome[], "toolchains", tcName, "bin", "lean"}];
+        leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
         ,
 (* No toolchain file at all: try elan default, then bare lean 
     *)
-        leanBin = FileNameJoin[{$HomeDirectory, ".elan", "bin", "lean"}];
+        leanBin = FileNameJoin[{elanHome[], "bin", "lean"}];
         If[! FileExistsQ[leanBin], leanBin = "lean"];
         leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
         If[ ! StringQ[leanLibDir] || ! DirectoryQ[leanLibDir],
