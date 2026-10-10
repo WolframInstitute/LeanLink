@@ -391,6 +391,35 @@ def constantModuleExport (handle : UInt64) (constName : @& String) : IO ByteArra
   | some m => return WXF.serialize (WXF.string m.toString)
   | none => return WXF.serialize (WXF.string s!"ERROR: no module at index {idx.toNat}")
 
+/-- Where a constant is declared in its source file: the declaration's range
+    (1-based lines, 0-based codepoint columns) from the olean's declaration-range
+    data, as recorded at elaboration. -/
+@[export leanlink_decl_range]
+def declRangeExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  unless env.contains name do
+    return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+  let ctx : Core.Context := {
+    fileName := "<declrange>"
+    fileMap := { source := "", positions := #[0] }
+  }
+  let st : Core.State := { env }
+  try
+    let res ← ((Lean.findDeclarationRanges? name : CoreM (Option DeclarationRanges)).run ctx st).toIO'
+    match res with
+    | .ok (some r, _) =>
+      return WXF.serialize (WXF.wlAssociation #[
+        (WXF.string "StartLine", WXF.integer r.range.pos.line),
+        (WXF.string "StartColumn", WXF.integer r.range.pos.column),
+        (WXF.string "EndLine", WXF.integer r.range.endPos.line),
+        (WXF.string "EndColumn", WXF.integer r.range.endPos.column)])
+    | .ok (none, _) => return WXF.serialize (WXF.string s!"ERROR: no declaration range for {constName}")
+    | .error _ => return WXF.serialize (WXF.string "ERROR: findDeclarationRanges? failed")
+  catch _ =>
+    return WXF.serialize (WXF.string "ERROR: findDeclarationRanges? exception")
+
 /-- Get used constants from a constant's type and value expressions.
     Returns WXF-encoded Association: <|"type" -> {names...}, "value" -> {names...}|> -/
 @[export leanlink_get_used_constants]

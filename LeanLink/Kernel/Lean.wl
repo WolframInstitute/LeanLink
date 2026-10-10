@@ -283,6 +283,8 @@ $moduleConstantKindsFn := $moduleConstantKindsFn = LibraryFunctionLoad[$ShimLib,
 
 $constantModuleFn := $constantModuleFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_constant_module", {Integer, "UTF8String"}, {Integer, 1}]
 
+$declRangeFn := $declRangeFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_decl_range", {Integer, "UTF8String"}, {Integer, 1}]
+
 $listConstantNamesFn := $listConstantNamesFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_names", {Integer, "UTF8String"}, {Integer, 1}]
 
 $listConstantKindsFn := $listConstantKindsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_kinds", {Integer, "UTF8String"}, {Integer, 1}]
@@ -493,6 +495,70 @@ isFFIError[r_] := StringQ[r] && StringStartsQ[r, "ERROR"]
    open, sent to the shim comma-separated. *)
 
 openNamespaces[opts_List] := StringRiffle[Select[Flatten[{Lookup[opts, "Open", {}]}], StringQ], ","]
+
+(* ---- term["Source"] ----
+   A module's source file is found from the olean directories its handle was
+   loaded from. For a Lake build directory, the module's trace records the exact
+   compile command and so the source path, whatever the library's srcDir; else
+   the default layout, then one level of srcDir (lib/, src/, ...). A toolchain's
+   lib/lean maps to its src/lean. *)
+
+$lakeBuildSuffixes = {FileNameJoin[{".lake", "build", "lib", "lean"}], FileNameJoin[{".lake", "build", "lib"}]};
+
+traceSource[traceFile_String] := If[ FileExistsQ[traceFile],
+    Flatten @ StringCases[
+        Cases[Quiet[ImportString[ReadString[traceFile], "RawJSON"]], KeyValuePattern["message" -> m_String] :> m, Infinity],
+        RegularExpression["[/\\\\]bin[/\\\\]lean(?:\\.exe)? (.+?\\.lean) -o "] :> "$1"
+    ],
+    {}
+]
+
+sourceCandidates[dir_String, parts_List, rel_String] := With[
+    {suffix = SelectFirst[$lakeBuildSuffixes, StringEndsQ[dir, #]&, None]},
+    Which[
+        suffix =!= None,
+            With[{root = StringDrop[dir, -StringLength[suffix]]},
+                Join[
+                    traceSource[FileNameJoin[Join[{dir}, Most[parts], {Last[parts] <> ".trace"}]]],
+                    {FileNameJoin[{root, rel}]},
+                    FileNameJoin[{#, rel}]& /@ Select[FileNames["*", root], DirectoryQ[#] && ! StringStartsQ[FileNameTake[#], "."]&]
+                ]
+            ],
+        StringEndsQ[dir, FileNameJoin[{"lib", "lean"}]],
+            {FileNameJoin[{FileNameDrop[dir, -2], "src", "lean", rel}]},
+        True,
+            {}
+    ]
+]
+
+moduleSourceFile[h_Integer, module_String] := With[
+    {parts = StringSplit[module, "."]},
+    SelectFirst[
+        Flatten[sourceCandidates[#, parts, FileNameJoin[parts] <> ".lean"]& /@
+            StringSplit[Lookup[Lookup[$handleSource, h, <||>], "SearchPath", ""], ":"]],
+        FileExistsQ,
+        Missing["NotAvailable"]
+    ]
+]
+
+(* The declaration's text: its range (1-based lines, 0-based codepoint columns)
+   from the olean, sliced out of the module's source file. *)
+
+declarationSource[h_Integer, name_String] := Module[{range, module, file, lines},
+    range = Quiet[decodeWXF[$declRangeFn[h, name]]];
+    If[ ! AssociationQ[range], Return[Missing["NotAvailable"], Module]];
+    module = Quiet[decodeWXF[$constantModuleFn[h, name]]];
+    If[ ! StringQ[module] || StringStartsQ[module, "ERROR: "], Return[Missing["NotAvailable"], Module]];
+    file = moduleSourceFile[h, module];
+    If[ MissingQ[file], Return[file, Module]];
+    lines = StringSplit[Import[file, "Text", CharacterEncoding -> "UTF-8"], "\n", All];
+    If[ range["EndLine"] > Length[lines], Return[Missing["NotAvailable"], Module]];
+    lines = lines[[range["StartLine"] ;; range["EndLine"]]];
+(* trim the end before the start: on a one-line range they are the same line *)
+    lines[[-1]] = StringTake[lines[[-1]], UpTo[range["EndColumn"]]];
+    lines[[1]] = StringDrop[lines[[1]], Min[range["StartColumn"], StringLength[lines[[1]]]]];
+    StringRiffle[lines, "\n"]
+]
 
 (* ---- LeanEvaluate ----
    #eval in a lean process (the pinned toolchain), value returned through JSON.
@@ -947,6 +1013,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     "TermRefs",
                     "Axioms",
                     "Module",
+                    "Source",
                     "ExprGraph",
                     "CallGraph",
                     "Parameters",
@@ -1035,6 +1102,9 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     ,
                     If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]
                 ]
+            ,
+            "Source",
+                If[IntegerQ[handle], declarationSource[handle, name], Missing["NoHandle"]]
             ,
             "Module",
                 If[ IntegerQ[handle],

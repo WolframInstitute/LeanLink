@@ -131,6 +131,7 @@ VerificationTest[
         "TermRefs",
         "Axioms",
         "Module",
+        "Source",
         "ExprGraph",
         "CallGraph",
         "Parameters",
@@ -245,6 +246,16 @@ VerificationTest[
     "{a : Type} \[RightArrow] {n : Nat} \[RightArrow] Vec a (n + 1) \[RightArrow] a"
     ,
     TestID -> "TypeForm-Open"
+]
+
+(* Source: the declaration's text, from the olean's range and the module's file. *)
+
+VerificationTest[
+    $filtered["LeanLink.Examples.identity"]["Source"]
+    ,
+    "theorem identity : forall (P : Prop), P -> P := fun _ hp => hp"
+    ,
+    TestID -> "Property-Source"
 ]
 
 (* WXF integers >= 128 (machine sizes and big integers) round-trip. LeanLink
