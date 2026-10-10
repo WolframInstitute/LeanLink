@@ -7,7 +7,7 @@ PacletObject[
     "Creator" -> "Nik Murzin",
     "License" -> "MIT",
     "PublisherID" -> "Wolfram",
-    "Version" -> "1.0.9",
+    "Version" -> "1.0.10",
     "WolframVersion" -> "14.0+",
     "PrimaryContext" -> "Wolfram`LeanLink`",
     "Categories" -> {"Mathematics", "Logic"},
