@@ -22,10 +22,14 @@ RelatedGuides: [LeanLink]
 | Property | Result |
 |---|---|
 | `"Type"` / `"Term"` | the type / body as a symbolic expression tree |
-| `"TypeForm"` / `"TermForm"` | the type / body pretty-printed as Lean source |
+| `"TypeForm"` | the type as `#check` prints it, from Lean's own printer; <code>*term*["TypeForm", "Open" -> {*ns*, ...}]</code> prints names under those namespaces unqualified |
+| `"TermForm"` | the body pretty-printed as Lean source |
 | `"Parameters"` | the binder chain (name, type, binder kind) as rows |
 | `"TypeRefs"` / `"TermRefs"` | constants the type / body refers to |
-| `"ExprGraph"` / `"CallGraph"` | a [Graph]() of the expression tree / dependencies |
+| `"Axioms"` | the axioms the constant depends on, as `#print axioms` reports them |
+| `"Module"` | the module that declares the constant |
+| `"Source"` | the declaration's source text |
+| `"ExprGraph"` / `"CallGraph"` | a [Graph]() of the expression tree / dependencies (a display graph: it omits auxiliary declarations, so use `"Axioms"`, not `"CallGraph"`, to audit axioms) |
 | `"Name"` / `"Kind"` | the constant's name / declaration kind |
 
 - The expression tree is built from the CIC heads [LeanConst](), [LeanApp](), [LeanForall](), [LeanLam](), [LeanBVar](), [LeanSort](), [LeanLitNat](), ... which carry box formatting, so a `"Type"` displays in Lean notation rather than as raw heads.

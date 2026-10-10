@@ -20,14 +20,16 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 ### Importing and exporting
 
 - [LeanImport]() import constants from a compiled Lean module, returning a [LeanEnvironment]()
-- [LeanImportString]() compile a Lean 4 source string into a [LeanEnvironment]()
+- [LeanImportString]() compile a Lean 4 source string into a [LeanEnvironment](); with `"ProjectDir"` it can import a built project
+- [LeanBuild]() build a Lake project's modules with its pinned toolchain
+- [LeanEvaluate]() evaluate a Lean expression with `#eval` and return its value
 - [LeanExportString]() convert a [LeanEnvironment]() back to Lean 4 source
 - [LeanExport]() write a [LeanEnvironment]() to a `.lean` file
 
 ### Environments and terms
 
 - [LeanEnvironment]() a collection of named Lean constants; supports [Keys](), [Length](), [Information]()
-- [LeanTerm]() one Lean constant, with `"Type"`, `"Term"`, `"TypeForm"`, `"Parameters"`, `"ExprGraph"` properties
+- [LeanTerm]() one Lean constant, with `"Type"`, `"Term"`, `"TypeForm"`, `"Axioms"`, `"Module"`, `"Source"`, `"Parameters"`, `"ExprGraph"` properties
 - [LeanConstant]() the raw `name / kind / type / term` record returned by the native shim
 
 ### Querying a loaded environment
