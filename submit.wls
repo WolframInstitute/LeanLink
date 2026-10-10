@@ -53,6 +53,22 @@ If[ stale =!= {},
     Print["  rebuild with ./build.sh (cross-compiles every platform) to ship the fix."]
 ]
 
+(* ---- never ship the provisioned Lean runtime ----
+   Loading the dev paclet (tests, doc builds) links libleanshared and its
+   siblings from the local elan toolchain next to each shim. They are symlinks
+   into ~/.elan, and the submission packs them dereferenced: that is how 1.0.9
+   shipped a 155 MB Mac ARM64 runtime to every platform. The runtime is
+   provisioned on the user's machine at load, so strip it here, before the file
+   tree below is refreshed - that tree is what gets packed. *)
+
+runtime = FileNames[{"libleanshared*", "libInit_shared*", "libLake_shared*"},
+    FileNameJoin[{repoDir, "LeanLink", "LibraryResources"}], 2]
+
+If[ runtime =!= {},
+    Print["stripping the provisioned Lean runtime from LibraryResources (", Length[runtime], " files)"];
+    Scan[DeleteFile, runtime]
+]
+
 Needs["DefinitionNotebookClient`"]
 
 (* ---- repair the paclet file tree before validating ----
