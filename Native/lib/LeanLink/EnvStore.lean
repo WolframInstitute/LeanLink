@@ -40,6 +40,9 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
   Lean.searchPathRef.set (userPaths ++ libPaths)
   -- Import modules
   let modules : Array Import := imports.map fun m => { module := m.toName }
+  -- No loadExts: it requires enableInitializersExecution, which crashes an
+  -- embedded runtime. Extension states stay empty, so the in-process printer
+  -- has no notation; TypeForm gets #check-style output from the lean frontend.
   let env ← Lean.importModules modules {} 0
   return env
 
@@ -216,11 +219,13 @@ def getValueUnfoldedExport (handle : UInt64) (constName : @& String)
 
 /-- Pretty-print an expression using Lean's built-in pretty-printer.
     Uses the environment's notations, so infix ops, implicit elision, etc. work. -/
-def ppExprInEnv (env : Environment) (e : Expr) : IO String := do
+def ppExprInEnv (env : Environment) (e : Expr) (opens : List Name := []) : IO String := do
   try
     let ctx : Core.Context := {
       fileName := "<pp>"
       fileMap := { source := "", positions := #[0] }
+      -- names under these namespaces print unqualified, as after `open`
+      openDecls := opens.map fun ns => OpenDecl.simple ns []
     }
     let st : Core.State := { env }
     let res ←
@@ -233,10 +238,16 @@ def ppExprInEnv (env : Environment) (e : Expr) : IO String := do
   catch _ =>
     return s!"{e.dbgToString}"
 
+/-- Comma-separated namespaces (as sent from WL) to the list `ppExprInEnv` opens. -/
+def parseOpens (opens : String) : List Name :=
+  (opens.splitOn ",").filterMap fun ns =>
+    let ns := ns.trim
+    if ns.isEmpty then none else some ns.toName
+
 /-- Get pretty-printed type string. Optionally unfolds N levels first. -/
 @[export leanlink_pp_type]
 def ppTypeExport (handle : UInt64) (constName : @& String)
-    (unfoldLevel : UInt32) : IO ByteArray := do
+    (unfoldLevel : UInt32) (opens : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
   let name := constName.toName
@@ -245,14 +256,14 @@ def ppTypeExport (handle : UInt64) (constName : @& String)
     let ty := if unfoldLevel.toNat > 0
       then unfoldExpr env ci.type unfoldLevel.toNat
       else ci.type
-    let s ← ppExprInEnv env ty
+    let s ← ppExprInEnv env ty (parseOpens opens)
     return WXF.serialize (WXF.string s)
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
 /-- Get pretty-printed value/proof string. Optionally unfolds N levels first. -/
 @[export leanlink_pp_value]
 def ppValueExport (handle : UInt64) (constName : @& String)
-    (unfoldLevel : UInt32) : IO ByteArray := do
+    (unfoldLevel : UInt32) (opens : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
   let name := constName.toName
@@ -263,7 +274,7 @@ def ppValueExport (handle : UInt64) (constName : @& String)
       let v' := if unfoldLevel.toNat > 0
         then unfoldExpr env v unfoldLevel.toNat
         else v
-      let s ← ppExprInEnv env v'
+      let s ← ppExprInEnv env v' (parseOpens opens)
       return WXF.serialize (WXF.string s)
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")

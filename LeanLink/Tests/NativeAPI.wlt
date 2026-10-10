@@ -158,6 +158,33 @@ VerificationTest[
     TestID -> "Property-Axioms-IsList"
 ]
 
+(* TypeForm is #check output: Lean's own delaborator via the lean frontend,
+   with notation (not raw applications) and "Open" -> {ns} shortening names. *)
+
+VerificationTest[
+    $filtered["LeanLink.Examples.modus_ponens"]["TypeForm"]
+    ,
+    "\[ForAll] (P Q : Prop), P \[RightArrow] (P \[RightArrow] Q) \[RightArrow] Q"
+    ,
+    TestID -> "TypeForm-LeanNotation"
+]
+
+VerificationTest[
+    $filtered["LeanLink.Examples.contrapositive"]["TypeForm"]
+    ,
+    "\[ForAll] (P Q : Prop), (P \[RightArrow] Q) \[RightArrow] \[Not]Q \[RightArrow] \[Not]P"
+    ,
+    TestID -> "TypeForm-NotNotation"
+]
+
+VerificationTest[
+    $filtered["LeanLink.Examples.Vec.head"]["TypeForm", "Open" -> {"LeanLink.Examples"}]
+    ,
+    "{a : Type} \[RightArrow] {n : Nat} \[RightArrow] Vec a (n + 1) \[RightArrow] a"
+    ,
+    TestID -> "TypeForm-Open"
+]
+
 (* Module: the module that declares a constant. *)
 
 VerificationTest[

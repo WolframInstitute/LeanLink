@@ -70,8 +70,8 @@ extern lean_object* leanlink_list_constant_names(uint64_t handle, lean_object* f
 extern lean_object* leanlink_list_constant_kinds(uint64_t handle, lean_object* filter);
 extern lean_object* leanlink_get_type_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
 extern lean_object* leanlink_get_value_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
-extern lean_object* leanlink_pp_type(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
-extern lean_object* leanlink_pp_value(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
+extern lean_object* leanlink_pp_type(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* opens);
+extern lean_object* leanlink_pp_value(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* opens);
 extern lean_object* leanlink_type_check(uint64_t handle, lean_object* exprWXF);
 extern lean_object* leanlink_open_goal(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_apply_tactic(uint64_t stateId, lean_object* tactic);
@@ -409,7 +409,9 @@ DLLEXPORT int leanlink_wl_pp_type(
     uint32_t unfold_level = (uint32_t)MArgument_getInteger(Args[2]);
     lean_object* name = lean_mk_string(name_cstr);
 
-    lean_object* io_res = leanlink_pp_type(handle, name, unfold_level);
+    const char* opens_cstr = MArgument_getUTF8String(Args[3]);
+    lean_object* opens = lean_mk_string(opens_cstr);
+    lean_object* io_res = leanlink_pp_type(handle, name, unfold_level, opens);
     /* name consumed by leanlink_pp_type */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
@@ -429,7 +431,9 @@ DLLEXPORT int leanlink_wl_pp_value(
     uint32_t unfold_level = (uint32_t)MArgument_getInteger(Args[2]);
     lean_object* name = lean_mk_string(name_cstr);
 
-    lean_object* io_res = leanlink_pp_value(handle, name, unfold_level);
+    const char* opens_cstr = MArgument_getUTF8String(Args[3]);
+    lean_object* opens = lean_mk_string(opens_cstr);
+    lean_object* io_res = leanlink_pp_value(handle, name, unfold_level, opens);
     /* name consumed by leanlink_pp_value */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }

@@ -285,9 +285,9 @@ $getTypeUnfoldedFn := $getTypeUnfoldedFn = LibraryFunctionLoad[$ShimLib, "leanli
 
 $getValueUnfoldedFn := $getValueUnfoldedFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_value_unfolded", {Integer, "UTF8String", Integer}, {Integer, 1}]
 
-$ppTypeFn := $ppTypeFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_pp_type", {Integer, "UTF8String", Integer}, {Integer, 1}]
+$ppTypeFn := $ppTypeFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_pp_type", {Integer, "UTF8String", Integer, "UTF8String"}, {Integer, 1}]
 
-$ppValueFn := $ppValueFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_pp_value", {Integer, "UTF8String", Integer}, {Integer, 1}]
+$ppValueFn := $ppValueFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_pp_value", {Integer, "UTF8String", Integer, "UTF8String"}, {Integer, 1}]
 
 $typeCheckFn := $typeCheckFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_type_check", {Integer, {Integer, 1}}, {Integer, 1}]
 
@@ -386,6 +386,7 @@ getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, se
         Return[$Failed]
     ];
     $envCache[key] = handle;
+    registerHandle[handle, imports, searchPath];
     handle
 ]
 
@@ -481,6 +482,105 @@ $callEdgeColor = <|
 $termCache = <||>
 
 isFFIError[r_] := StringQ[r] && StringStartsQ[r, "ERROR"]
+
+(* "Open" -> {"A.B", ...} (or one string): namespaces Lean's printer treats as
+   open, sent to the shim comma-separated. *)
+
+openNamespaces[opts_List] := StringRiffle[Select[Flatten[{Lookup[opts, "Open", {}]}], StringQ], ","]
+
+(* ---- #check-style TypeForm from the lean frontend ----
+   The embedded runtime imports an environment without its extensions: building
+   them needs initializer execution, which crashes inside a host process. So the
+   in-process printer knows no notation. The lean frontend loads extensions
+   properly; one lean process pretty-prints a batch of types with ppExpr - the
+   delaborator #check uses - and the result is cached per handle and opens. *)
+
+$handleSource = <||>;
+
+$typeFormCache = <||>;
+
+(* What a handle was loaded from, so a lean process can import the same thing. *)
+
+registerHandle[h_Integer, imports_List, searchPath_String] := If[ h > 0,
+    $handleSource[h] = <|"Imports" -> imports, "SearchPath" -> searchPath,
+        "Names" -> Lookup[Lookup[$handleSource, h, <||>], "Names", {}]|>
+]
+
+registerHandleNames[h_Integer, names_List] := If[ KeyExistsQ[$handleSource, h],
+    $handleSource[h, "Names"] = Union[$handleSource[h, "Names"], names]
+]
+
+leanStringLiteral[s_String] := "\"" <> StringReplace[s, {"\\" -> "\\\\", "\"" -> "\\\""}] <> "\""
+
+frontendTypeForms[h_Integer, names_List, opens_String] := Module[
+    {info, tc, script, file, namesFile, res, out, json}
+    ,
+    info = Lookup[$handleSource, h, None];
+    tc = leanToolchainDir[];
+    If[ info === None || tc === $Failed || names === {}, Return[$Failed, Module]];
+    namesFile = FileNameJoin[{$TemporaryDirectory, "LeanLinkPPNames" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".txt"}];
+    Export[namesFile, StringRiffle[names, "\n"], "Text", CharacterEncoding -> "UTF-8"];
+    script = StringRiffle[
+        Join[
+            {"import Lean"},
+            ("import " <> #&) /@ info["Imports"],
+            {"open Lean Meta"},
+            If[opens === "", {}, {"open " <> StringRiffle[StringSplit[opens, ","], " "] <> " in"}],
+            {
+                "#eval show MetaM Unit from do",
+                "  let mut out : Array (String \[Times] Json) := #[]",
+(* names come from a file: an array literal of thousands overflows the code generator *)
+                "  for n in (\[LeftArrow] IO.FS.lines " <> leanStringLiteral[namesFile] <> ") do",
+                "    if let some ci := (\[LeftArrow] getEnv).find? n.toName then",
+                "      try out := out.push (n, Json.str (toString (\[LeftArrow] ppExpr ci.type))) catch _ => pure ()",
+                "  IO.println (\"LEANLINK_PP_JSON \" ++ (Json.mkObj out.toList).compress)"
+            }
+        ],
+        "\n"
+    ];
+    file = FileNameJoin[{$TemporaryDirectory, "LeanLinkPP" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
+    Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
+    res = RunProcess[
+        {FileNameJoin[{tc, "bin", "lean"}], file},
+        ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> info["SearchPath"]]
+    ];
+    Quiet[DeleteFile[{file, namesFile}]];
+    out = Quiet @ Check[
+        FromCharacterCode[ToCharacterCode[res["StandardOutput"], "ISO8859-1"], "UTF-8"],
+        res["StandardOutput"]
+    ];
+(* Find the JSON in the raw output: ImportString reads its argument as bytes
+   and decodes the UTF-8 itself, so it must not be pre-decoded. *)
+    json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_PP_JSON "]&, None];
+    If[ json === None,
+        Message[LeanTerm::err, "lean could not pretty-print the type: " <> StringTake[StringTrim[out <> "\n" <> res["StandardError"]], UpTo[2000]]];
+        Return[$Failed, Module]
+    ];
+    Replace[Quiet[ImportString[StringDrop[json, StringLength["LEANLINK_PP_JSON "]], "RawJSON"]], Except[_Association] -> $Failed]
+]
+
+(* The whole environment's names go in one batch (one lean process; about 3 s
+   for 4000 names), up to 10000; a name outside it, or in a larger environment,
+   is printed alone.
+   A failed batch is cached too, so a missing toolchain costs one attempt. *)
+
+typeFormFor[h_Integer, name_String, opens_String] := Module[
+    {key = {h, opens}, cache, names, res}
+    ,
+    cache = Lookup[$typeFormCache, Key[key], Missing[]];
+    If[ cache === $Failed, Return[Missing["NotAvailable"], Module]];
+    If[ ! AssociationQ[cache] || ! KeyExistsQ[cache, name],
+        names = Lookup[Lookup[$handleSource, h, <||>], "Names", {}];
+        names = If[MemberQ[names, name] && Length[names] <= 10000 && ! AssociationQ[cache], names, {name}];
+        res = frontendTypeForms[h, names, opens];
+        $typeFormCache[key] = Which[
+            AssociationQ[res], Join[Replace[cache, Except[_Association] -> <||>], res],
+            AssociationQ[cache], cache,
+            True, $Failed
+        ]
+    ];
+    Lookup[Replace[$typeFormCache[key], Except[_Association] -> <||>], name, Missing["NotAvailable"]]
+]
 
 fetchField[handle_Integer, name_String, "Type"] := Lookup[
     $termCache
@@ -751,14 +851,24 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     ]
                 ]
             ,
+(* As #check prints it: Lean's own delaborator, run by the lean frontend
+   (typeFormFor), with notation, coercions and field notation; "Open" -> {ns}
+   prints names under those namespaces unqualified. LeanLink's WL printer is
+   the fallback - no handle, an unfolded type, or no toolchain. *)
             "TypeForm",
-                With[{typeExpr = LeanTerm[data]["Type", level]},
-                    If[MatchQ[typeExpr, _Missing | $Failed], Missing["NoHandle"], leanPP[typeExpr]]
+                With[{r = If[IntegerQ[handle] && level === 0, typeFormFor[handle, name, openNamespaces[opts]], None]},
+                    If[ StringQ[r],
+                        r
+                        ,
+                        With[{typeExpr = LeanTerm[data]["Type", level]},
+                            If[MatchQ[typeExpr, _Missing | $Failed], Missing["NoHandle"], leanPP[typeExpr]]
+                        ]
+                    ]
                 ]
             ,
             "TermForm",
                 If[ IntegerQ[handle],
-                    With[{r = Quiet[decodeWXF[$ppValueFn[handle, name, level]]]},
+                    With[{r = Quiet[decodeWXF[$ppValueFn[handle, name, level, openNamespaces[opts]]]]},
                         If[StringQ[r], r, leanPP[LeanTerm[data]["Term", level]]]
                     ]
                     ,
@@ -786,9 +896,6 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]
                 ]
             ,
-(* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
-   Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
-   depth), this follows every dependency, so it is safe to verify proofs with. *)
             "Module",
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[$constantModuleFn[handle, name]]]},
@@ -802,6 +909,9 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     Missing["NoHandle"]
                 ]
             ,
+(* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
+   Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
+   depth), this follows every dependency, so it is safe to verify proofs with. *)
             "Axioms",
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[$collectAxiomsFn[handle, name]]]},
@@ -2332,10 +2442,15 @@ LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] := iBox[
 
 (* ============================================================================ *)
 
-LeanLoadEnvironment[imports_List, searchPath_String] := $loadEnvFn[StringRiffle[imports, ","], searchPath]
+LeanLoadEnvironment[imports_List, searchPath_String] := With[{h = $loadEnvFn[StringRiffle[imports, ","], searchPath]},
+    If[IntegerQ[h], registerHandle[h, imports, searchPath]];
+    h
+]
 
 LeanFreeEnvironment[handle_Integer] := (
     $freeEnvFn[handle];
+    KeyDropFrom[$handleSource, handle];
+    $typeFormCache = KeySelect[$typeFormCache, First[#] =!= handle&];
     Null
 )
 
@@ -2573,6 +2688,8 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         If[ ! TrueQ[OptionValue["IncludeInternal"]],
             kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]
         ];
+        registerHandle[handle, {modName}, searchPath];
+        registerHandleNames[handle, Keys[kinds]];
         (* Build lazy LeanTerms *)
         res = LeanEnvironment[
             Append[
@@ -2638,6 +2755,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
                     kinds = Quiet[decodeWXF[$listConstantKindsFn[h, OptionValue["Filter"]]]];
                     If[ AssociationQ[kinds],
                         If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#]&]];
+                        registerHandleNames[h, Keys[kinds]];
 (* Build lazy LeanTerms: Name + Kind + _Handle. Each symbol remembers its specific handle! 
     
     
