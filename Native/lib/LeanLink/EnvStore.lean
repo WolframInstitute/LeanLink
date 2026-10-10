@@ -484,15 +484,25 @@ def applyTacticExport (stateId : UInt64) (tacticStr : @& String) : IO ByteArray 
             match lctx.findFromUserName? name with
             | some ldecl => pure ldecl.toExpr
             | none =>
-              match ps.env.find? name with
-              | some ci => pure (Lean.mkConst name (ci.levelParams.map Level.param))
-              | none => throwError s!"unknown term: {tok}"
+              -- Fresh universe metavariables, so a universe-polymorphic lemma
+              -- can unify with the goal in the type check below.
+              if ps.env.contains name then Meta.mkConstWithFreshMVarLevels name
+              else throwError s!"unknown term: {tok}"
           if tacticArgs.isEmpty then throwError "exact requires an argument"
           let head ← resolveToken tacticArgs.head!
           let mut term := head
           for arg in tacticArgs.tail! do
             let argExpr ← resolveToken arg
             term := Lean.mkApp term argExpr
+          -- mkApp builds the application unchecked and MVarId.assign is the raw
+          -- assignment, so without this any term closed any goal (exact Nat.zero
+          -- "proved" False). Type-check the term, then require its type to be
+          -- definitionally equal to the goal before assigning.
+          Meta.check term
+          let termType ← Meta.inferType term
+          let goalType ← goalId.getType
+          unless (← Meta.isDefEq termType goalType) do
+            throwError m!"exact: type mismatch{indentExpr term}\nhas type{indentExpr termType}\nbut the goal is{indentExpr goalType}"
           goalId.assign term
           pure []
         | "apply" =>

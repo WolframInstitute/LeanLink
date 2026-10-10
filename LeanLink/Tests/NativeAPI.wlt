@@ -138,6 +138,58 @@ VerificationTest[
     TestID -> "Property-Properties-List"
 ]
 
+(* LeanTactic exact must type-check its term against the goal. It used to
+   assign any resolvable term to any goal (exact Nat.zero "proved" False), so
+   Complete -> True was not evidence of a proof. Pin both directions. *)
+
+VerificationTest[
+    Block[{s = LeanState[$filtered["LeanLink.Examples.identity"]]},
+        s = LeanTactic["intro P hp"][s];
+        LeanTactic["exact hp"][s]["Complete"]
+    ]
+    ,
+    True
+    ,
+    TestID -> "Tactic-Exact-WellTyped-Completes"
+]
+
+VerificationTest[
+    Block[{s = LeanState[$filtered["LeanLink.Examples.identity"]]},
+        s = LeanTactic["intro P hp"][s];
+        LeanTactic["exact Nat.zero"][s]
+    ]
+    ,
+    $Failed
+    ,
+    {LeanTactic::err}
+    ,
+    TestID -> "Tactic-Exact-IllTyped-Rejected"
+]
+
+VerificationTest[
+    Block[{s = LeanState[$filtered["LeanLink.Examples.modus_ponens"]]},
+        s = LeanTactic["intro P Q hp hpq"][s];
+        LeanTactic["exact hpq hp"][s]["Complete"]
+    ]
+    ,
+    True
+    ,
+    TestID -> "Tactic-Exact-Application-Completes"
+]
+
+VerificationTest[
+    Block[{s = LeanState[$filtered["LeanLink.Examples.modus_ponens"]]},
+        s = LeanTactic["intro P Q hp hpq"][s];
+        LeanTactic["exact hp"][s]
+    ]
+    ,
+    $Failed
+    ,
+    {LeanTactic::err}
+    ,
+    TestID -> "Tactic-Exact-WrongHypothesis-Rejected"
+]
+
 VerificationTest[
     MatchQ[$filtered["LeanLink.Examples.Vec.head"]["Type"], _LeanForall],
     True,
