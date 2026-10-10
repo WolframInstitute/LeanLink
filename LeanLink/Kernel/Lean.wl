@@ -738,16 +738,19 @@ frontendTypeForms[h_Integer, names_List, opens_String] := Module[
         Join[
             {"import Lean"},
             ("import " <> #&) /@ info["Imports"],
-            {"open Lean Meta"},
+(* Open nothing but the requested namespaces, and fully qualify the script's
+   own names: `open Lean Meta` would bring Lean.Term and Lean.Meta.State into
+   scope, and the delaborator then prints a project's own Term or State in full
+   because the short name is ambiguous - unlike #check in a project file. *)
             If[opens === "", {}, {"open " <> StringRiffle[StringSplit[opens, ","], " "] <> " in"}],
             {
-                "#eval show MetaM Unit from do",
-                "  let mut out : Array (String \[Times] Json) := #[]",
+                "#eval show Lean.Meta.MetaM Unit from do",
+                "  let mut out : Array (String \[Times] Lean.Json) := #[]",
 (* names come from a file: an array literal of thousands overflows the code generator *)
                 "  for n in (\[LeftArrow] IO.FS.lines " <> leanStringLiteral[namesFile] <> ") do",
-                "    if let some ci := (\[LeftArrow] getEnv).find? n.toName then",
-                "      try out := out.push (n, Json.str (toString (\[LeftArrow] ppExpr ci.type))) catch _ => pure ()",
-                "  IO.println (\"LEANLINK_PP_JSON \" ++ (Json.mkObj out.toList).compress)"
+                "    if let some ci := (\[LeftArrow] Lean.getEnv).find? n.toName then",
+                "      try out := out.push (n, Lean.Json.str (toString (\[LeftArrow] Lean.Meta.ppExpr ci.type))) catch _ => pure ()",
+                "  IO.println (\"LEANLINK_PP_JSON \" ++ (Lean.Json.mkObj out.toList).compress)"
             }
         ],
         "\n"
