@@ -3,8 +3,11 @@
 How to write the LeanLink documentation sources under `docs/` - the
 `Template: Symbol` reference pages, the `Template: Guide` guide, and the
 `Template: TechNote` tutorials. They are literate-markdown files that
-[`build_docs.wls`](../build_docs.wls) turns into evaluated Wolfram notebooks via
-`MarkdownToNotebook` (MTN), landing under `LeanLink/Documentation/English/`.
+[`build_docs.wls`](../build_docs.wls) turns into evaluated Wolfram notebooks with
+PacletPage's `BuildPacletDocumentation`, which runs `MarkdownToNotebook` (MTN) on
+each page. The notebooks land under `LeanLink/Documentation/English/`, and
+[`release.wls`](../release.wls) publishes them as the
+[documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink).
 This is the house style. It is adapted from the WolframParser doc guide and
 overrides the upstream
 [wolfram-symbol-page skill](https://github.com/sw1sh/MarkdownToNotebook/blob/main/skills/wolfram-symbol-page/SKILL.md)
@@ -21,18 +24,19 @@ its init can wedge kernels):
 wl -f build_docs.wls
 ```
 
-`build_docs.wls` auto-discovers every `docs/**/*.md`, so a new file builds with
-no wiring. It uses the **deployed** MarkdownToNotebook cloud resource
-(`ResourceFunction["https://www.wolframcloud.com/obj/nikm/DeployedResources/Function/MarkdownToNotebook"]`),
-not a local copy - so the build needs cloud access. The `<!-- => ... -->` hint
+`build_docs.wls` auto-discovers every `docs/**/*.md` whose frontmatter names a
+page template, so a new page builds with no wiring. It needs PacletPage 0.3.8 or
+later, installed or in a checkout named by `PACLETPAGE_DIR` (see
+[`pacletpage.wl`](../pacletpage.wl)). The `<!-- => ... -->` hint
 after a cell is **author-facing only** - MTN strips HTML comments before
 evaluating, so a hint is never checked against the real output. That is exactly
 why you must read the built `.nb` back: the hint records what you *expect*, the
 build produces what is *real*. Probe each example against the live paclet first
-and paste the real result into the hint - a wrong hint is worse than none. To
-iterate on one page without rebuilding the whole set, bind
-`mtn = ResourceFunction["https://www.wolframcloud.com/obj/nikm/DeployedResources/Function/MarkdownToNotebook"]`
-and call `mtn[src, out, "EvaluateSeparator" -> None]` on it directly.
+and paste the real result into the hint - a wrong hint is worse than none.
+Iterating on one page is cheap: each page's notebook is cached under a key of its
+source and the paclet's Wolfram Language code (`PacletInfo.wl`, `Kernel/`), so a
+rebuild converts only the pages that changed. The key does not cover the native
+shim: after rebuilding only the shim, run `wl -f build_docs.wls --no-cache`.
 
 ## The native bridge must be live
 
@@ -49,21 +53,34 @@ dylib alone; the Mathlib pages additionally need a **built** mathlib4 checkout
 (see *Gate the heavy examples*). If the shim is missing the build will fail loudly
 rather than emit blank cells - that is intended.
 
-## State threads across sections - `EvaluateSeparator -> None`
+## Where state threads: tutorials, not symbol pages
 
-This is the one rule that **inverts** the upstream skill. `build_docs.wls`
-builds every page with `"EvaluateSeparator" -> None`, so the per-heading context
-reset is **off**: a [LeanEnvironment]() imported in `## Part 1` is still bound in
-`## Part 5`. Pages may - and the tutorials do - carry one environment across
-sections. Import an environment once near the top, then query it section by
-section. Do not redundantly re-import in each section, and do not reuse a name
-for two different environments across sections (the later binding wins for the
-whole notebook).
+The examples of a page run in sequence, and where the context is reset depends on
+the template:
 
-A practical consequence: a native [LeanEnvironment]() handle stays valid for the
-life of one kernel, and importing a *second* environment does not invalidate the
-first - so a tutorial that imports `env`, then later imports `mathlibEnv`, then
-refers back to `env`, is fine.
+- A **tutorial** (`Template: TechNote`) is one narrative and runs in **one
+  context**: a [LeanEnvironment]() imported in `## Part 1` is still bound in
+  `## Part 5`. Import an environment once near the top, then query it section by
+  section. Do not redundantly re-import in each section, and do not reuse a name
+  for two different environments across sections (the later binding wins for the
+  rest of the notebook).
+- Every other page - a **symbol page**, the **guide**, and the **resource
+  definition** (`docs/ResourceDefinition.md`) - runs each section, and each example
+  between `---` delimiters, in a **clean context**. Each one defines what it uses:
+  a `## Scope` example that queries the bundled environment starts with its own
+  `env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];`.
+  Cells under the same heading, with no `---` between them, share state.
+
+A section that uses a name an earlier section defined renders an unevaluated
+expression or a wrong value - `env["id_proof"]["ExprGraph"]` echoed back, or
+`Information[env, ...]` describing the symbol `env` - while the page itself
+converts fine. PacletPage reports it, and `build_docs.wls` stops, naming the page,
+the heading, and the name.
+
+A practical consequence of a tutorial's single context: a native
+[LeanEnvironment]() handle stays valid for the life of one kernel, and importing a
+*second* environment does not invalidate the first - so a tutorial that imports
+`env`, then later imports `mathlibEnv`, then refers back to `env`, is fine.
 
 ## Symbols are autolinked, never bare backticks
 
@@ -143,9 +160,10 @@ output reads on both themes. The graph-producing examples ([ExprGraph](),
 ## Headless rasterization caveat
 
 A headless `wl` session **cannot rasterize** typeset boxes - `Rasterize` of a
-`RawBoxes` / `Style` expression comes back all white. `build_docs.wls` pins the
-front end to Light so the graph outputs that *do* rasterize (the Lean expression
-and call graphs) are not inverted. If a page needs to show a typeset rendering,
+`RawBoxes` / `Style` expression comes back all white. The converter writes every
+notebook with `LightDark -> "Light"`, and the graph outputs (the Lean expression
+and call graphs) stay graphics, not rasters, so the headless front end's dark
+default never inverts them. If a page needs to show a typeset rendering,
 verify it by exporting a PDF and converting with `sips`, not by `Rasterize`.
 
 ## Gate the heavy examples
@@ -185,7 +203,9 @@ absent the dependent path cannot be verified, so:
 - **Symbol page** (`Template: Symbol`): `## Usage` (the signature, one statement
   per paragraph), `## Details & Options` (bullets become Notes), then
   `## Basic Examples` / `## Scope` / `## Properties and Relations` /
-  `## Possible Issues` / `## Neat Examples` as warranted. Model a primary-API
+  `## Possible Issues` / `## Neat Examples` as warranted. Each section, and each
+  example between `---`, starts in a clean context, so it defines what it uses.
+  Model a primary-API
   page on [Symbols/LeanImport.md](Symbols/LeanImport.md) or
   [Symbols/LeanTactic.md](Symbols/LeanTactic.md); a one-line AST constructor on
   [Symbols/LeanApp.md](Symbols/LeanApp.md).
