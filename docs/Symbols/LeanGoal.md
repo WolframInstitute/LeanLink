@@ -52,6 +52,8 @@ g["Context"]
 A [LeanState]() holds one or more [LeanGoal]()s; `"GoalCount"` is the length of its `"Goals"` list.
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
+s0 = LeanState[env["id_proof"]];
 Length[s0["Goals"]] == s0["GoalCount"]
 ```
 

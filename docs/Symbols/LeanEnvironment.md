@@ -56,6 +56,7 @@ env["id_proof"]
 The available metadata properties:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 Information[env, "Properties"]
 ```
 
@@ -67,13 +68,14 @@ How many constants of each kind:
 Information[env, "Kinds"]
 ```
 
-<!-- => <|"def" -> 6, "theorem" -> 18, "inductive" -> 1|> -->
+<!-- => <|"theorem" -> 18, "def" -> 11, "constructor" -> 2, "inductive" -> 1|> -->
 
 ## Properties and Relations
 
 [Normal]() recovers the underlying [Association]() of [LeanTerm]() values:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 Head @ Normal[env]
 ```
 

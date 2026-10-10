@@ -48,6 +48,9 @@ LeanImport["Demo", "ProjectDir" -> dir, "Filter" -> "two_eq"]["two_eq"]["TypeFor
 A module that does not compile gives a [Failure]() whose `"Output"` carries Lean's error:
 
 ```wl
+dir = CreateDirectory[];
+Export[FileNameJoin[{dir, "lakefile.toml"}], "name = \"demo\"\n[[lean_lib]]\nname = \"Demo\"\n", "Text"];
+Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"];
 Export[FileNameJoin[{dir, "Demo.lean"}], "theorem bad : 1 + 1 = 3 := rfl\n", "Text"];
 r = LeanBuild[dir, {"Demo"}];
 {r["Tag"], StringContainsQ[r["Output"], "error"]}

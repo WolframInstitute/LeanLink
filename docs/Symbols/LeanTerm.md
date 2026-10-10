@@ -72,6 +72,7 @@ env["id_proof"]["Type"]
 The binder chain as a [Dataset]():
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["modus_ponens"]["Parameters"] // Dataset
 ```
 

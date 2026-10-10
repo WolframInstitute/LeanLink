@@ -51,15 +51,12 @@ leanEnv["FinalGoal"]["TypeForm"]
 The whole transpiled environment as Lean 4 source:
 
 ```wl
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
 LeanExportString[leanEnv]
 ```
 
 <!-- =>
 axiom U : Type
-
-axiom a : U
-axiom b : U
-axiom c : U
 
 axiom Ax1 : b = a
 axiom Ax2 : b = c
@@ -78,6 +75,7 @@ theorem FinalGoal : a = c := by
 The transpiled goal re-checks: opening it with [LeanState]() and stepping the generated proof drives it to completion.
 
 ```wl
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
 LeanState[leanEnv["FinalGoal"]]["Complete"]
 ```
 

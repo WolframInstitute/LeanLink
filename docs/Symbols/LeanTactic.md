@@ -50,6 +50,8 @@ LeanTactic[{"intro P", "intro h", "exact h"}][s0]["Complete"]
 Step one tactic at a time, threading the state:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
+s0 = LeanState[env["id_proof"]];
 s1 = LeanTactic["intro P"][s0];
 s2 = LeanTactic["intro h"][s1];
 s3 = LeanTactic["exact h"][s2];

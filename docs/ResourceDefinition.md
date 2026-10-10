@@ -46,6 +46,7 @@ env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
 How many constants, and of what kinds:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 Length[env]
 ```
 
@@ -55,13 +56,14 @@ Length[env]
 Information[env, "Kinds"]
 ```
 
-<!-- => <|"def" -> 6, "theorem" -> 18, "inductive" -> 1|> -->
+<!-- => <|"theorem" -> 18, "def" -> 11, "constructor" -> 2, "inductive" -> 1|> -->
 
 ---
 
 A single constant is a [LeanTerm]() summary box:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]
 ```
 
@@ -88,6 +90,7 @@ env["id_proof"]["TermForm"]
 Every expression is a tree; `"ExprGraph"` draws it:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]["ExprGraph"]
 ```
 
@@ -122,6 +125,7 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 The `"Parameters"` property unfolds a theorem's binder chain - explicit, implicit, and instance arguments - as a [Dataset]():
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["modus_ponens"]["Parameters"] // Dataset
 ```
 
@@ -132,6 +136,7 @@ env["modus_ponens"]["Parameters"] // Dataset
 Open any theorem as a proof goal and step through it with tactics:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 s0 = LeanState[env["id_proof"]]
 ```
 

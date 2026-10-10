@@ -59,6 +59,8 @@ s0["Goals"][[1]]["Target"]
 Drive the proof to completion with a sequence of tactics:
 
 ```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
+s0 = LeanState[env["id_proof"]];
 LeanTactic[{"intro P", "intro h", "exact h"}][s0]["Complete"]
 ```
 
