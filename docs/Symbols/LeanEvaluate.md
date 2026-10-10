@@ -22,6 +22,7 @@ RelatedGuides: [LeanLink]
 |---|---|---|
 | `"ProjectDir"` | [None]() | a built Lake project whose modules the expression may use |
 | `"Imports"` | `{}` | modules to import |
+| `"Source"` | `""` | Lean declarations the expression uses (definitions, `open`s), placed after the imports |
 | `"Open"` | `{}` | namespaces to open |
 | `"TimeLimit"` | `600` | seconds before the evaluation is stopped |
 
@@ -58,6 +59,18 @@ LeanEvaluate["(List.range 8).map triangle", "ProjectDir" -> dir, "Imports" -> {"
 ```
 
 <!-- => {0, 1, 3, 6, 10, 15, 21, 28} -->
+
+Give the definitions the expression needs with `"Source"`, here a recursive helper defined by equations:
+
+```wl
+LeanEvaluate["(List.range 8).map (fib 1 1)", "Source" -> "def fib (a b : Nat) : Nat -> Nat
+  | 0 => a
+  | n + 1 => fib b (a + b) n"]
+```
+
+<!-- => {1, 1, 2, 3, 5, 8, 13, 21} -->
+
+Large data goes in as definitions too. Split long list literals into chunks of a few hundred elements; one literal of thousands can overflow Lean's code generator.
 
 ## Possible Issues
 

@@ -170,6 +170,14 @@ VerificationTest[
 ]
 
 VerificationTest[
+    LeanEvaluate["(List.range 8).map (fib 1 1)", "Source" -> "def fib (a b : Nat) : Nat -> Nat\n  | 0 => a\n  | n + 1 => fib b (a + b) n"]
+    ,
+    {1, 1, 2, 3, 5, 8, 13, 21}
+    ,
+    TestID -> "LeanEvaluate-Source"
+]
+
+VerificationTest[
     LeanEvaluate["undefinedThing + 1"]["Tag"]
     ,
     "LeanEvaluateFailed"

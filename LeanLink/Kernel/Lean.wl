@@ -96,7 +96,7 @@ LeanBuild::usage = "LeanBuild[dir, {\"Module1\", ...}] builds those modules of t
 
 LeanBuild::version = "The project pins `1` but LeanLink's runtime is `2`: LeanImport cannot load what this builds."
 
-LeanEvaluate::usage = "LeanEvaluate[expr] evaluates the Lean expression expr (a string) with #eval and returns its value as a Wolfram Language expression, through JSON: Nat and Int give integers, Bool gives True or False, String gives strings, List and Array give lists. \"ProjectDir\" and \"Imports\" make a built project's modules available, \"Open\" opens namespaces, \"TimeLimit\" bounds the run in seconds. The value is computed by Lean's interpreter, not checked by its kernel."
+LeanEvaluate::usage = "LeanEvaluate[expr] evaluates the Lean expression expr (a string) with #eval and returns its value as a Wolfram Language expression, through JSON: Nat and Int give integers, Bool gives True or False, String gives strings, List and Array give lists. \"ProjectDir\" and \"Imports\" make a built project's modules available, \"Source\" adds declarations (definitions, opens) the expression uses, \"Open\" opens namespaces, \"TimeLimit\" bounds the run in seconds. The value is computed by Lean's interpreter, not checked by its kernel."
 
 LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
 
@@ -582,10 +582,10 @@ runLeanProcess[cmd_List, env_Association, limit_] := Module[
     <|"ExitCode" -> ProcessInformation[p, "ExitCode"], "StandardOutput" -> out, "StandardError" -> err|>
 ]
 
-Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "TimeLimit" -> 600};
+Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "Source" -> "", "TimeLimit" -> 600};
 
 LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
-    {tc, projDir, searchPath, opens, script, file, res, json, diag}
+    {tc, projDir, searchPath, opens, srcLines, srcImports, srcBody, script, file, res, json, diag}
     ,
     tc = leanToolchainDir[];
     If[ tc === $Failed,
@@ -599,10 +599,18 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
         ":"
     ];
     opens = Select[Flatten[{OptionValue["Open"]}], StringQ];
+(* "Source": declarations the expression uses (definitions, opens), placed
+   after the imports. Any import lines in it move to the header, the only
+   place Lean accepts them. *)
+    srcLines = StringSplit[Replace[OptionValue["Source"], Except[_String] -> ""], "\n", All];
+    srcImports = StringTrim /@ Select[srcLines, StringStartsQ[StringTrim[#], "import "]&];
+    srcBody = StringRiffle[Select[srcLines, ! StringStartsQ[StringTrim[#], "import "]&], "\n"];
     script = StringRiffle[
         Join[
             {"import Lean.Data.Json"},
             ("import " <> #&) /@ OptionValue["Imports"],
+            srcImports,
+            If[StringTrim[srcBody] === "", {}, {srcBody}],
             If[opens === {}, {}, {"open " <> StringRiffle[opens, " "] <> " in"}],
             {"#eval IO.println (\"LEANLINK_EVAL_JSON \" ++ (Lean.Json.arr #[Lean.toJson (" <> expr <> ")]).compress)"}
         ],
