@@ -92,7 +92,7 @@ LeanExportString::usage = "LeanExportString[env] converts a LeanEnvironment to a
 
 LeanExport::usage = "LeanExport[file, env] exports a LeanEnvironment to a .lean file."
 
-LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]."
+LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
 
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment."
 
@@ -1998,11 +1998,11 @@ leanSource[other_, _] := "sorry /- " <> ToString[Short[other, 1]] <> " -/"
 
 (* ============================================================================ *)
 
-LeanImportString[src_String] := Block[{tmpFile, modName, result},
+LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFile, modName, result},
     modName = "LeanLinkTmp" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^6]];
     tmpFile = FileNameJoin[{$TemporaryDirectory, modName <> ".lean"}];
     Export[tmpFile, src, "Text", CharacterEncoding -> "UTF-8"];
-    result = LeanImport[tmpFile];
+    result = LeanImport[tmpFile, opts];
     (* Cleanup the .lean source -- olean kept for lazy queries *)
     If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
     result
@@ -2420,7 +2420,8 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     leanBin,
     leanLibDir,
     content,
-    names
+    names,
+    projSearch
 },
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
@@ -2442,6 +2443,10 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             Module
         ]
     ];
+(* A source file outside the project (e.g. a LeanImportString snippet) can still
+   import the project's modules: its oleans go on LEAN_PATH for the compile and
+   on the search path for the load. Only an explicit ProjectDir does this. *)
+    projSearch = If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""];
 (* Resolve the correct lean binary from the LeanLink project toolchain 
     
     
@@ -2495,15 +2500,34 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             DirectoryName[absFile]
         ]
     },
-        result = RunProcess[{leanBin, "-o", oleanFile, "-R", rootDir, absFile}]
+(* Pin LEAN_PATH for the compile. The shim sets it process-wide on every
+   environment load, so inheriting it would make what this source can import
+   depend on whichever environment happened to be loaded last. *)
+        result = RunProcess[
+            {leanBin, "-o", oleanFile, "-R", rootDir, absFile},
+            ProcessEnvironment -> Association[
+                GetEnvironment[],
+                "LEAN_PATH" -> StringRiffle[DeleteCases[{projSearch, leanLibDir}, ""], ":"]
+            ]
+        ]
     ];
     If[ result["ExitCode"] =!= 0,
-        Message[LeanImport::err, "lean compilation failed: " <> result["StandardError"]];
+(* lean writes diagnostics to stdout, not stderr; RunProcess decodes them as
+   Latin-1, so re-decode as UTF-8 to keep the goal/type text readable. *)
+        Message[
+            LeanImport::err,
+            "lean compilation failed: " <> StringTrim[
+                Quiet @ Check[
+                    FromCharacterCode[ToCharacterCode[result["StandardOutput"] <> "\n" <> result["StandardError"], "ISO8859-1"], "UTF-8"],
+                    result["StandardOutput"] <> "\n" <> result["StandardError"]
+                ]
+            ]
+        ];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Block]
     ];
     (* Load via lazy pattern *)
-    searchPath = tmpDir <> ":" <> leanLibDir;
+    searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], ":"];
     Block[{handle, kinds, srcNames, res},
         handle = $loadEnvFn[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
