@@ -2473,28 +2473,39 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     
     
     *)
-    tcFile = None;
-    If[StringQ[$DevProjectRoot], tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}]];
-    If[ ! FileExistsQ[tcFile],
-(* Paclet-bundled lean-toolchain: in paclet root, cached at load time 
+(* The pinned toolchain the shim was built against comes first: the olean this
+   compile writes must match the runtime that loads it. The paclet ships no
+   lean-toolchain file, so the fallbacks below reached elan's default
+   toolchain, which need not be the pinned one ("incompatible header"). *)
+    With[{tc = leanToolchainDir[]},
+        If[ tc =!= $Failed,
+            leanBin = FileNameJoin[{tc, "bin", "lean"}];
+            leanLibDir = FileNameJoin[{tc, "lib", "lean"}]
+            ,
+        tcFile = None;
+        If[StringQ[$DevProjectRoot], tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}]];
+        If[ ! FileExistsQ[tcFile],
+    (* Paclet-bundled lean-toolchain: in paclet root, cached at load time 
     
     
-    *)
-        tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]
-    ];
-    If[ FileExistsQ[tcFile],
-        tcName = StringTrim[Import[tcFile, "Text"]];
-        tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
-        leanBin = FileNameJoin[{elanHome[], "toolchains", tcName, "bin", "lean"}];
-        leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
-        ,
-(* No toolchain file at all: try elan default, then bare lean 
-    *)
-        leanBin = FileNameJoin[{elanHome[], "bin", "lean"}];
-        If[! FileExistsQ[leanBin], leanBin = "lean"];
-        leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
-        If[ ! StringQ[leanLibDir] || ! DirectoryQ[leanLibDir],
-            leanLibDir = FileNameJoin[{DirectoryName[DirectoryName[leanBin]], "lib", "lean"}]
+        *)
+            tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]
+        ];
+        If[ FileExistsQ[tcFile],
+            tcName = StringTrim[Import[tcFile, "Text"]];
+            tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
+            leanBin = FileNameJoin[{elanHome[], "toolchains", tcName, "bin", "lean"}];
+            leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
+            ,
+    (* No toolchain file at all: try elan default, then bare lean 
+        *)
+            leanBin = FileNameJoin[{elanHome[], "bin", "lean"}];
+            If[! FileExistsQ[leanBin], leanBin = "lean"];
+            leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
+            If[ ! StringQ[leanLibDir] || ! DirectoryQ[leanLibDir],
+                leanLibDir = FileNameJoin[{DirectoryName[DirectoryName[leanBin]], "lib", "lean"}]
+            ]
+        ];
         ]
     ];
     (* Standalone file: compile via lean CLI subprocess *)
