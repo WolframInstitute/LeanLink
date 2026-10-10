@@ -58,6 +58,12 @@ target_link_directories(LeanLinkShim PRIVATE ${LEAN_HOME}/lib/lean)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(DEFAULT_LIBS ${CMAKE_SOURCE_DIR}/libgnu_lean_thunks.a ${LEAN_HOME}/bin/libleanshared.dll ${LEAN_HOME}/bin/libleanshared_1.dll ${LEAN_HOME}/bin/libleanshared_2.dll)
     target_link_libraries(LeanLinkShim PRIVATE -Wl,--enable-auto-import ${DEFAULT_LIBS})
+    # Link the MinGW runtime statically. The shim's _Thread_local needs libgcc's
+    # emulated-TLS helper (__emutls_get_address), which in turn needs winpthread;
+    # linked dynamically they drag in libgcc_s_seh-1.dll and libwinpthread-1.dll,
+    # which neither Windows nor the Lean toolchain (built with LLVM/libc++)
+    # provides, so the shim would fail to load. The system UCRT stays dynamic.
+    target_link_options(LeanLinkShim PRIVATE -static)
 else()
     target_link_libraries(LeanLinkShim PRIVATE leanshared)
 endif()
