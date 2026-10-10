@@ -1613,7 +1613,9 @@ leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Not" && Length[flattenApp[e]
 
 leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Exists" := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 1 && MatchQ[Last[args], LeanLam[_, _, _, _]],
-        "\[Exists] " <> cleanName[Last[args][[1]]] <> ", " <> leanPP[Last[args][[3]], d - 1]
+(* Substitute the binder name into the body, as the forall/lambda printers do;
+   without it the bound variable renders as its de Bruijn index (#0). *)
+        "\[Exists] " <> cleanName[Last[args][[1]]] <> ", " <> leanPP[substBVar0[Last[args][[3]], Last[args][[1]]], d - 1]
         ,
         "Exists " <> StringRiffle[leanPP[#, d - 1]& /@ args, " "]
     ]
