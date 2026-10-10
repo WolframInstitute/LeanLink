@@ -20,18 +20,18 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
-Load and immediately free an environment (gated on a built mathlib4 checkout):
+Load the core `Init` module from the Lean toolchain and immediately free it:
 
 ```wl
-leanLib = FileNameJoin[{$HomeDirectory, "src", "mathlib4", ".lake", "build", "lib", "lean"}];
-If[ DirectoryQ[leanLib],
-    handle = LeanLoadEnvironment[{"Mathlib.Logic.Basic"}, leanLib];
+toolchainLib = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", "leanprover--lean4---v4.30.0", "lib", "lean"}];
+If[ DirectoryQ[toolchainLib],
+    handle = LeanLoadEnvironment[{"Init"}, toolchainLib];
     LeanFreeEnvironment[handle],
-    "Mathlib not built"
+    "Lean toolchain not installed"
 ]
 ```
 
-<!-- => Null (or "Mathlib not built") -->
+<!-- => Null (or "Lean toolchain not installed") -->
 
 ## Properties and Relations
 
