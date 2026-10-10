@@ -254,7 +254,7 @@ Scan[
         sym::abort = "Native call aborted: `1`"
     ]
     ,
-    {LeanImport, LeanExpr, LeanValue, LeanConstantInfo, LeanListConstants, LeanTactic}
+    {LeanImport, LeanExpr, LeanValue, LeanConstantInfo, LeanListConstants, LeanTactic, LeanTerm}
 ]
 
 $loadEnvFn := $loadEnvFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_load_env", {"UTF8String", "UTF8String"}, Integer]
@@ -270,6 +270,8 @@ $getValueFn := $getValueFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_valu
 $getConstantFn := $getConstantFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_constant", {Integer, "UTF8String"}, {Integer, 1}]
 
 $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_used_constants", {Integer, "UTF8String"}, {Integer, 1}]
+
+$collectAxiomsFn := $collectAxiomsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_collect_axioms", {Integer, "UTF8String"}, {Integer, 1}]
 
 $listConstantNamesFn := $listConstantNamesFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_names", {Integer, "UTF8String"}, {Integer, 1}]
 
@@ -699,6 +701,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     "TermForm",
                     "TypeRefs",
                     "TermRefs",
+                    "Axioms",
                     "ExprGraph",
                     "CallGraph",
                     "Parameters",
@@ -776,6 +779,22 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     data["TermRefs"]
                     ,
                     If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]
+                ]
+            ,
+(* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
+   Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
+   depth), this follows every dependency, so it is safe to verify proofs with. *)
+            "Axioms",
+                If[ IntegerQ[handle],
+                    With[{r = Quiet[decodeWXF[$collectAxiomsFn[handle, name]]]},
+                        Which[
+                            ListQ[r], r,
+                            StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
+                            True, $Failed
+                        ]
+                    ]
+                    ,
+                    Missing["NoHandle"]
                 ]
             ,
             "ExprGraph",

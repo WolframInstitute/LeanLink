@@ -325,6 +325,32 @@ def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray :
   | some ci => return WXF.serialize (WXF.constantToWXF ci)
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+/-- Axioms a constant transitively depends on, via Lean.collectAxioms: the same
+    traversal as `#print axioms`, following every auxiliary declaration (the
+    omega/simp/decide `_proof_N` / `_auxLemma` lemmas a display graph filters out).
+    Returns a WXF list of names, sorted. -/
+@[export leanlink_collect_axioms]
+def collectAxiomsExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  unless env.contains name do
+    return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+  let ctx : Core.Context := {
+    fileName := "<axioms>"
+    fileMap := { source := "", positions := #[0] }
+  }
+  let st : Core.State := { env }
+  try
+    let res ← ((Lean.collectAxioms name : CoreM (Array Name)).run ctx st).toIO'
+    match res with
+    | .ok (axioms, _) =>
+      let names := (axioms.map toString).qsort (fun a b => a < b)
+      return WXF.serialize (WXF.wlList (names.map WXF.string))
+    | .error _ => return WXF.serialize (WXF.string "ERROR: collectAxioms failed")
+  catch _ =>
+    return WXF.serialize (WXF.string "ERROR: collectAxioms exception")
+
 /-- Get used constants from a constant's type and value expressions.
     Returns WXF-encoded Association: <|"type" -> {names...}, "value" -> {names...}|> -/
 @[export leanlink_get_used_constants]

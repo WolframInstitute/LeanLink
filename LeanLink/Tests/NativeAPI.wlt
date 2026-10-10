@@ -129,6 +129,7 @@ VerificationTest[
         "TermForm",
         "TypeRefs",
         "TermRefs",
+        "Axioms",
         "ExprGraph",
         "CallGraph",
         "Parameters",
@@ -136,6 +137,24 @@ VerificationTest[
     }
     ,
     TestID -> "Property-Properties-List"
+]
+
+(* Axioms: exact audit via Lean.collectAxioms. modus_ponens is pure logic. *)
+
+VerificationTest[
+    $filtered["LeanLink.Examples.modus_ponens"]["Axioms"]
+    ,
+    {}
+    ,
+    TestID -> "Property-Axioms-ModusPonens-None"
+]
+
+VerificationTest[
+    ListQ[$filtered["LeanLink.Examples.Vec.head"]["Axioms"]]
+    ,
+    True
+    ,
+    TestID -> "Property-Axioms-IsList"
 ]
 
 (* LeanTactic exact must type-check its term against the goal. It used to
