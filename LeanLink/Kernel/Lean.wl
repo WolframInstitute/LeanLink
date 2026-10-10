@@ -3015,6 +3015,9 @@ applyTacticStr[tac_String, state_LeanState, head_ : LeanTactic] := Block[{data =
         Return[$Failed]
     ];
     If[ ! AssociationQ[result],
+(* The shim reports a failed tactic as an error string ("unsupported tactic: ...",
+   a Lean elaboration error). Surface it instead of returning a bare $Failed. *)
+        If[StringQ[result], Message[head::err, StringDelete[result, StartOfString ~~ "ERROR: "]]];
         $Failed
         ,
         LeanState[
