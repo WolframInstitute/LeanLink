@@ -96,6 +96,8 @@ LeanBuild::usage = "LeanBuild[dir, {\"Module1\", ...}] builds those modules of t
 
 LeanBuild::version = "The project pins `1` but LeanLink's runtime is `2`: LeanImport cannot load what this builds."
 
+LeanEvaluate::usage = "LeanEvaluate[expr] evaluates the Lean expression expr (a string) with #eval and returns its value as a Wolfram Language expression, through JSON: Nat and Int give integers, Bool gives True or False, String gives strings, List and Array give lists. \"ProjectDir\" and \"Imports\" make a built project's modules available, \"Open\" opens namespaces, \"TimeLimit\" bounds the run in seconds. The value is computed by Lean's interpreter, not checked by its kernel."
+
 LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
 
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment."
@@ -491,6 +493,85 @@ isFFIError[r_] := StringQ[r] && StringStartsQ[r, "ERROR"]
    open, sent to the shim comma-separated. *)
 
 openNamespaces[opts_List] := StringRiffle[Select[Flatten[{Lookup[opts, "Open", {}]}], StringQ], ","]
+
+(* ---- LeanEvaluate ----
+   #eval in a lean process (the pinned toolchain), value returned through JSON.
+   The process is polled rather than run with RunProcess, for a time limit, and
+   its output is read while it runs: a large value would otherwise fill the
+   pipe and deadlock the wait. *)
+
+runLeanProcess[cmd_List, env_Association, limit_] := Module[
+    {p, out = "", err = "", t0 = AbsoluteTime[], read}
+    ,
+    read[stream_] := Replace[ReadString[stream, EndOfBuffer], Except[_String] -> ""];
+    p = StartProcess[cmd, ProcessEnvironment -> env];
+    While[ ProcessStatus[p] === "Running",
+        out = out <> read[ProcessConnection[p, "StandardOutput"]];
+        err = err <> read[ProcessConnection[p, "StandardError"]];
+        If[ AbsoluteTime[] - t0 > limit, KillProcess[p]; Return[$TimedOut, Module]];
+        Pause[0.02]
+    ];
+    out = out <> Replace[ReadString[ProcessConnection[p, "StandardOutput"]], Except[_String] -> ""];
+    err = err <> Replace[ReadString[ProcessConnection[p, "StandardError"]], Except[_String] -> ""];
+    <|"ExitCode" -> ProcessInformation[p, "ExitCode"], "StandardOutput" -> out, "StandardError" -> err|>
+]
+
+Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "TimeLimit" -> 600};
+
+LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
+    {tc, projDir, searchPath, opens, script, file, res, json, diag}
+    ,
+    tc = leanToolchainDir[];
+    If[ tc === $Failed,
+        Return[Failure["ToolchainNotInstalled", <|
+            "MessageTemplate" -> "LeanLink's toolchain leanprover/lean4:`1` is not installed.",
+            "MessageParameters" -> {$LeanToolchainVersion}|>], Module]
+    ];
+    projDir = OptionValue["ProjectDir"];
+    searchPath = StringRiffle[
+        DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], FileNameJoin[{tc, "lib", "lean"}]}, ""],
+        ":"
+    ];
+    opens = Select[Flatten[{OptionValue["Open"]}], StringQ];
+    script = StringRiffle[
+        Join[
+            {"import Lean.Data.Json"},
+            ("import " <> #&) /@ OptionValue["Imports"],
+            If[opens === {}, {}, {"open " <> StringRiffle[opens, " "] <> " in"}],
+            {"#eval IO.println (\"LEANLINK_EVAL_JSON \" ++ (Lean.Json.arr #[Lean.toJson (" <> expr <> ")]).compress)"}
+        ],
+        "\n"
+    ];
+    file = FileNameJoin[{$TemporaryDirectory, "LeanLinkEval" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
+    Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
+    res = runLeanProcess[
+        {FileNameJoin[{tc, "bin", "lean"}], file},
+        Association[GetEnvironment[], "LEAN_PATH" -> searchPath],
+        OptionValue["TimeLimit"]
+    ];
+    Quiet[DeleteFile[file]];
+    If[ res === $TimedOut,
+        Return[Failure["TimedOut", <|
+            "MessageTemplate" -> "Evaluation exceeded the time limit of `1` s.",
+            "MessageParameters" -> {OptionValue["TimeLimit"]}|>], Module]
+    ];
+(* The JSON is found in the raw output: ImportString decodes the UTF-8 itself. *)
+    json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_EVAL_JSON "]&, None];
+    If[ json =!= None,
+        With[{v = Quiet[ImportString[StringDrop[json, StringLength["LEANLINK_EVAL_JSON "]], "RawJSON"]]},
+            If[ListQ[v] && Length[v] === 1, Return[First[v], Module]]
+        ]
+    ];
+    diag = StringTrim @ Quiet @ Check[
+        FromCharacterCode[ToCharacterCode[res["StandardOutput"] <> "\n" <> res["StandardError"], "ISO8859-1"], "UTF-8"],
+        res["StandardOutput"] <> "\n" <> res["StandardError"]
+    ];
+    Failure["LeanEvaluateFailed", <|
+        "MessageTemplate" -> "Lean could not evaluate the expression: `1`",
+        "MessageParameters" -> {StringTake[diag, UpTo[500]]},
+        "Output" -> diag, "ExitCode" -> res["ExitCode"]
+    |>]
+]
 
 (* ---- LeanBuild ----
    Builds with the lake of the toolchain the project pins, called directly: the

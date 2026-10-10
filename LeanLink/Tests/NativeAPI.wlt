@@ -158,6 +158,32 @@ VerificationTest[
     TestID -> "Property-Axioms-IsList"
 ]
 
+(* LeanEvaluate: #eval, value back through JSON. *)
+
+VerificationTest[
+    {LeanEvaluate["1 + 1"], LeanEvaluate["[1, 2, 3].map (· * 2)"], LeanEvaluate["decide (3 < 5)"], LeanEvaluate["\"\[ForAll]x\""]}
+    ,
+    {2, {2, 4, 6}, True, "\[ForAll]x"}
+    ,
+    TestID -> "LeanEvaluate-Values"
+]
+
+VerificationTest[
+    LeanEvaluate["undefinedThing + 1"]["Tag"]
+    ,
+    "LeanEvaluateFailed"
+    ,
+    TestID -> "LeanEvaluate-ErrorFailure"
+]
+
+VerificationTest[
+    LeanEvaluate["(List.range 300000000).foldl (· + ·) 0", "TimeLimit" -> 2]["Tag"]
+    ,
+    "TimedOut"
+    ,
+    TestID -> "LeanEvaluate-TimeLimit"
+]
+
 (* LeanBuild: the pinned toolchain's lake; Success, or a Failure carrying lake's
    output; never a toolchain download. *)
 

@@ -28,6 +28,7 @@ PacletObject[
           "Wolfram`LeanLink`LeanConstant",
           "Wolfram`LeanLink`LeanConstantInfo",
           "Wolfram`LeanLink`LeanEnvironment",
+          "Wolfram`LeanLink`LeanEvaluate",
           "Wolfram`LeanLink`LeanExport",
           "Wolfram`LeanLink`LeanExportString",
           "Wolfram`LeanLink`LeanExpr",
