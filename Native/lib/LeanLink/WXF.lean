@@ -275,6 +275,20 @@ def readInt (s : ParseState) (nbytes : Nat) : Option (Int × ParseState) :=
       else (val : Int)
     some (signed, { s with pos := s.pos + nbytes })
 
+/-- A WXF big integer body: varint(len), then ASCII decimal digits with an
+    optional leading '-'. Parsed from the bytes directly - String.toInt? is not
+    exported by the Windows runtime DLLs, so the shim cannot link against it. -/
+def readBigInt (s : ParseState) : Option (Int × ParseState) :=
+  match readVarint s with
+  | none => none
+  | some (len, s') =>
+    if s'.pos + len > s'.data.size then none
+    else
+      let (neg, v) := (List.range len).foldl (fun (acc : Bool × Nat) i =>
+        let b := (s'.data.get! (s'.pos + i)).toNat
+        if b == 45 then (true, acc.2) else (acc.1, acc.2 * 10 + (b - 48))) (false, 0)
+      some (if neg then -(v : Int) else (v : Int), { s' with pos := s'.pos + len })
+
 /-- A parsed WXF value -/
 inductive WVal where
   | sym : String → WVal
@@ -314,9 +328,9 @@ partial def parseWVal (s : ParseState) : Option (WVal × ParseState) :=
       | none => none
       | some (n, s'') => some (.int n, s'')
     else if tag == 73 then -- 'I' = big integer: varint(len), decimal digits
-      match readString s' with
+      match readBigInt s' with
       | none => none
-      | some (digits, s'') => digits.toInt?.map fun n => (.int n, s'')
+      | some (n, s'') => some (.int n, s'')
     else if tag == 102 then -- 'f' = function
       match readVarint s' with
       | none => none
