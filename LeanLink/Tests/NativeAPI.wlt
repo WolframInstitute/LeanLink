@@ -247,6 +247,19 @@ VerificationTest[
     TestID -> "TypeForm-Open"
 ]
 
+(* WXF integers >= 128 (machine sizes and big integers) round-trip. LeanLink
+   used non-WXF tokens past int8, so a type with a literal >= 128 failed. *)
+
+VerificationTest[
+    With[{env = LeanImportString["theorem lit1000 : (1000 : Nat) = 1000 := rfl\ntheorem lit2e70 : (1180591620717411303424 : Nat) = 1180591620717411303424 := rfl"]},
+        {FreeQ[env["lit1000"]["Type"], LeanLitNat[1000]], FreeQ[env["lit2e70"]["Type"], LeanLitNat[1180591620717411303424]]}
+    ]
+    ,
+    {False, False}
+    ,
+    TestID -> "WXF-BigIntegerLiterals"
+]
+
 (* Module: the module that declares a constant. *)
 
 VerificationTest[

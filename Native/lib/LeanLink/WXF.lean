@@ -7,10 +7,11 @@
     f = 0x66 (102) — function: varint(argCount), head, arg₁, ..., argₙ
     s = 0x73 (115) — symbol:   varint(len), UTF-8 bytes
     S = 0x53 (83)  — string:   varint(len), UTF-8 bytes
-    C = 0x43 (67)  — int8:     1 byte signed
-    D = 0x44 (68)  — int16:    2 bytes LE
-    E = 0x45 (69)  — int32:    4 bytes LE
-    F = 0x46 (70)  — int64:    8 bytes LE
+    C = 0x43 (67)  — int8:     1 byte, two's complement
+    j = 0x6A (106) — int16:    2 bytes LE, two's complement
+    i = 0x69 (105) — int32:    4 bytes LE, two's complement
+    L = 0x4C (76)  — int64:    8 bytes LE, two's complement
+    I = 0x49 (73)  — big integer: varint(len), ASCII decimal digits
     A = 0x41 (65)  — association: varint(count), rule₁, ..., ruleₙ
     - = 0x2D (45)  — rule (in association): key, value
     : = 0x3A (58)  — rule delayed: key, value
@@ -41,37 +42,31 @@ def string (s : String) : ByteArray :=
   let bytes := s.toUTF8
   ⟨#[83]⟩ ++ encodeVarint bytes.size ++ bytes
 
-/-- Token for machine int8: 'C' + 1 byte -/
-def int8 (n : Int) : ByteArray :=
-  ⟨#[67, (n % 256).toNat.toUInt8]⟩
+/-- `n` as `width` little-endian two's-complement bytes. -/
+def leBytes (n : Int) (width : Nat) : Array UInt8 :=
+  let v : Nat := (if n < 0 then n + 2 ^ (8 * width) else n).toNat
+  (Array.range width).map fun i => ((v / 2 ^ (8 * i)) % 256).toUInt8
 
-/-- Token for machine int32: 'E' + 4 bytes LE -/
-def int32 (n : Int) : ByteArray :=
-  let v := n.toNat
-  ⟨#[69,
-    (v % 256).toUInt8,
-    ((v / 256) % 256).toUInt8,
-    ((v / 65536) % 256).toUInt8,
-    ((v / 16777216) % 256).toUInt8]⟩
+-- Machine integers: 'C' int8, 'j' int16, 'i' int32, 'L' int64. (These were
+-- 'E'/'F', which are not WXF tokens: any integer >= 128 - a numeric literal in
+-- a type, a proof-state id past 127 - serialized as corrupt data.)
+def int8 (n : Int) : ByteArray := ⟨#[67] ++ leBytes n 1⟩
+def int16 (n : Int) : ByteArray := ⟨#[106] ++ leBytes n 2⟩
+def int32 (n : Int) : ByteArray := ⟨#[105] ++ leBytes n 4⟩
+def int64 (n : Int) : ByteArray := ⟨#[76] ++ leBytes n 8⟩
 
-/-- Token for machine int64: 'F' + 8 bytes LE -/
-def int64 (n : Int) : ByteArray :=
-  let v := n.toNat
-  ⟨#[70,
-    (v % 256).toUInt8,
-    ((v / 256) % 256).toUInt8,
-    ((v / 65536) % 256).toUInt8,
-    ((v / 16777216) % 256).toUInt8,
-    ((v / (2^32)) % 256).toUInt8,
-    ((v / (2^40)) % 256).toUInt8,
-    ((v / (2^48)) % 256).toUInt8,
-    ((v / (2^56)) % 256).toUInt8]⟩
+/-- Token for big integer: 'I' + varint(len) + ASCII decimal digits -/
+def bigInteger (n : Int) : ByteArray :=
+  let digits := (toString n).toUTF8
+  ⟨#[73]⟩ ++ encodeVarint digits.size ++ digits
 
 /-- Encode an integer using the smallest representation -/
 def integer (n : Int) : ByteArray :=
-  if -128 ≤ n && n ≤ 127 then int8 n
-  else if -2147483648 ≤ n && n ≤ 2147483647 then int32 n
-  else int64 n
+  if -2 ^ 7 ≤ n && n < 2 ^ 7 then int8 n
+  else if -2 ^ 15 ≤ n && n < 2 ^ 15 then int16 n
+  else if -2 ^ 31 ≤ n && n < 2 ^ 31 then int32 n
+  else if -2 ^ 63 ≤ n && n < 2 ^ 63 then int64 n
+  else bigInteger n
 
 /-- Token for function: 'f' + varint(argCount) + head + args -/
 def function (argCount : Nat) : ByteArray :=
@@ -306,18 +301,22 @@ partial def parseWVal (s : ParseState) : Option (WVal × ParseState) :=
       match readInt s' 1 with
       | none => none
       | some (n, s'') => some (.int n, s'')
-    else if tag == 68 then -- 'D' = int16
+    else if tag == 106 then -- 'j' = int16
       match readInt s' 2 with
       | none => none
       | some (n, s'') => some (.int n, s'')
-    else if tag == 69 then -- 'E' = int32
+    else if tag == 105 then -- 'i' = int32
       match readInt s' 4 with
       | none => none
       | some (n, s'') => some (.int n, s'')
-    else if tag == 70 then -- 'F' = int64
+    else if tag == 76 then -- 'L' = int64
       match readInt s' 8 with
       | none => none
       | some (n, s'') => some (.int n, s'')
+    else if tag == 73 then -- 'I' = big integer: varint(len), decimal digits
+      match readString s' with
+      | none => none
+      | some (digits, s'') => digits.toInt?.map fun n => (.int n, s'')
     else if tag == 102 then -- 'f' = function
       match readVarint s' with
       | none => none
