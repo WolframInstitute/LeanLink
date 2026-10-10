@@ -273,6 +273,10 @@ $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib, "lean
 
 $collectAxiomsFn := $collectAxiomsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_collect_axioms", {Integer, "UTF8String"}, {Integer, 1}]
 
+$moduleConstantKindsFn := $moduleConstantKindsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_module_constant_kinds", {Integer, "UTF8String"}, {Integer, 1}]
+
+$constantModuleFn := $constantModuleFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_constant_module", {Integer, "UTF8String"}, {Integer, 1}]
+
 $listConstantNamesFn := $listConstantNamesFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_names", {Integer, "UTF8String"}, {Integer, 1}]
 
 $listConstantKindsFn := $listConstantKindsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_kinds", {Integer, "UTF8String"}, {Integer, 1}]
@@ -702,6 +706,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     "TypeRefs",
                     "TermRefs",
                     "Axioms",
+                    "Module",
                     "ExprGraph",
                     "CallGraph",
                     "Parameters",
@@ -784,6 +789,19 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
 (* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
    Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
    depth), this follows every dependency, so it is safe to verify proofs with. *)
+            "Module",
+                If[ IntegerQ[handle],
+                    With[{r = Quiet[decodeWXF[$constantModuleFn[handle, name]]]},
+                        Which[
+                            StringQ[r] && ! StringStartsQ[r, "ERROR: "], r,
+                            StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
+                            True, $Failed
+                        ]
+                    ]
+                    ,
+                    Missing["NoHandle"]
+                ]
+            ,
             "Axioms",
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[$collectAxiomsFn[handle, name]]]},
@@ -2528,30 +2546,22 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     ];
     (* Load via lazy pattern *)
     searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], ":"];
-    Block[{handle, kinds, srcNames, res},
+    Block[{handle, kinds, res},
         handle = $loadEnvFn[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
             Message[LeanImport::err, "Failed to load compiled file"];
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
         ];
-(* Extract names from source for filtering -- these are unqualified 
-    *)
-        content = Import[absFile, "Text"];
-        srcNames = StringCases[
-            content
-            ,
-            RegularExpression[
-                "(?m)^(?:noncomputable\\s+)?(?:def|theorem|lemma|inductive|structure|class|instance|abbrev)\\s+([a-zA-Z_][a-zA-Z0-9_.]*)"
-            ]
-            :>
-            "$1"
-        ];
-(* Get actual Lean names from env, filter to source-defined ones 
-    *)
-        kinds = decodeWXF[$listConstantKindsFn[handle, ""]];
+(* Keep exactly the constants this module declares, read from its own olean
+   data. Matching names scraped from the source text missed everything inside
+   a namespace (environment names are qualified, the scraped ones were not),
+   and anything made by a macro, `private`, or an attribute on the same line. *)
+        kinds = decodeWXF[$moduleConstantKindsFn[handle, modName]];
         If[! AssociationQ[kinds], Return[$Failed, Block]];
-        kinds = KeySelect[kinds, (TrueQ[OptionValue["IncludeInternal"]] || ! isInternalName[#]) && MemberQ[srcNames, #]&];
+        If[ ! TrueQ[OptionValue["IncludeInternal"]],
+            kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]
+        ];
         (* Build lazy LeanTerms *)
         res = LeanEnvironment[
             Append[

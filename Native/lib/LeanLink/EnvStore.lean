@@ -351,6 +351,35 @@ def collectAxiomsExport (handle : UInt64) (constName : @& String) : IO ByteArray
   catch _ =>
     return WXF.serialize (WXF.string "ERROR: collectAxioms exception")
 
+/-- The constants a module declares, with their kinds, read from the module's
+    own olean data: exactly what it defines, however it was written - inside a
+    namespace, through a macro, `private`, or with attributes. -/
+@[export leanlink_module_constant_kinds]
+def moduleConstantKindsExport (handle : UInt64) (moduleStr : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let some idx := env.getModuleIdx? moduleStr.toName
+    | return WXF.serialize (WXF.string s!"ERROR: module not loaded: {moduleStr}")
+  let some data := env.header.moduleData[idx.toNat]?
+    | return WXF.serialize (WXF.string s!"ERROR: no module data for {moduleStr}")
+  let entries := data.constNames.filterMap fun name =>
+    (env.find? name).map fun ci => (WXF.string name.toString, WXF.string (WXF.constantKind ci))
+  return WXF.serialize (WXF.wlAssociation entries)
+
+/-- The module that declares a constant. -/
+@[export leanlink_constant_module]
+def constantModuleExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  unless env.contains name do
+    return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+  let some idx := env.getModuleIdxFor? name
+    | return WXF.serialize (WXF.string s!"ERROR: {constName} is not from an imported module")
+  match env.allImportedModuleNames[idx.toNat]? with
+  | some m => return WXF.serialize (WXF.string m.toString)
+  | none => return WXF.serialize (WXF.string s!"ERROR: no module at index {idx.toNat}")
+
 /-- Get used constants from a constant's type and value expressions.
     Returns WXF-encoded Association: <|"type" -> {names...}, "value" -> {names...}|> -/
 @[export leanlink_get_used_constants]

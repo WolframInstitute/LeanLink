@@ -64,6 +64,8 @@ extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint3
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_collect_axioms(uint64_t handle, lean_object* name);
+extern lean_object* leanlink_module_constant_kinds(uint64_t handle, lean_object* module);
+extern lean_object* leanlink_constant_module(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_list_constant_names(uint64_t handle, lean_object* filter);
 extern lean_object* leanlink_list_constant_kinds(uint64_t handle, lean_object* filter);
 extern lean_object* leanlink_get_type_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
@@ -517,6 +519,38 @@ DLLEXPORT int leanlink_wl_get_constant(
  * getUsedConstants(handle, name) -> MTensor (WXF bytes)
  * Returns <|"type" -> {names...}, "value" -> {names...}|>
  */
+DLLEXPORT int leanlink_wl_module_constant_kinds(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* module_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* module = lean_mk_string(module_cstr);
+
+    lean_object* io_res = leanlink_module_constant_kinds(handle, module);
+    /* module consumed by leanlink_module_constant_kinds */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+DLLEXPORT int leanlink_wl_constant_module(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_constant_module(handle, name);
+    /* name consumed by leanlink_constant_module */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
 DLLEXPORT int leanlink_wl_collect_axioms(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
 {

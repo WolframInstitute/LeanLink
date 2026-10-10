@@ -130,6 +130,7 @@ VerificationTest[
         "TypeRefs",
         "TermRefs",
         "Axioms",
+        "Module",
         "ExprGraph",
         "CallGraph",
         "Parameters",
@@ -155,6 +156,31 @@ VerificationTest[
     True
     ,
     TestID -> "Property-Axioms-IsList"
+]
+
+(* Module: the module that declares a constant. *)
+
+VerificationTest[
+    $filtered["LeanLink.Examples.modus_ponens"]["Module"]
+    ,
+    "LeanLink.Examples"
+    ,
+    TestID -> "Property-Module"
+]
+
+(* LeanImportString keeps what the source declares, including inside a
+   namespace. It used to match unqualified names scraped from the text against
+   the qualified environment names, so namespaced declarations came back empty. *)
+
+VerificationTest[
+    Sort @ DeleteCases[
+        Keys[First[LeanImportString["namespace LLTest\ntheorem t1 : 1 = 1 := rfl\ndef d1 : Nat := 3\nend LLTest"]]],
+        "_Handle"
+    ]
+    ,
+    {"LLTest.d1", "LLTest.t1"}
+    ,
+    TestID -> "ImportString-Namespace-Kept"
 ]
 
 (* LeanTactic exact must type-check its term against the goal. It used to
