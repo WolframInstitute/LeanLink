@@ -20,10 +20,15 @@
 #include <string.h>
 
 /* Lean FFI init (not in lean.h but exported from libleanshared) */
-/* Returns void as of Lean 4.30 (it did return an IO result earlier). Reading a
-   lean_object* here picks up whatever the return register held, and the first
-   dereference - lean_io_result_is_error - segfaults the host process. */
-extern void lean_initialize_runtime_module(void);
+/* lean_initialize, not lean_initialize_runtime_module: a host that uses the Lean
+   package must also start Lean's C++ side (kernel, library, compiler), as Lean's
+   FFI notes say. With the runtime alone the IR interpreter's option names stay
+   null, and the first evalConst - the pretty printer reaching a parenthesizer for
+   a non-builtin syntax kind, such as a dependent if-then-else - dereferences one
+   and kills the kernel. lean_initialize includes the runtime initialization and
+   runs the Init, Std and Lean module initializers, which are no-ops when
+   initialize_leanlink_LeanLink reaches them again. It returns void. */
+extern void lean_initialize(void);
 extern void lean_io_mark_end_initialization(void);
 extern void lean_initialize_thread(void);
 
@@ -165,7 +170,7 @@ static int lazy_lean_init(void) {
 #ifdef LEAN_LIB_DIR
     portable_setenv("LEAN_PATH", LEAN_LIB_DIR, 0);
 #endif
-    lean_initialize_runtime_module();
+    lean_initialize();
 
     lean_object* res;
 

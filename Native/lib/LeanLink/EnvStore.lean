@@ -40,10 +40,14 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
   Lean.searchPathRef.set (userPaths ++ libPaths)
   -- Import modules
   let modules : Array Import := imports.map fun m => { module := m.toName }
-  -- No loadExts: it requires enableInitializersExecution, which crashes an
-  -- embedded runtime. Extension states stay empty, so the in-process printer
-  -- has no notation; TypeForm gets #check-style output from the lean frontend.
-  let env ← Lean.importModules modules {} 0
+  -- loadExts fills the environment extensions from the imported data: notation
+  -- (unexpanders, parenthesizers), simp sets, instances. That runs imported
+  -- initializers through the interpreter, which must be enabled before every
+  -- import: importModules turns it off again when it finishes (withImporting),
+  -- and it runs each module's initializers at most once per process. Regions
+  -- are never freed (freeEnvExport only drops the handle), as that requires.
+  unsafe Lean.enableInitializersExecution
+  let env ← Lean.importModules modules {} 0 (loadExts := true)
   return env
 
 -- ============================================================================

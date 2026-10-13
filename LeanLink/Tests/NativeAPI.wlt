@@ -396,6 +396,30 @@ VerificationTest[
     TestID -> "Property-TermForm-IsString"
 ]
 
+(* ================================================================ *)
+
+(* TermForm - in-process printing with the imported notation         *)
+
+(* ================================================================ *)
+
+(* A dependent if-then-else reaches the IR interpreter through the
+   parenthesizer, which killed the kernel until the shim called
+   lean_initialize. The notation needs importModules (loadExts := true),
+   enabled again before every import; this import follows many others. *)
+
+VerificationTest[
+    $termEnv = LeanImportString["namespace TermDemo\ntheorem dite_proof (a b : Nat) : a = b ∨ a ≠ b := if h : a = b then Or.inl h else Or.inr h\ndef ite_def (a b : Nat) : Nat := if a = b then 1 else 0\ndef arith (n : Nat) : Nat := n - 396 + 2 * n\nend TermDemo"];
+    $termEnv["TermDemo.dite_proof"]["TermForm"]
+    ,
+    "fun a b => if h : a = b then Or.inl h else Or.inr h"
+    ,
+    TestID -> "TermForm-DependentIf-NoCrash"
+]
+
+VerificationTest[$termEnv["TermDemo.ite_def"]["TermForm"], "fun a b => if a = b then 1 else 0", TestID -> "TermForm-Notation-If"]
+
+VerificationTest[$termEnv["TermDemo.arith"]["TermForm"], "fun n => n - 396 + 2 * n", TestID -> "TermForm-Notation-Arithmetic"]
+
 VerificationTest[
     ListQ[$filtered["LeanLink.Examples.Vec.head"]["TypeRefs"]],
     True,
