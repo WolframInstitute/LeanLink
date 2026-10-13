@@ -22,9 +22,11 @@ $siteAccount = "wolframinstitute@wolframinstitute.org"
    section reading a name only an earlier section gave a value (the reset has
    cleared it, so the cell renders unevaluated or wrong while the page still
    builds), and lets a dry run that does not build report the account check
-   rather than refuse. *)
+   rather than refuse. 0.3.11 stops a deploy at the first failed cloud write and
+   replaces the documentation in place, so a deploy that stops leaves the live
+   pages served; an older one could leave the resource without them. *)
 
-$minPacletPage = "0.3.8"
+$minPacletPage = "0.3.11"
 
 $pacletPageResource = "https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/PacletPage"
 

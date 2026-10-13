@@ -54,7 +54,7 @@ result = PublishPacletPage[$leanlinkDir, "LeanLink",
 ]
 
 If[ ! AssociationQ[result],
-    Print["FATAL: PublishPacletPage failed"];
+    Print["FATAL: PublishPacletPage failed", If[FailureQ[result], ": " <> result["Message"], ""]];
     Exit[1]
 ]
 

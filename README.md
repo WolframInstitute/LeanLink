@@ -100,7 +100,7 @@ This runs `lake build` for the Lean library, then cross-compiles the C shim with
 wl -f build_docs.wls
 ```
 
-Builds the markdown pages in `docs/` into notebooks under `LeanLink/Documentation/English/`, and `docs/ResourceDefinition.md` into `LeanLink/ResourceDefinition.nb`, with [PacletPage](https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/PacletPage) 0.3.8 or later, installed or in a checkout named by `PACLETPAGE_DIR`. The build stops on a page that does not convert, or whose section reads a variable that only an earlier section set. Unchanged pages come from a cache; pass `--no-cache` after rebuilding only the native library. [docs/DOC_GUIDE.md](docs/DOC_GUIDE.md) is the guide to writing the pages.
+Builds the markdown pages in `docs/` into notebooks under `LeanLink/Documentation/English/`, and `docs/ResourceDefinition.md` into `LeanLink/ResourceDefinition.nb`, with [PacletPage](https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/PacletPage) 0.3.11 or later, installed or in a checkout named by `PACLETPAGE_DIR`. The build stops on a page that does not convert, or whose section reads a variable that only an earlier section set. Unchanged pages come from a cache; pass `--no-cache` after rebuilding only the native library. [docs/DOC_GUIDE.md](docs/DOC_GUIDE.md) is the guide to writing the pages.
 
 ### Publishing
 

@@ -25,7 +25,7 @@ wl -f build_docs.wls
 ```
 
 `build_docs.wls` auto-discovers every `docs/**/*.md` whose frontmatter names a
-page template, so a new page builds with no wiring. It needs PacletPage 0.3.8 or
+page template, so a new page builds with no wiring. It needs PacletPage 0.3.11 or
 later, installed or in a checkout named by `PACLETPAGE_DIR` (see
 [`pacletpage.wl`](../pacletpage.wl)). The `<!-- => ... -->` hint
 after a cell is **author-facing only** - MTN strips HTML comments before
