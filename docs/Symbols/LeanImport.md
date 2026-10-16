@@ -23,7 +23,7 @@ RelatedGuides: [LeanLink]
 
 | Option | Default | Description |
 |---|---|---|
-| `"ProjectDir"` | `Automatic` | the lake project the module is resolved in |
+| `"ProjectDir"` | `Automatic` | the Lake project the module is resolved in, with its packages and path dependencies |
 | `"Imports"` | `{}` | extra modules to load alongside the target |
 | `"Filter"` | `""` | keep only constants whose name contains this substring |
 | `"IncludeInternal"` | `False` | include compiler-internal / private declarations |

@@ -329,41 +329,30 @@ shortName[s_String] := StringReplace[s, {RegularExpression["\\._@\\..*"] -> "", 
 
 (* ============================================================================ *)
 
-resolveSearchPath[projDir_String] := Block[
-    {buildLib, leanLib, pkgDirs, paths}
-    ,
-(* Lake v5 puts oleans under .lake/build/lib/lean/ ; Lake v4 uses .lake/build/lib/ 
-    
-    
-    *)
-    buildLib = With[{
-        v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
-        v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]
-    },
-        If[DirectoryQ[v5], v5, v4]
-    ];
-(* Discover lake package build directories -- prefer lib/lean/ (v5), fallback lib/ (v4) 
-    
-    
-    *)
-    pkgDirs = Block[{pkgsRoot = FileNameJoin[{projDir, ".lake", "packages"}]},
-        If[ DirectoryQ[pkgsRoot],
-            Select[
-                (
-                    With[{
-                            v5 = FileNameJoin[{#, ".lake", "build", "lib", "lean"}],
-                            v4 = FileNameJoin[{#, ".lake", "build", "lib"}]
-                        },
-                            If[DirectoryQ[v5], v5, v4]
-                        ]& /@ FileNames["*", pkgsRoot]
-                )
-                ,
-                DirectoryQ
-            ]
-            ,
-            {}
-        ]
-    ];
+(* A package's build directory: Lake v5 puts oleans under .lake/build/lib/lean/, v4 under
+   .lake/build/lib/. *)
+
+lakeBuildLib[dir_String] := With[{v5 = FileNameJoin[{dir, ".lake", "build", "lib", "lean"}]}, If[DirectoryQ[v5], v5, FileNameJoin[{dir, ".lake", "build", "lib"}]]]
+
+(* Lake builds a path dependency (`path = "../x"` in the lakefile) where it lives, not under
+   .lake/packages. A package's lake-manifest.json lists each one as "type": "path", with its
+   "dir" relative to that package, and each one's own manifest lists its path dependencies. *)
+
+manifestPathDependencies[dir_String] := With[{manifest = Quiet[Import[FileNameJoin[{dir, "lake-manifest.json"}], "RawJSON"]]},
+    If[ AssociationQ[manifest],
+        Select[Cases[Lookup[manifest, "packages", {}], KeyValuePattern[{"type" -> "path", "dir" -> d_String}] :> ExpandFileName[FileNameJoin[{dir, d}]]], DirectoryQ],
+        {}
+    ]
+]
+
+(* every path dependency of a project, direct or through other path dependencies, each once *)
+
+lakePathDependencies[projDir_String] := Rest @ FixedPoint[DeleteDuplicates[Join[#, Flatten[manifestPathDependencies /@ #]]] &, {ExpandFileName[projDir]}]
+
+(* The search path for a project: its own build, its packages under .lake/packages (git
+   dependencies), its path dependencies wherever they live, then its toolchain's library. *)
+
+resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".lake", "packages"}], leanLib},
     leanLib = Block[{dir = projDir, tc, version, toolchainDir},
         While[
             StringLength[dir] > 1
@@ -378,8 +367,7 @@ resolveSearchPath[projDir_String] := Block[
         ];
         Nothing
     ];
-    paths = Select[Join[{buildLib}, pkgDirs, {leanLib}], StringQ[#] && DirectoryQ[#]&];
-    StringRiffle[paths, ":"]
+    StringRiffle[Select[Join[{lakeBuildLib[projDir]}, lakeBuildLib /@ If[DirectoryQ[pkgsRoot], FileNames["*", pkgsRoot], {}], lakeBuildLib /@ lakePathDependencies[projDir], {leanLib}], StringQ[#] && DirectoryQ[#] &], ":"]
 ]
 
 $envCache = <||>

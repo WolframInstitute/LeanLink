@@ -211,6 +211,27 @@ VerificationTest[
     TestID -> "LeanBuild-UpToDate"
 ]
 
+(* A path dependency (`path = "../dep"` in the lakefile) lives outside
+   .lake/packages: "ProjectDir" finds it through lake-manifest.json. *)
+
+VerificationTest[
+    Module[{root = CreateDirectory[], dep, main},
+        dep = CreateDirectory[FileNameJoin[{root, "dep"}]];
+        main = CreateDirectory[FileNameJoin[{root, "main"}]];
+        Export[FileNameJoin[{dep, "lakefile.toml"}], "name = \"dep\"\ndefaultTargets = [\"Dep\"]\n[[lean_lib]]\nname = \"Dep\"\n", "Text"];
+        Export[FileNameJoin[{dep, "Dep.lean"}], "theorem Dep.two : 1 + 1 = 2 := rfl\n", "Text"];
+        Export[FileNameJoin[{main, "lakefile.toml"}], "name = \"main\"\ndefaultTargets = [\"Main\"]\n[[require]]\nname = \"dep\"\npath = \"../dep\"\n[[lean_lib]]\nname = \"Main\"\n", "Text"];
+        Export[FileNameJoin[{main, "Main.lean"}], "import Dep\ntheorem Main.two : 1 + 1 = 2 := Dep.two\n", "Text"];
+        Scan[Export[FileNameJoin[{#, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"] &, {dep, main}];
+        LeanBuild[main];
+        {LeanImport["Main", "ProjectDir" -> main]["Main.two"]["TypeForm"], LeanImportString["import Dep\ntheorem t : 1 + 1 = 2 := Dep.two", "ProjectDir" -> main]["t"]["TypeForm"]}
+    ]
+    ,
+    {"1 + 1 = 2", "1 + 1 = 2"}
+    ,
+    TestID -> "ProjectDir-PathDependency"
+]
+
 VerificationTest[
     With[{r = LeanBuild[$lbProject["leanprover/lean4:v4.30.0", "theorem bad : 1 = 2 := rfl\n"], {"Probe"}]},
         {r["Tag"], StringContainsQ[r["Output"], "error"]}

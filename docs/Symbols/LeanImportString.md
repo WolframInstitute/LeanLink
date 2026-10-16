@@ -17,7 +17,7 @@ RelatedGuides: [LeanLink]
 
 - *src* is ordinary Lean 4 source: any mix of `def`, `theorem`, `inductive`, `structure`, and so on. Each top-level declaration becomes one [LeanTerm]() in the result.
 - The string is compiled by the `lean` of LeanLink's pinned toolchain and loaded into the embedded runtime. A type error in *src* returns [$Failed]() with a `LeanImport::err` message carrying Lean's diagnostic, as `lake build` would report it.
-- With `"ProjectDir" -> *dir*`, *src* can `import` the modules of the built Lake project in *dir*. A theorem proved `by decide` against the project's definitions is then a kernel-checked claim about them.
+- With `"ProjectDir" -> *dir*`, *src* can `import` the modules of the built Lake project in *dir*, of its packages, and of its path dependencies (`path = "../x"` in the lakefile). A theorem proved `by decide` against the project's definitions is then a kernel-checked claim about them.
 - Declarations inside a `namespace` are kept under their full names.
 - Use [LeanImportString]() for ad-hoc definitions and round-trips; use [LeanImport]() to pull constants from a compiled module such as Mathlib.
 
