@@ -69,6 +69,7 @@ extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint3
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_collect_axioms(uint64_t handle, lean_object* name);
+extern lean_object* leanlink_kernel_check(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_module_constant_kinds(uint64_t handle, lean_object* module);
 extern lean_object* leanlink_constant_module(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_decl_range(uint64_t handle, lean_object* name);
@@ -590,6 +591,22 @@ DLLEXPORT int leanlink_wl_collect_axioms(
 
     lean_object* io_res = leanlink_collect_axioms(handle, name);
     /* name consumed by leanlink_collect_axioms */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+DLLEXPORT int leanlink_wl_kernel_check(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_kernel_check(handle, name);
+    /* name consumed by leanlink_kernel_check */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 

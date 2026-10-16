@@ -27,6 +27,7 @@ RelatedGuides: [LeanLink]
 | `"Parameters"` | the binder chain (name, type, binder kind) as rows |
 | `"TypeRefs"` / `"TermRefs"` | constants the type / body refers to |
 | `"Axioms"` | the axioms the constant depends on, as `#print axioms` reports them; like it, this trusts that every declaration passed the kernel (see Possible Issues) |
+| `"KernelCheck"` | the module that declares the constant, replayed through Lean's kernel as `leanchecker` does: a [Success](), or a [Failure]() with the kernel's message |
 | `"Module"` | the module that declares the constant |
 | `"Source"` | the declaration's source text |
 | `"ExprGraph"` / `"CallGraph"` | a [Graph]() of the expression tree / dependencies (a display graph: it omits auxiliary declarations, so use `"Axioms"`, not `"CallGraph"`, to audit axioms) |
@@ -99,10 +100,21 @@ LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]["TypeForm"]
 
 ## Possible Issues
 
-`"Axioms"` reports what `#print axioms` reports, and trusts what it trusts: that every declaration passed Lean's kernel when its module was built. A module can skip that check, with `set_option debug.skipKernelTC true` or by adding a declaration directly with `addDecl`, and a forged proof then shows no axioms: a theorem of type `False` proved by `True.intro` gives `{}`. To verify a proof from an untrusted source, replay its module through the kernel with `leanchecker`, which ships with the Lean toolchain, from the built project:
+`"Axioms"` reports what `#print axioms` reports, and trusts what it trusts: that every declaration passed Lean's kernel when its module was built. A module can skip that check, with `set_option debug.skipKernelTC true` or by adding a declaration directly with `addDecl`, and a forged proof then shows no axioms. Here a theorem of type `False` is "proved" by `True.intro`:
 
-```
-lake env leanchecker MyModule
+```wl
+forged = LeanImportString["import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"]["Forged.falseProof"];
+forged["Axioms"]
 ```
 
-It rejects the forgery with `(kernel) declaration type mismatch`.
+<!-- => {} -->
+
+`"KernelCheck"` replays the module that declares it through the kernel, as `leanchecker` does, and rejects the forgery:
+
+```wl
+forged["KernelCheck"]
+```
+
+<!-- => Failure["KernelRejected", ...]: (kernel) declaration type mismatch -->
+
+To verify a proof from an untrusted source, check `"KernelCheck"` as well as `"Axioms"`. From the command line, `lake env leanchecker MyModule` in the built project runs the same replay.

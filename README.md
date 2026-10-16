@@ -26,7 +26,7 @@ elan toolchain install leanprover/lean4:v4.30.0
 - **Lean notation** — `"TypeForm"` prints a type with Lean's own pretty-printer, opening the namespaces you name
 - **Symbolic expressions** — Lean expressions as `LeanApp`, `LeanConst`, `LeanForall`, etc., displayed in Lean notation
 - **Interactive proofs** — `LeanState`/`LeanTactic` for step-by-step proof construction
-- **Provenance** — the axioms a theorem depends on, the module that declares it, and its source
+- **Provenance and verification** — the axioms a theorem depends on, a kernel replay of its module that catches declarations which skipped the kernel, the module that declares it, and its source
 - **Builds and evaluation** — `LeanBuild` builds a Lake project; `LeanEvaluate` runs `#eval` and returns the value as Wolfram data
 - **Graphs** — expression trees and the dependency graph of a proof
 - **ProofToLean** — transpile Wolfram `ProofObject` to Lean environments

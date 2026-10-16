@@ -24,6 +24,11 @@ private initialize envStore : IO.Ref (Std.HashMap UInt64 Environment) ← IO.mkR
 /-- Global counter for generating unique handles. -/
 private initialize nextHandle : IO.Ref UInt64 ← IO.mkRef 1
 
+/-- The search path each environment was loaded with, by handle. A kernel check
+    imports a module's imports again, and a later load may have replaced the global
+    search path with one that does not reach them. -/
+private initialize searchPathStore : IO.Ref (Std.HashMap UInt64 SearchPath) ← IO.mkRef {}
+
 -- ============================================================================
 -- Internal helpers
 -- ============================================================================
@@ -70,6 +75,8 @@ def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt
     let handle ← nextHandle.get
     nextHandle.set (handle + 1)
     envStore.modify fun m => m.insert handle env
+    let searchPath ← Lean.searchPathRef.get
+    searchPathStore.modify fun m => m.insert handle searchPath
     return handle
   catch e =>
     IO.eprintln s!"[LeanLink] loadEnv error: {e}"
@@ -79,6 +86,7 @@ def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt
 @[export leanlink_free_env]
 def freeEnvExport (handle : UInt64) : IO Unit := do
   envStore.modify fun m => m.erase handle
+  searchPathStore.modify fun m => m.erase handle
 
 /-- List theorems/constants in the environment, filtered by prefix.
     Returns WXF-encoded Association: <|name -> LeanConstant[...], ...|> -/
@@ -380,6 +388,42 @@ def moduleConstantKindsExport (handle : UInt64) (moduleStr : @& String) : IO Byt
   let entries := data.constNames.filterMap fun name =>
     (env.find? name).map fun ci => (WXF.string name.toString, WXF.string (WXF.constantKind ci))
   return WXF.serialize (WXF.wlAssociation entries)
+
+/-- Replay the module that declares a constant through the kernel, as `leanchecker`
+    does: import the module's own imports, then add every constant the module declares
+    to that environment, each one checked by the kernel. A declaration that never
+    passed the kernel (`set_option debug.skipKernelTC`, a direct `addDecl`) fails here,
+    while the module's stored data, which `collectAxioms` reads, cannot show it. The
+    constants come from the module data as loaded, so a module compiled to a temporary
+    file is checked too. Gives the module and its number of constants, or "REJECTED: "
+    with the kernel's message, or "ERROR: " when the check itself cannot run. -/
+@[export leanlink_kernel_check]
+def kernelCheckExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := constName.toName
+  let some idx := env.getModuleIdxFor? name
+    | return WXF.serialize (WXF.string s!"ERROR: {constName} is not from an imported module")
+  let some data := env.header.moduleData[idx.toNat]?
+    | return WXF.serialize (WXF.string s!"ERROR: no module data for {constName}")
+  let some module := env.allImportedModuleNames[idx.toNat]?
+    | return WXF.serialize (WXF.string s!"ERROR: no module at index {idx.toNat}")
+  if let some searchPath := (← searchPathStore.get)[handle]? then
+    Lean.searchPathRef.set searchPath
+  let base ← match (← (Lean.importModules data.imports {} 0).toBaseIO) with
+    | .ok base => pure base
+    | .error e => return WXF.serialize (WXF.string s!"ERROR: cannot import the imports of {module}: {e}")
+  -- constNames is constants.map (·.name); iterating constants alone also keeps the
+  -- compiled code off Array.toSubarray, which the Windows libleanshared does not export
+  let mut newConstants : Std.HashMap Name ConstantInfo := {}
+  for ci in data.constants do
+    newConstants := newConstants.insert ci.name ci
+  match (← (base.replay newConstants).toBaseIO) with
+  | .ok _ =>
+    return WXF.serialize (WXF.wlAssociation #[
+      (WXF.string "Module", WXF.string module.toString),
+      (WXF.string "Declarations", WXF.integer newConstants.size)])
+  | .error e => return WXF.serialize (WXF.string s!"REJECTED: {e}")
 
 /-- The module that declares a constant. -/
 @[export leanlink_constant_module]

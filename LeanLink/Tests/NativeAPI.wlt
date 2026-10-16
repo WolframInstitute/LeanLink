@@ -130,6 +130,7 @@ VerificationTest[
         "TypeRefs",
         "TermRefs",
         "Axioms",
+        "KernelCheck",
         "Module",
         "Source",
         "ExprGraph",
@@ -157,6 +158,27 @@ VerificationTest[
     True
     ,
     TestID -> "Property-Axioms-IsList"
+]
+
+(* KernelCheck: the declaring module replayed through the kernel, as leanchecker
+   does. A declaration added with debug.skipKernelTC shows no axioms; only the
+   replay rejects it. *)
+
+VerificationTest[
+    $filtered["LeanLink.Examples.modus_ponens"]["KernelCheck"]["Module"]
+    ,
+    "LeanLink.Examples"
+    ,
+    TestID -> "Property-KernelCheck-Accepts"
+]
+
+VerificationTest[
+    $forged = LeanImportString["import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"]["Forged.falseProof"];
+    {$forged["Axioms"], $forged["KernelCheck"]["Tag"]}
+    ,
+    {{}, "KernelRejected"}
+    ,
+    TestID -> "Property-KernelCheck-RejectsSkippedKernel"
 ]
 
 (* LeanEvaluate: #eval, value back through JSON. *)

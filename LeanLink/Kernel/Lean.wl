@@ -279,6 +279,8 @@ $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib, "lean
 
 $collectAxiomsFn := $collectAxiomsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_collect_axioms", {Integer, "UTF8String"}, {Integer, 1}]
 
+$kernelCheckFn := $kernelCheckFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_kernel_check", {Integer, "UTF8String"}, {Integer, 1}]
+
 $moduleConstantKindsFn := $moduleConstantKindsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_module_constant_kinds", {Integer, "UTF8String"}, {Integer, 1}]
 
 $constantModuleFn := $constantModuleFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_constant_module", {Integer, "UTF8String"}, {Integer, 1}]
@@ -1011,6 +1013,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     "TypeRefs",
                     "TermRefs",
                     "Axioms",
+                    "KernelCheck",
                     "Module",
                     "Source",
                     "ExprGraph",
@@ -1130,6 +1133,23 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     With[{r = Quiet[decodeWXF[$collectAxiomsFn[handle, name]]]},
                         Which[
                             ListQ[r], r,
+                            StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
+                            True, $Failed
+                        ]
+                    ]
+                    ,
+                    Missing["NoHandle"]
+                ]
+            ,
+(* Kernel replay of the declaring module, as leanchecker does: it catches a
+   declaration that never passed the kernel, which "Axioms" cannot see. A
+   rejection is a result, a Failure, not an error. *)
+            "KernelCheck",
+                If[ IntegerQ[handle],
+                    With[{r = Quiet[decodeWXF[$kernelCheckFn[handle, name]]]},
+                        Which[
+                            AssociationQ[r], Success["KernelChecked", <|"MessageTemplate" -> "The kernel accepts all `1` declarations of `2`.", "MessageParameters" -> {r["Declarations"], r["Module"]}, "Module" -> r["Module"], "Declarations" -> r["Declarations"]|>],
+                            StringQ[r] && StringStartsQ[r, "REJECTED: "], Failure["KernelRejected", <|"MessageTemplate" -> "`1`", "MessageParameters" -> {StringDelete[r, StartOfString ~~ "REJECTED: "]}|>],
                             StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
                             True, $Failed
                         ]
