@@ -84,3 +84,7 @@ Keys @ LeanImportString[src]
 ```
 
 <!-- => {"myT"} -->
+
+## Possible Issues
+
+`wolframscript` reads a `.wls` script as Latin-1, so non-ASCII Lean syntax in a string literal reaches Lean garbled: `¬` arrives as `Â¬`, and Lean reports an unexpected token. The error message shows the token as `¬` again, which hides the cause. Keep such source in a `.lean` file and read it with `Import[file, "Text", CharacterEncoding -> "UTF-8"]`.

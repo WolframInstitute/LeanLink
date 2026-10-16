@@ -1120,7 +1120,11 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
             ,
 (* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
    Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
-   depth), this follows every dependency, so it is safe to verify proofs with. *)
+   depth), this follows every dependency. Like #print axioms it trusts that each
+   declaration passed the kernel when its module was built, which a module can
+   skip (debug.skipKernelTC, or a direct addDecl): a forged proof then shows no
+   axioms. Verifying an untrusted proof takes a kernel replay of its module, as
+   leanchecker does. *)
             "Axioms",
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[$collectAxiomsFn[handle, name]]]},
