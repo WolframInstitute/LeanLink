@@ -1041,4 +1041,12 @@ VerificationTest[
     TestID -> "LeanCompile-Environment-MultiDef"
 ]
 
+VerificationTest[
+    Wolfram`LeanLink`Private`isInternalName /@ {"Char.reduceEq._@.Lean.Meta.Simp.4145659166._hygCtx._hyg.27", "Nat.add_comm", "List.rec"}
+    ,
+    {True, False, True}
+    ,
+    TestID -> "LeanImport-names-with-macro-scopes-are-internal"
+]
+
 EndTestSection[]

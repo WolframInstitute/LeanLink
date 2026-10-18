@@ -2693,7 +2693,8 @@ Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "
 
 (* Internal name patterns to filter out *)
 
-$internalPatterns = "_cstage1" | "_cstage2" | "_rarg" | "_sunfold" | "_unsafe_rec" | ".match_" | ".rec" | ".recOn" | ".casesOn" | ".brecOn" | ".binductionOn" | ".below" | ".ibelow" | ".noConfusion" | ".noConfusionType" | "._sizeOf" | ".sizeOf_spec" | ".inj" | ".injEq"
+(* "._@." marks a name with macro scopes, made by hygiene; such a name is not found again from its string *)
+$internalPatterns = "_cstage1" | "_cstage2" | "_rarg" | "_sunfold" | "_unsafe_rec" | ".match_" | ".rec" | ".recOn" | ".casesOn" | ".brecOn" | ".binductionOn" | ".below" | ".ibelow" | ".noConfusion" | ".noConfusionType" | "._sizeOf" | ".sizeOf_spec" | ".inj" | ".injEq" | "._@."
 
 isInternalName[name_String] := StringContainsQ[name, $internalPatterns]
 
