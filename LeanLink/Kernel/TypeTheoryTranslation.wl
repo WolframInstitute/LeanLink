@@ -60,25 +60,29 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
 ]
 
 (* The cone in dependency order, each constant as TypeTheory declarations, checked in one batch. When the
-   batch fails, the declarations are added one at a time to name the constant TypeTheory rejects. *)
+   batch fails, the declarations are added one at a time to name the constant TypeTheory rejects. A cone
+   with Lean's quotient types is imported, by default, under rules that allow their computation rule. *)
 
 importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ Block[
-    {$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, order, baseEnvironment, declarations, environment},
-    baseEnvironment = Replace[base, Automatic :> TypeTheoryEnvironment[]];
-    order = Select[coneOrder[roots], Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
-    declarations = Catenate[leanDeclarations /@ order];
+    {$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
+    cone = coneOrder[roots];
+    baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
+    order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
+    declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
     environment = TypeTheoryEnvironment[baseEnvironment, declarations];
     If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
     Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]];
     environment
 ]
 
+importedDeclarations[environment_, name_String] := Join[leanDeclarations[name], quotientComputation[environment, name]]
+
 (* TypeTheory's own failure, introduced by the Lean constant it rejects *)
 
 rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure["RejectedByTypeTheory", Join[data, <|
     "MessageTemplate" -> StringJoin[
         "TypeTheory rejects the Lean constant ", name, ": ", Lookup[data, "MessageTemplate", tag],
-        If[quotientsQ, " It depends on Lean's quotient types, whose computation rule TypeTheory does not have yet.", ""]
+        If[quotientsQ, " It depends on Lean's quotient types, whose computation rule needs an environment whose rules allow rewrite rules.", ""]
     ],
     "Constant" -> name,
     "TypeTheoryFailure" -> tag
@@ -87,9 +91,9 @@ rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure[
 locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = baseEnvironment},
     Scan[
         Function[name,
-            environment = TypeTheoryEnvironment[environment, leanDeclarations[name]];
+            environment = TypeTheoryEnvironment[environment, importedDeclarations[environment, name]];
             If[ FailureQ[environment],
-                Throw[rejection[name, environment, AnyTrue[order, Function[constant, constantKind[constant] === "quot"]]], $bridgeTag]
+                Throw[rejection[name, environment, AnyTrue[order, quotientConstantQ] && ! rewriteRulesAllowedQ[baseEnvironment]], $bridgeTag]
             ]
         ],
         order
@@ -97,9 +101,47 @@ locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = ba
     Throw[failure, $bridgeTag]
 ]
 
+(* === Quotients === *)
+
+(* Lean's kernel reduces Quot.lift and Quot.ind applied to Quot.mk, a computation rule it has built in. Under
+   rules that allow rewrite rules, TypeTheory has the same rule as two rewrite rules, added after the
+   constants they compute with; the names are not Lean names, so they cannot clash with a constant. *)
+
+$quotientRuleNames = {"Quot.lift computes", "Quot.ind computes"}
+
+quotientRules[] := TypeTheoryRules["CalculusOfInductiveConstructions", "RewriteRules" -> True]
+
+quotientConstantQ[name_String] := constantKind[name] === "quot"
+
+rewriteRulesAllowedQ[environment_] := TrueQ[Information[environment, "Rules"]["RewriteRules"]]
+
+quotientComputation[environment_, "Quot.lift"] /; rewriteRulesAllowedQ[environment] := {
+    TypeTheoryRewriteRule["Quot.lift computes", ForAll[
+        {
+            Typed["α", TypeUniverse["u"]], Typed["r", TypeSpecifier[{"α", "α"} -> TypeUniverse[0]]], Typed["β", TypeUniverse["v"]], Typed["f", TypeSpecifier[{"α"} -> "β"]],
+            Typed["h", ForAll[{Typed["a", "α"], Typed["b", "α"]}, Implies["r"["a", "b"], Construct[Subscript["Eq", "v"], "β", "f"["a"], "f"["b"]]]]], Typed["a", "α"]
+        },
+        Construct[Subscript["Quot.lift", "u", "v"], "α", "r", "β", "f", "h", Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]] -> "f"["a"]
+    ], "UniverseParameters" -> {"u", "v"}]
+}
+
+quotientComputation[environment_, "Quot.ind"] /; rewriteRulesAllowedQ[environment] := {
+    TypeTheoryRewriteRule["Quot.ind computes", ForAll[
+        {
+            Typed["α", TypeUniverse["u"]], Typed["r", TypeSpecifier[{"α", "α"} -> TypeUniverse[0]]], Typed["β", TypeSpecifier[{Construct[Subscript["Quot", "u"], "α", "r"]} -> TypeUniverse[0]]],
+            Typed["mk", ForAll[{Typed["a", "α"]}, "β"[Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]]]], Typed["a", "α"]
+        },
+        Construct[Subscript["Quot.ind", "u"], "α", "r", "β", "mk", Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]] -> "mk"["a"]
+    ], "UniverseParameters" -> {"u"}]
+}
+
+quotientComputation[_, _String] := {}
+
 (* === The cone === *)
 
-(* Constructors and recursors come with their inductive type; the others come after what they mention. *)
+(* Constructors and recursors come with their inductive type; the others come after what they mention.
+   The walk is depth first with a stack of its own, since a cone in Mathlib is deeper than the recursion
+   limit: an entry {name, False} visits name, and {primary, True} follows its dependencies. *)
 
 coneOrder[roots_List] := Block[{visited = <||>, stack = CreateDataStructure["Stack"], order = CreateDataStructure["DynamicArray"]},
     Scan[Function[root, stack["Push", {root, False}]], Reverse[roots]];
@@ -124,11 +166,15 @@ primaryName[name_String] := Switch[constantKind[name],
     _, name
 ]
 
-(* an inductive type mentions what its constructors mention *)
+(* an inductive type mentions what its constructors mention; Quot.lift and Quot.ind compute on Quot.mk, so
+   they come after it, with their computation rule *)
 
-constantDependencies[name_String] := DeleteDuplicates @ If[ constantKind[name] === "inductive",
-    Catenate[usedConstants /@ Prepend[inductiveInformation[name]["Constructors"], name]],
-    usedConstants[name]
+constantDependencies[name_String] := DeleteDuplicates @ Join[
+    If[ constantKind[name] === "inductive",
+        Catenate[usedConstants /@ Prepend[inductiveInformation[name]["Constructors"], name]],
+        usedConstants[name]
+    ],
+    If[MemberQ[{"Quot.lift", "Quot.ind"}, name], {"Quot.mk"}, {}]
 ]
 
 ownNames[name_String] := If[ constantKind[name] === "inductive",
@@ -462,10 +508,11 @@ TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPa
 
 (* Lean's kernel follows the calculus of inductive constructions, TypeTheory's rules with Prop. Without Prop
    a recursor eliminates a universe above Lean's and a theorem may state a type, and Lean has no rewrite
-   rules, so the computation an environment's rewrite rules give would be lost. *)
+   rules, so the computation an environment's rewrite rules give would be lost; only the quotient rules the
+   import adds are Lean's own. *)
 
 checkLeanRules[environment_TypeTheoryEnvironment] := Block[
-    {rules = Information[environment, "Rules"], rewriteRules = Information[environment, "RewriteRules"]},
+    {rules = Information[environment, "Rules"], rewriteRules = DeleteCases[Information[environment, "RewriteRules"], Alternatives @@ $quotientRuleNames]},
     If[ rules["Prop"] === False, bridgeFailure["UnsupportedRules", "The environment follows the rules `1`, which have no Prop, and Lean's kernel follows the calculus of inductive constructions.", {rules["Name"]}]];
     If[ MatchQ[rewriteRules, {__}], bridgeFailure["UnsupportedRules", "The environment has the rewrite rules `1`, which Lean's kernel does not have.", {rewriteRules}]]
 ]

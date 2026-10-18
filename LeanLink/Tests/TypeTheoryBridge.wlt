@@ -57,6 +57,23 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-string-literals-are-reported"
 ]
 
+$funext = LeanToTypeTheory[$lean, "funext"]
+
+VerificationTest[
+    {Information[$funext, "Rules"]["RewriteRules"], Information[$funext, "RewriteRules"], MatchQ[TypeTheoryCheck[$funext], True | _Success]},
+    {True, {"Quot.lift computes"}, True},
+    TestID -> "LeanToTypeTheory-quotients-compute-by-a-rewrite-rule"
+]
+
+VerificationTest[
+    {
+        StringQ[TypeTheoryToLean[$funext, "funext"]],
+        StringContainsQ[LeanToTypeTheory[$lean, "funext", "Environment" -> TypeTheoryEnvironment[]]["Message"], "whose rules allow rewrite rules"]
+    },
+    {True, True},
+    TestID -> "LeanToTypeTheory-quotients-need-rules-that-allow-rewrite-rules"
+]
+
 (* ================================================================ *)
 
 (* To Lean                                                           *)
