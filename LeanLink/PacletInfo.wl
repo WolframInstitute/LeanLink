@@ -61,9 +61,11 @@ PacletObject[
           "Wolfram`LeanLink`LeanTactic",
           "Wolfram`LeanLink`LeanTerm",
           "Wolfram`LeanLink`LeanToFunction",
+          "Wolfram`LeanLink`LeanToTypeTheory",
           "Wolfram`LeanLink`LeanTruncated",
           "Wolfram`LeanLink`LeanValue",
-          "Wolfram`LeanLink`ProofToLean"
+          "Wolfram`LeanLink`ProofToLean",
+          "Wolfram`LeanLink`TypeTheoryToLean"
         }
       },
       {

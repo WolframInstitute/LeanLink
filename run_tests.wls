@@ -11,6 +11,12 @@ $testDir = FileNameJoin[{$pacletDir, "Tests"}];
 
 PacletDirectoryLoad[$pacletDir];
 
+(* The TypeTheory bridge's tests need WolframInstitute/TypeTheory: installed, or a checkout next to this one *)
+
+With[{typeTheory = FileNameJoin[{ParentDirectory[$rootDir], "TypeTheory", "TypeTheory"}]},
+    If[PacletFind["WolframInstitute/TypeTheory"] === {} && DirectoryQ[typeTheory], PacletDirectoryLoad[typeTheory]]
+];
+
 Needs["Wolfram`LeanLink`"];
 
 (* LeanLink Native build dir -- self-contained test environment *)
