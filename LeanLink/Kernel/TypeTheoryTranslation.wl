@@ -516,9 +516,13 @@ declarationText[TypeTheoryTheorem[name_, statement_, proof_, options___]] := Blo
     "theorem " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[statement, <||>] <> " :=\n  " <> leanText[proof, <||>]
 ]
 
+(* in its constructors' types the inductive type is a local of Lean's, named without universe levels *)
+
 declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
-    "inductive " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " where" <> StringJoin[
-        Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> "\n  | " <> identifierBase[HoldComplete[constructor]] <> " : " <> leanText[constructorType, <||>]]
+    "inductive " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " where" <> Block[{$declaredInductive = HoldComplete[name]},
+        StringJoin[
+            Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> "\n  | " <> identifierBase[HoldComplete[constructor]] <> " : " <> leanText[constructorType, <||>]]
+        ]
     ]
 ]
 
@@ -559,7 +563,7 @@ leanText[n_Integer, scope_Association] := "(" <> ToString[n] <> " : Nat)"
 
 leanText[Construct[head_, arguments___], scope_Association] := applicationText[HoldComplete[head], HoldComplete /@ Unevaluated[{arguments}], scope]
 
-leanText[Subscript[constant_, levels___], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> levelSuffix[HoldComplete /@ Unevaluated[{levels}]]
+leanText[Subscript[constant_, levels___], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> constantLevelSuffix[HoldComplete[constant], HoldComplete /@ Unevaluated[{levels}]]
 
 leanText[InductiveRecursor[inductive_], scope_Association] := "@" <> leanName[HoldComplete[InductiveRecursor[inductive]]]
 
@@ -575,7 +579,7 @@ heldLeanText[HoldComplete[term_], scope_Association] := leanText[term, scope]
 
 applicationText[head_HoldComplete, arguments_List, scope_Association] := "(" <> headText[head, scope] <> StringJoin[Function[argument, " " <> heldLeanText[argument, scope]] /@ arguments] <> ")"
 
-headText[HoldComplete[Subscript[constant_, levels___]], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> levelSuffix[HoldComplete /@ Unevaluated[{levels}]]
+headText[HoldComplete[Subscript[constant_, levels___]], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> constantLevelSuffix[HoldComplete[constant], HoldComplete /@ Unevaluated[{levels}]]
 
 headText[HoldComplete[name : (_Symbol | _String | InductiveRecursor[_])], scope_Association] := Lookup[scope, HoldComplete[name], "@" <> leanName[HoldComplete[name]]]
 
@@ -610,6 +614,10 @@ bracketed["StrictImplicit", text_String] := "{{" <> text <> "}}"
 (* === Universe levels as Lean source === *)
 
 levelSuffix[levels_List] := ".{" <> StringRiffle[Function[level, heldLevelText[level]] /@ levels, ", "] <> "}"
+
+constantLevelSuffix[constant_HoldComplete, levels_List] := If[constant === $declaredInductive, "", levelSuffix[levels]]
+
+$declaredInductive = None
 
 SetAttributes[levelText, HoldFirst]
 

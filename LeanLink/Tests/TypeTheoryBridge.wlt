@@ -84,6 +84,17 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-Lean-kernel-checks-the-proof"
 ]
 
+$wrapped = TypeTheoryEnvironment[$prelude, {
+    TypeTheoryInductiveType[Wrapper, ForAll[{Typed[A, TypeUniverse[u]]}, TypeUniverse[Max[1, u]]], {WrapperIntroduction -> ForAll[{Annotation[Typed[A, TypeUniverse[u]], "Implicit"], Typed[x, A]}, Wrapper[A]]}],
+    TypeTheoryDefinition[Unwrap, Function[{Annotation[Typed[A, TypeUniverse[u]], "Implicit"], Typed[w, Wrapper[A]]}, InductiveRecursor[Wrapper][Function[{Typed[t, Wrapper[A]]}, A], Function[{Typed[x, A]}, x], w]]]
+}]
+
+VerificationTest[
+    With[{compiled = LeanImportString[TypeTheoryToLean[$wrapped, Unwrap]]}, compiled["TypeTheory.Unwrap"]["TypeForm"]],
+    "{A : Sort u} \[RightArrow] TypeTheory.Wrapper A \[RightArrow] A",
+    TestID -> "TypeTheoryToLean-universe-polymorphic-inductive-type"
+]
+
 VerificationTest[
     First @ TypeTheoryToLean[$prelude, NotAConstant],
     "UnknownConstant",
