@@ -324,8 +324,12 @@ def typeCheckExport (handle : UInt64) (exprWXF : @& ByteArray) : IO ByteArray :=
       let res ←
         ((Meta.MetaM.run' (do
           let ty ← Meta.inferType expr
-          let ppStr ← PrettyPrinter.ppExpr ty
-          return (ty, s!"{ppStr}")) : CoreM (Expr × String)).run ctx st).toIO'
+          -- printing can fail where checking does not, as for the type of Fin.isLt; the type is still returned
+          let ppStr ← try
+              let fmt ← PrettyPrinter.ppExpr ty
+              pure s!"{fmt}"
+            catch _ => pure s!"{ty}"
+          return (ty, ppStr)) : CoreM (Expr × String)).run ctx st).toIO'
       match res with
       | .ok ((ty, ppStr), _) =>
         -- Return association with both expr tree and string

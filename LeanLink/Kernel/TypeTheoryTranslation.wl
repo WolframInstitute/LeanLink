@@ -266,10 +266,15 @@ universeParameters[name_String] := Lookup[$universes, name, $universes[name] = r
 
 readUniverseParameters[name_String] := Block[{count, raw, instantiated, pairs, mapping},
     count = SelectFirst[Range[0, 8], Function[n, AssociationQ[typeCheck[LeanConst[name, placeholderLevels[n]], $handle]]], None];
+    raw = Cases[fetchField[$handle, name, "Type"], LeanLevelParam[parameter_] :> parameter, Infinity];
+    (* a shim before LeanLink 1.1.6 cannot type-check a constant whose type Lean fails to print, such as
+       Fin.isLt; a single parameter, or none, is then the one in the type *)
+    If[ count === None && Length[DeleteDuplicates[raw]] <= 1,
+        Return[DeleteDuplicates[raw], Block]
+    ];
     If[count === None, bridgeFailure["UniverseParameters", "The universe parameters of `1` could not be read from Lean.", {name}]];
     If[ count === 0,
         {},
-        raw = Cases[fetchField[$handle, name, "Type"], LeanLevelParam[parameter_] :> parameter, Infinity];
         instantiated = Cases[typeCheck[LeanConst[name, placeholderLevels[count]], $handle]["Type"], LeanLevelParam[parameter_] :> parameter, Infinity];
         If[Length[raw] =!= Length[instantiated], bridgeFailure["UniverseParameters", "The universe parameters of `1` could not be matched up.", {name}]];
         mapping = Association[Function[pair, Last[pair] -> First[pair]] /@ DeleteDuplicates[Transpose[{raw, instantiated}]]];
