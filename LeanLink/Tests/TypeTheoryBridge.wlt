@@ -130,7 +130,7 @@ VerificationTest[
 $booleans = Append[$prelude, TypeTheoryTheorem[
     NegationTwice,
     ForAll[{Typed[b, Booleans]}, Not[Not[b]] == b],
-    Function[{Typed[b, Booleans]}, InductiveRecursor[Booleans][Function[{Typed[t, Booleans]}, Not[Not[t]] == t], EqualityReflexivity[BooleanFalse], EqualityReflexivity[BooleanTrue], b]]
+    Function[{Typed[b, Booleans]}, InductiveRecursor[Booleans][Function[{Typed[t, Booleans]}, Not[Not[t]] == t], EqualityReflexivity[False], EqualityReflexivity[True], b]]
 ]]
 
 VerificationTest[
