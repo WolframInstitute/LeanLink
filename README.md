@@ -19,6 +19,12 @@ LeanLink loads the Lean runtime from the toolchain it is built against, installe
 elan toolchain install leanprover/lean4:v4.30.0
 ```
 
+The TypeTheory bridge (`LeanToTypeTheory`, `TypeTheoryToLean`) also needs the paclet [WolframInstitute/TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), which it loads on first use:
+
+```wolfram
+PacletInstall[ResourceObject["https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/TypeTheory"]]
+```
+
 ## Features
 
 - **Native LibraryLink bridge** — embeds the Lean runtime directly via a C shim, no subprocess overhead
@@ -30,6 +36,7 @@ elan toolchain install leanprover/lean4:v4.30.0
 - **Builds and evaluation** — `LeanBuild` builds a Lake project; `LeanEvaluate` runs `#eval` and returns the value as Wolfram data
 - **Graphs** — expression trees and the dependency graph of a proof
 - **ProofToLean** — transpile Wolfram `ProofObject` to Lean environments
+- **TypeTheory bridge**: `LeanToTypeTheory` imports Lean constants into the Wolfram Language proof engine [TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), whose own kernel checks them again; `TypeTheoryToLean` writes TypeTheory proofs as Lean source for Lean's kernel
 - **LeanCompile** — lower Lean definitions to native code through `FunctionCompile`
 
 ## Quick Start
@@ -125,6 +132,8 @@ LeanLink/
 │   │   ├── LeanLink.wl        # Entry point
 │   │   ├── Lean.wl            # Main API, pretty-printer, proof engine
 │   │   ├── ProofToLean.wl     # ProofObject -> Lean transpiler
+│   │   ├── TypeTheoryBridge.wl       # LeanToTypeTheory, TypeTheoryToLean: entry points
+│   │   ├── TypeTheoryTranslation.wl  # The bridge, loaded with TypeTheory on first use
 │   │   ├── Compiler.wl        # Dependent types for the Wolfram Compiler
 │   │   └── Utilities.wl       # ImportDOT and other helpers
 │   ├── Assets/                # Bundled .lean files, hero image

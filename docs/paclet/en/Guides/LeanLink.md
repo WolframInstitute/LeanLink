@@ -13,7 +13,7 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 
 ## Abstract
 
-<code>Wolfram\`LeanLink\`</code> embeds the [Lean 4](https://lean-lang.org/) theorem prover in the Wolfram Language through a native [LibraryLink]() shim. [LeanImport]() and [LeanImportString]() load constants from a compiled module (Mathlib included) or a source string into a [LeanEnvironment]() of [LeanTerm]() values; each term carries its type and proof as symbolic expression trees built from the CIC heads ([LeanConst](), [LeanApp](), [LeanForall](), ...), pretty-prints as Lean source, and draws as a [Graph](). [LeanState]() and [LeanTactic]() run interactive tactic proofs, [ProofToLean]() transpiles a Wolfram [ProofObject]() into checkable Lean, and [LeanCompile]() lowers a Lean definition to a [FunctionCompile]() function.
+<code>Wolfram\`LeanLink\`</code> embeds the [Lean 4](https://lean-lang.org/) theorem prover in the Wolfram Language through a native [LibraryLink]() shim. [LeanImport]() and [LeanImportString]() load constants from a compiled module (Mathlib included) or a source string into a [LeanEnvironment]() of [LeanTerm]() values; each term carries its type and proof as symbolic expression trees built from the CIC heads ([LeanConst](), [LeanApp](), [LeanForall](), ...), pretty-prints as Lean source, and draws as a [Graph](). [LeanState]() and [LeanTactic]() run interactive tactic proofs, [ProofToLean]() transpiles a Wolfram [ProofObject]() into checkable Lean, [LeanToTypeTheory]() and [TypeTheoryToLean]() exchange proofs with the Wolfram Language proof engine TypeTheory, and [LeanCompile]() lowers a Lean definition to a [FunctionCompile]() function.
 
 ## Functions
 
@@ -76,6 +76,11 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 ### Transpiling Wolfram proofs
 
 - [ProofToLean]() transpile a Wolfram [ProofObject]() into a checkable [LeanEnvironment]()
+
+### The TypeTheory proof engine
+
+- [LeanToTypeTheory]() import Lean constants into the Wolfram Language proof engine [TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), whose own kernel checks them again
+- [TypeTheoryToLean]() write a TypeTheory proof as Lean source, for Lean's kernel to check
 
 ### Compiling Lean to native code
 
