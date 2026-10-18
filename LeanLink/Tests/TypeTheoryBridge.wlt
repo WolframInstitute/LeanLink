@@ -57,6 +57,14 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-string-literals-are-reported"
 ]
 
+VerificationTest[
+    With[{environment = LeanToTypeTheory[LeanImportString["theorem belowPower : 2 ^ 64 - 1 < 2 ^ 64 := by decide"], "belowPower"]},
+        {KeyExistsQ[environment, "belowPower"], Information[environment, "NaturalNumbers"]["Operations"][["LessEqual"]]}
+    ],
+    {True, "Nat.ble"},
+    TestID -> "LeanToTypeTheory-Lean-arithmetic-computes-on-literals"
+]
+
 $funext = LeanToTypeTheory[$lean, "funext"]
 
 VerificationTest[

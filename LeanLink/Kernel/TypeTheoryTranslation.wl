@@ -282,7 +282,7 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
             inductiveDeclarations[name, universes],
         "def",
             With[{value = leanTerm[leanExpression[name, "Term"]], type = leanTerm[leanExpression[name, "Type"]], levels = universes},
-                {TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels]}
+                Prepend[natOperationRegistration[name], TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels]]
             ],
         "theorem",
             With[{statement = leanTerm[leanExpression[name, "Type"]], proof = leanTerm[leanExpression[name, "Term"]], levels = universes},
@@ -311,6 +311,34 @@ inductiveDeclarations[name_String, universes_List] := Block[{information = induc
         ]
     ]
 ]
+
+(* Lean's kernel computes these operations on literals with GMP. Registered right after its definition,
+   each computes on literals in TypeTheory too, with integers, from TypeTheory 0.10 on. *)
+
+$leanNatOperations = <|
+    "Nat.add" -> "Addition",
+    "Nat.sub" -> "Subtraction",
+    "Nat.mul" -> "Multiplication",
+    "Nat.pow" -> "Power",
+    "Nat.div" -> "Quotient",
+    "Nat.mod" -> "Remainder",
+    "Nat.gcd" -> "GCD",
+    "Nat.log2" -> "Log2",
+    "Nat.land" -> "BitAnd",
+    "Nat.lor" -> "BitOr",
+    "Nat.xor" -> "BitXor",
+    "Nat.shiftLeft" -> "ShiftLeft",
+    "Nat.shiftRight" -> "ShiftRight",
+    "Nat.beq" -> "Equal",
+    "Nat.ble" -> "LessEqual"
+|>
+
+natOperationRegistration[name_String] := If[ KeyExistsQ[$leanNatOperations, name] && natOperationsQ[],
+    With[{role = $leanNatOperations[name]}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ", Association[role -> name]]}],
+    {}
+]
+
+natOperationsQ[] := natOperationsQ[] = MatchQ[Information[TypeTheoryEnvironment["Prelude"], "NaturalNumbers"], KeyValuePattern["Operations" -> _Association]]
 
 (* the recursor TypeTheory generated must have Lean's type, compared at the same placeholder levels *)
 
