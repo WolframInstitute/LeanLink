@@ -1,12 +1,12 @@
 # LeanLink documentation guide
 
-How to write the LeanLink documentation sources under `docs/` - the
+How to write the LeanLink documentation sources under `docs/paclet/en/` - the
 `Template: Symbol` reference pages, the `Template: Guide` guide, and the
 `Template: TechNote` tutorials. They are literate-markdown files that
-[`build_docs.wls`](../build_docs.wls) turns into evaluated Wolfram notebooks with
+[`build_docs.wls`](../../../build_docs.wls) turns into evaluated Wolfram notebooks with
 PacletPage's `BuildPacletDocumentation`, which runs `MarkdownToNotebook` (MTN) on
 each page. The notebooks land under `LeanLink/Documentation/English/`, and
-[`release.wls`](../release.wls) publishes them as the
+[`release.wls`](../../../release.wls) publishes them as the
 [documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink).
 This is the house style. It is adapted from the WolframParser doc guide and
 overrides the upstream
@@ -24,10 +24,10 @@ its init can wedge kernels):
 wl -f build_docs.wls
 ```
 
-`build_docs.wls` auto-discovers every `docs/**/*.md` whose frontmatter names a
+`build_docs.wls` auto-discovers every `docs/paclet/en/**/*.md` whose frontmatter names a
 page template, so a new page builds with no wiring. It needs PacletPage 0.3.11 or
 later, installed or in a checkout named by `PACLETPAGE_DIR` (see
-[`pacletpage.wl`](../pacletpage.wl)). The `<!-- => ... -->` hint
+[`pacletpage.wl`](../../../pacletpage.wl)). The `<!-- => ... -->` hint
 after a cell is **author-facing only** - MTN strips HTML comments before
 evaluating, so a hint is never checked against the real output. That is exactly
 why you must read the built `.nb` back: the hint records what you *expect*, the
@@ -65,7 +65,7 @@ the template:
   for two different environments across sections (the later binding wins for the
   rest of the notebook).
 - Every other page - a **symbol page**, the **guide**, and the **resource
-  definition** (`docs/ResourceDefinition.md`) - runs each section, and each example
+  definition** (`docs/paclet/en/ResourceDefinition.md`) - runs each section, and each example
   between `---` delimiters, in a **clean context**. Each one defines what it uses:
   a `## Scope` example that queries the bundled environment starts with its own
   `env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];`.
@@ -102,7 +102,7 @@ Every symbol - **built-in ([FunctionCompile](), [Graph](), [Dataset](),
   (`"ProjectDir"`, `"Filter"`), a **tactic string** (`"intro P"`,
   `"exact h"`), a **Lean source fragment** (`∀ (P : Prop), P → P`), or a **path**
   (`LeanLink/Assets/`).
-- If you link a paclet symbol that has no `docs/Symbols/<Name>.md` page,
+- If you link a paclet symbol that has no `docs/paclet/en/Symbols/<Name>.md` page,
   **create the page** in the same pass, so the link resolves.
 
 ## Argument names are italics, not math

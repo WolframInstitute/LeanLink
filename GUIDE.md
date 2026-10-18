@@ -6,7 +6,7 @@ Conventions for the LeanLink paclet sources: kernel packages
 (`Native/shim/*.c`). Adapted from the THVM WL guide. The rules at the top
 are non-negotiable; the rest are conventions that keep code readable and
 consistent with the IDE auto-formatter. For the documentation sources
-under `docs/`, see [docs/DOC_GUIDE.md](docs/DOC_GUIDE.md).
+under `docs/paclet/en/`, see [docs/paclet/en/DOC_GUIDE.md](docs/paclet/en/DOC_GUIDE.md).
 
 ## Formatting
 

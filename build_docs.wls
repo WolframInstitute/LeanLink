@@ -1,9 +1,9 @@
 #!/usr/bin/env wolframscript
-(* Build the LeanLink documentation with PacletPage: each docs/**/*.md page whose
+(* Build the LeanLink documentation with PacletPage: each docs/paclet/en/**/*.md page whose
    frontmatter names a page template (Symbol, Guide, TechNote) becomes a notebook
-   under LeanLink/Documentation/English/, and docs/ResourceDefinition.md becomes
+   under LeanLink/Documentation/English/, and docs/paclet/en/ResourceDefinition.md becomes
    LeanLink/ResourceDefinition.nb, the definition notebook submit.wls submits.
-   Other markdown (docs/DOC_GUIDE.md) is skipped. No cloud login is needed.
+   Other markdown (DOC_GUIDE.md) is skipped. No cloud login is needed.
 
    The build fails on a page that did not convert, and on a section that reads a
    name only an earlier section gave a value (see checkBuild in pacletpage.wl).

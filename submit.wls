@@ -2,7 +2,7 @@
 (* Submit the Wolfram/LeanLink paclet to the Wolfram Paclet Repository.
 
    The submission artifact is LeanLink/ResourceDefinition.nb, generated from
-   docs/ResourceDefinition.md by build_docs.wls - edit the markdown and
+   docs/paclet/en/ResourceDefinition.md by build_docs.wls - edit the markdown and
    rebuild before submitting, never the notebook.
 
    LeanLink is a LibraryLink paclet: the kernel loads

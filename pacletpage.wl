@@ -8,7 +8,7 @@ $repoDir = DirectoryName[$InputFileName]
 
 $leanlinkDir = FileNameJoin[{$repoDir, "LeanLink"}]
 
-$docsDir = FileNameJoin[{$repoDir, "docs"}]
+$docsDir = FileNameJoin[{$repoDir, "docs", "paclet", "en"}]
 
 (* The documentation site, and the paclet resource it is built around, belong to
    this account. PacletPage refuses to publish from a kernel connected as any
@@ -56,7 +56,7 @@ loadPacletPage[] := Block[{dir = Environment["PACLETPAGE_DIR"], paclet},
     paclet["Version"]
 ]
 
-(* The pages build from docs/ with PacletPage's defaults. *)
+(* The pages build from docs/paclet/en with PacletPage's defaults. *)
 
 $buildOptions = {"Source" -> $docsDir}
 
