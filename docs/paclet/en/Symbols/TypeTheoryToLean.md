@@ -24,6 +24,7 @@ RelatedGuides: [LeanLink]
 - The prelude's axioms are Lean's: `PropositionalExtensionality` is `propext`, `FunctionExtensionality` is `funext` and `Choice` is `Classical.choice`, so a classical proof depends on Lean's own axioms and declares none.
 - Every other constant is declared under the namespace `TypeTheory`, as an `axiom`, a `noncomputable def`, a `theorem` or an `inductive`.
 - Compiling the source with [LeanImportString]() has Lean's kernel check every declaration, independently of TypeTheory's.
+- Lean's kernel follows the calculus of inductive constructions, the rules of TypeTheory's prelude. An environment whose rules have no Prop, such as TypeTheory's HoTT environment, or that has rewrite rules gives `Failure["UnsupportedRules", ...]`.
 
 ## Basic Examples
 
@@ -84,3 +85,13 @@ TypeTheoryToLean[TypeTheoryEnvironment[{TypeTheoryTheorem[TwoPlusTwo, 2 + 2 == 4
 ```
 
 <!-- => Failure["UnknownConstant", ...] -->
+
+---
+
+Lean's kernel does not follow the rules of TypeTheory's HoTT environment, which have no Prop:
+
+```wl
+TypeTheoryToLean[TypeTheoryEnvironment["HomotopyTypeTheory"], UniverseNotSet]
+```
+
+<!-- => Failure["UnsupportedRules", ...] -->

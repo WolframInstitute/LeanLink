@@ -434,6 +434,7 @@ TypeTheoryToLean[environment_TypeTheoryEnvironment, name : Except[_List], opts :
 
 TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPattern[]] := catchBridgeFailure @ Block[
     {declarations = Normal[environment], prelude = TypeTheoryEnvironment["Prelude"], $environment = environment, $declarationIndex, $constructorOwners, needed},
+    checkLeanRules[environment];
     If[FailureQ[declarations], Throw[declarations, $bridgeTag]];
     $declarationIndex = Association[Function[declaration, declarationKey[declaration] -> declaration] /@ declarations];
     $constructorOwners = Association[Catenate[constructorOwners /@ declarations]];
@@ -451,6 +452,16 @@ TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPa
         ],
         "\n\n"
     ] <> "\n"
+]
+
+(* Lean's kernel follows the calculus of inductive constructions, TypeTheory's rules with Prop. Without Prop
+   a recursor eliminates a universe above Lean's and a theorem may state a type, and Lean has no rewrite
+   rules, so the computation an environment's rewrite rules give would be lost. *)
+
+checkLeanRules[environment_TypeTheoryEnvironment] := Block[
+    {rules = Information[environment, "Rules"], rewriteRules = Information[environment, "RewriteRules"]},
+    If[ rules["Prop"] === False, bridgeFailure["UnsupportedRules", "The environment follows the rules `1`, which have no Prop, and Lean's kernel follows the calculus of inductive constructions.", {rules["Name"]}]];
+    If[ MatchQ[rewriteRules, {__}], bridgeFailure["UnsupportedRules", "The environment has the rewrite rules `1`, which Lean's kernel does not have.", {rewriteRules}]]
 ]
 
 (* the name a declaration introduces, held; an inductive type's constructors and recursor belong to it *)

@@ -127,4 +127,21 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-unknown-constant"
 ]
 
+$rewriting = TypeTheoryRules["CalculusOfInductiveConstructions", "RewriteRules" -> True]
+
+$bits = {
+    TypeTheoryInductiveType[Bit, TypeUniverse[1], {BitZero -> Bit, BitOne -> Bit}],
+    TypeTheoryAxiom[Flip, TypeSpecifier[{Bit} -> Bit]]
+}
+
+VerificationTest[
+    {
+        First @ TypeTheoryToLean[TypeTheoryEnvironment["HomotopyTypeTheory"], UniverseNotSet],
+        First @ TypeTheoryToLean[TypeTheoryEnvironment[$rewriting, Append[$bits, TypeTheoryRewriteRule[FlipZero, Flip[BitZero] -> BitOne]]], Flip],
+        StringContainsQ[TypeTheoryToLean[TypeTheoryEnvironment[$rewriting, $bits], Flip], "axiom TypeTheory.Flip"]
+    },
+    {"UnsupportedRules", "UnsupportedRules", True},
+    TestID -> "TypeTheoryToLean-refuses-rules-Lean-does-not-have"
+]
+
 EndTestSection[]
