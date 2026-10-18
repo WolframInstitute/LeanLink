@@ -107,6 +107,20 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-the-prelude-axioms-are-Lean-axioms"
 ]
 
+$booleans = Append[$prelude, TypeTheoryTheorem[
+    NegationTwice,
+    ForAll[{Typed[b, Booleans]}, Not[Not[b]] == b],
+    Function[{Typed[b, Booleans]}, InductiveRecursor[Booleans][Function[{Typed[t, Booleans]}, Not[Not[t]] == t], EqualityReflexivity[BooleanFalse], EqualityReflexivity[BooleanTrue], b]]
+]]
+
+VerificationTest[
+    With[{source = TypeTheoryToLean[$booleans, NegationTwice]},
+        {StringFreeQ[source, "inductive "], LeanImportString[source]["TypeTheory.NegationTwice"]["TypeForm"]}
+    ],
+    {True, "\[ForAll] (b : Bool), (!!b) = b"},
+    TestID -> "TypeTheoryToLean-the-Booleans-are-Lean-Bool"
+]
+
 VerificationTest[
     First @ TypeTheoryToLean[$prelude, NotAConstant],
     "UnknownConstant",
