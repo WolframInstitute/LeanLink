@@ -70,16 +70,16 @@ $proof = TypeTheoryProof[ForAll[{Typed[n, NonNegativeIntegers]}, 0 + n == n], $p
     TypeTheoryTactic["Exact", EqualityCongruence[NaturalNumberSuccessor, ih]]
 }]
 
-$proved = Append[$prelude, TypeTheoryTheorem[AdditionZeroLeft, $proof]]
+$proved = Append[$prelude, TypeTheoryTheorem[ZeroLeftIdentity, $proof]]
 
 VerificationTest[
-    StringContainsQ[TypeTheoryToLean[$proved, AdditionZeroLeft], {"theorem TypeTheory.EqualityCongruence.{u, v}", "theorem TypeTheory.AdditionZeroLeft"}, IgnoreCase -> False],
+    StringContainsQ[TypeTheoryToLean[$proved, ZeroLeftIdentity], {"theorem TypeTheory.EqualityCongruence.{u, v}", "theorem TypeTheory.ZeroLeftIdentity"}, IgnoreCase -> False],
     True,
     TestID -> "TypeTheoryToLean-writes-the-theorem-and-its-dependencies"
 ]
 
 VerificationTest[
-    With[{compiled = LeanImportString[TypeTheoryToLean[$proved, AdditionZeroLeft]]}, compiled["TypeTheory.AdditionZeroLeft"]["TypeForm"]],
+    With[{compiled = LeanImportString[TypeTheoryToLean[$proved, ZeroLeftIdentity]]}, compiled["TypeTheory.ZeroLeftIdentity"]["TypeForm"]],
     "\[ForAll] (n : Nat), Nat.add 0 n = n",
     TestID -> "TypeTheoryToLean-Lean-kernel-checks-the-proof"
 ]
