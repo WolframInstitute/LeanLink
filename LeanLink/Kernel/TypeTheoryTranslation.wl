@@ -167,14 +167,27 @@ primaryName[name_String] := Switch[constantKind[name],
 ]
 
 (* an inductive type mentions what its constructors mention; Quot.lift and Quot.ind compute on Quot.mk, so
-   they come after it, with their computation rule *)
+   they come after it, with their computation rule; a string literal is written with the constants that
+   Lean's kernel reads it as *)
 
 constantDependencies[name_String] := DeleteDuplicates @ Join[
     If[ constantKind[name] === "inductive",
         Catenate[usedConstants /@ Prepend[inductiveInformation[name]["Constructors"], name]],
         usedConstants[name]
     ],
-    If[MemberQ[{"Quot.lift", "Quot.ind"}, name], {"Quot.mk"}, {}]
+    If[MemberQ[{"Quot.lift", "Quot.ind"}, name], {"Quot.mk"}, {}],
+    If[stringLiteralQ[name], $stringLiteralConstants, {}]
+]
+
+$stringLiteralConstants = {"String.ofList", "List.cons", "List.nil", "Char.ofNat", "Char"}
+
+stringLiteralQ[name_String] := ! FreeQ[
+    Switch[constantKind[name],
+        "inductive", Function[constructor, leanExpression[constructor, "Type"]] /@ Prepend[inductiveInformation[name]["Constructors"], name],
+        "def" | "theorem", {leanExpression[name, "Type"], leanExpression[name, "Term"]},
+        _, {leanExpression[name, "Type"]}
+    ],
+    _LeanLitStr
 ]
 
 ownNames[name_String] := If[ constantKind[name] === "inductive",
@@ -410,7 +423,13 @@ leanSurface[LeanLitNat[n_Integer], _] := n
 
 leanSurface[LeanProj[_, index_Integer, structure_], scope_List] := surfacePart[leanSurface[structure, scope], index + 1]
 
-leanSurface[LeanLitStr[_], _] := bridgeFailure["StringLiteral", "`1` uses a string literal, which TypeTheory does not have.", {$currentConstant}]
+(* Lean's kernel reads a string literal as String.ofList applied to the list of its characters, each
+   Char.ofNat of its code point, so it is written that way; the list is built from its end *)
+leanSurface[LeanLitStr[string_String], _] := surfaceConstruct["String.ofList", Fold[
+    Function[{list, code}, surfaceConstruct[surfaceSubscript["List.cons", 0], "Char", surfaceConstruct["Char.ofNat", code], list]],
+    surfaceConstruct[surfaceSubscript["List.nil", 0], "Char"],
+    Reverse[ToCharacterCode[string]]
+]]
 
 leanSurface[other_, _] := bridgeFailure["UnsupportedExpression", "`1` contains `2`, which the bridge cannot translate.", {$currentConstant, Short[other]}]
 

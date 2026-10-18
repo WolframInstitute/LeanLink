@@ -52,9 +52,11 @@ VerificationTest[
 ]
 
 VerificationTest[
-    First @ LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"],
-    "StringLiteral",
-    TestID -> "LeanToTypeTheory-string-literals-are-reported"
+    With[{environment = LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"]},
+        {KeyExistsQ[environment, "greeting"], KeyExistsQ[environment, "String.ofList"], KeyExistsQ[environment, "Char.ofNat"]}
+    ],
+    {True, True, True},
+    TestID -> "LeanToTypeTheory-a-string-literal-is-written-as-Lean-reads-it"
 ]
 
 VerificationTest[
