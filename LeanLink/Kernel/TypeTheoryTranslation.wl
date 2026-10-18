@@ -591,11 +591,12 @@ $leanKeywords = {
 TypeTheoryToLean[environment_TypeTheoryEnvironment, name : Except[_List], opts : OptionsPattern[]] := TypeTheoryToLean[environment, {name}, opts]
 
 TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPattern[]] := catchBridgeFailure @ Block[
-    {declarations = Normal[environment], prelude = TypeTheoryEnvironment["Prelude"], $environment = environment, $declarationIndex, $constructorOwners, needed},
+    {declarations = Normal[environment], prelude = TypeTheoryEnvironment["Prelude"], $environment = environment, $declarationIndex, $constructorOwners, $blockOwners, needed},
     checkLeanRules[environment];
     If[FailureQ[declarations], Throw[declarations, $bridgeTag]];
     $declarationIndex = Association[Function[declaration, declarationKey[declaration] -> declaration] /@ declarations];
     $constructorOwners = Association[Catenate[constructorOwners /@ declarations]];
+    $blockOwners = Association[Catenate[blockOwners /@ declarations]];
     Scan[Function[name, If[! KeyExistsQ[environment, name], bridgeFailure["UnknownConstant", "`1` is not declared in the environment.", {name}]]], names];
     needed = exportOrder[Function[name, ownerKey[HoldComplete[name]]] /@ names];
     (* a prelude constant is written as Lean's only if it is the prelude's own *)
@@ -623,11 +624,23 @@ checkLeanRules[environment_TypeTheoryEnvironment] := Block[
     If[ MatchQ[rewriteRules, {__}], bridgeFailure["UnsupportedRules", "The environment has the rewrite rules `1`, which Lean's kernel does not have.", {rewriteRules}]]
 ]
 
-(* the name a declaration introduces, held; an inductive type's constructors and recursor belong to it *)
+(* the name a declaration introduces, held, the first type's for a block of mutually inductive types; an
+   inductive type's constructors and recursors belong to it, and the other types of its block to the first *)
 
-declarationKey[declaration_] := Replace[declaration, (TypeTheoryAxiom | TypeTheoryDefinition | TypeTheoryTheorem | TypeTheoryInductiveType)[name_, ___] :> HoldComplete[name]]
+declarationKey[declaration_] := Replace[declaration, {
+    TypeTheoryInductiveType[{(Rule | RuleDelayed)[first_, _], ___}, _List, ___] :> HoldComplete[first],
+    (TypeTheoryAxiom | TypeTheoryDefinition | TypeTheoryTheorem | TypeTheoryInductiveType)[name_, ___] :> HoldComplete[name]
+}]
 
 declarationKey[declaration_TypeTheoryNaturalNumbers] := None
+
+constructorOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, {constructors___}, ___]] := With[
+    {names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},
+    Join[
+        Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> (HoldComplete[constructor] -> resultHead[HoldComplete[constructorType]])],
+        Function[name, Replace[name, HoldComplete[type_] :> (HoldComplete[InductiveRecursor[type]] -> name)]] /@ names
+    ]
+]
 
 constructorOwners[TypeTheoryInductiveType[name_, _, {constructors___}, ___]] := Join[
     Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, _] :> (HoldComplete[constructor] -> HoldComplete[name])],
@@ -636,11 +649,31 @@ constructorOwners[TypeTheoryInductiveType[name_, _, {constructors___}, ___]] := 
 
 constructorOwners[_] := {}
 
-ownerKey[key_HoldComplete] := Lookup[$constructorOwners, key, key]
+blockOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, _List, ___]] := With[
+    {names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},
+    Function[name, name -> First[names]] /@ Rest[names]
+]
+
+blockOwners[_] := {}
+
+(* the type a constructor's type ends in *)
+resultHead[HoldComplete[(ForAll | Function)[_, body_]]] := resultHead[HoldComplete[body]]
+resultHead[HoldComplete[Implies[_, codomain_]]] := resultHead[HoldComplete[codomain]]
+resultHead[HoldComplete[TypeSpecifier[_ -> codomain_]]] := resultHead[HoldComplete[codomain]]
+resultHead[HoldComplete[Construct[head_, ___]]] := resultHead[HoldComplete[head]]
+resultHead[HoldComplete[Subscript[head_, ___]]] := HoldComplete[head]
+resultHead[HoldComplete[head_[___]]] := HoldComplete[head]
+resultHead[HoldComplete[head_]] := HoldComplete[head]
+
+(* the recursor on a type nested in X's block, InductiveRecursor[X, k], belongs where X's does *)
+ownerKey[key_HoldComplete] := With[
+    {owner = Lookup[$constructorOwners, Replace[key, HoldComplete[InductiveRecursor[type_, _Integer]] :> HoldComplete[InductiveRecursor[type]]], key]},
+    Lookup[$blockOwners, owner, owner]
+]
 
 (* a constant is Lean's own when it came from Lean, as a string name, or is a prelude constant Lean has *)
 
-leanSideQ[key_HoldComplete] := MatchQ[key, HoldComplete[_String] | HoldComplete[InductiveRecursor[_String]]] || KeyExistsQ[$preludeLeanNames, key]
+leanSideQ[key_HoldComplete] := MatchQ[key, HoldComplete[_String] | HoldComplete[InductiveRecursor[_String] | InductiveRecursor[_String, _Integer]]] || KeyExistsQ[$preludeLeanNames, key]
 
 exportOrder[roots_List] := Block[{$visited = <||>},
     Flatten[Last[Reap[Scan[visitDeclaration, roots], $exportTag]]]
@@ -656,7 +689,7 @@ visitDeclaration[key_HoldComplete] := Block[{owner = ownerKey[key]},
 
 mentionedConstants[declaration_] := DeleteDuplicates[Cases[
     declaration,
-    name : (_Symbol | _String | InductiveRecursor[_]) /; KeyExistsQ[$environment, name] :> ownerKey[HoldComplete[name]],
+    name : (_Symbol | _String | InductiveRecursor[_] | InductiveRecursor[_, _Integer]) /; KeyExistsQ[$environment, name] :> ownerKey[HoldComplete[name]],
     {0, Infinity},
     Heads -> True
 ]]
@@ -670,6 +703,8 @@ leanName[key_HoldComplete] := Which[
         First[key],
     MatchQ[key, HoldComplete[InductiveRecursor[_]]],
         leanName[Replace[key, HoldComplete[InductiveRecursor[inductive_]] :> HoldComplete[inductive]]] <> ".rec",
+    MatchQ[key, HoldComplete[InductiveRecursor[_, _Integer]]],
+        Replace[key, HoldComplete[InductiveRecursor[inductive_, index_]] :> leanName[HoldComplete[inductive]] <> ".rec_" <> ToString[index]],
     KeyExistsQ[$constructorOwners, key],
         leanName[$constructorOwners[key]] <> "." <> identifierBase[key],
     True,
@@ -706,15 +741,38 @@ declarationText[TypeTheoryTheorem[name_, statement_, proof_, options___]] := Blo
     "theorem " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[statement, <||>] <> " :=\n  " <> leanText[proof, <||>]
 ]
 
-(* in its constructors' types the inductive type is a local of Lean's, named without universe levels *)
+(* in its constructors' types the inductive type is a local of Lean's, named without universe levels, as
+   every type of a mutual block is in all of its constructors *)
 
-declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
-    "inductive " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " where" <> Block[{$declaredInductive = HoldComplete[name]},
-        StringJoin[
-            Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> "\n  | " <> identifierBase[HoldComplete[constructor]] <> " : " <> leanText[constructorType, <||>]]
-        ]
+declarationText[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, {constructors___}, options___]] := Block[
+    {
+        $universeNames = universeNames[HoldComplete[options]],
+        $declaredInductive = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}],
+        owned = Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> {HoldComplete[constructor], HoldComplete[constructorType]}]
+    },
+    "mutual\n" <> StringRiffle[
+        Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, type_] :> inductiveText[
+            HoldComplete[name],
+            HoldComplete[type],
+            Select[owned, Function[constructor, resultHead[Last[constructor]] === HoldComplete[name]]]
+        ], {2}],
+        "\n"
+    ] <> "\nend"
+]
+
+declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options___]] := Block[
+    {$universeNames = universeNames[HoldComplete[options]], $declaredInductive = {HoldComplete[name]}},
+    inductiveText[
+        HoldComplete[name],
+        HoldComplete[type],
+        Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> {HoldComplete[constructor], HoldComplete[constructorType]}]
     ]
 ]
+
+inductiveText[name_HoldComplete, type_HoldComplete, constructors_List] :=
+    "inductive " <> leanName[name] <> universeSuffix[] <> " : " <> heldLeanText[type, <||>] <> " where" <> StringJoin[
+        Function[constructor, "\n  | " <> identifierBase[First[constructor]] <> " : " <> heldLeanText[Last[constructor], <||>]] /@ constructors
+    ]
 
 declarationText[other_] := bridgeFailure["UnsupportedDeclaration", "`1` cannot be written as Lean source.", {Short[other]}]
 
@@ -808,9 +866,9 @@ bracketed["StrictImplicit", text_String] := "{{" <> text <> "}}"
 
 levelSuffix[levels_List] := ".{" <> StringRiffle[Function[level, heldLevelText[level]] /@ levels, ", "] <> "}"
 
-constantLevelSuffix[constant_HoldComplete, levels_List] := If[constant === $declaredInductive, "", levelSuffix[levels]]
+constantLevelSuffix[constant_HoldComplete, levels_List] := If[MemberQ[$declaredInductive, constant], "", levelSuffix[levels]]
 
-$declaredInductive = None
+$declaredInductive = {}
 
 SetAttributes[levelText, HoldFirst]
 

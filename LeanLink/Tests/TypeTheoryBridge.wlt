@@ -81,6 +81,30 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-mutual-and-nested-types-import-with-Lean's-recursors"
 ]
 
+VerificationTest[
+    With[
+        {
+            source = TypeTheoryToLean[
+                TypeTheoryEnvironment[TypeTheoryEnvironment["Prelude"], {
+                    TypeTheoryInductiveType[
+                        {Even -> TypeSpecifier[{NonNegativeIntegers} -> TypeUniverse[0]], Odd -> TypeSpecifier[{NonNegativeIntegers} -> TypeUniverse[0]]},
+                        {
+                            EvenZero -> Even[0],
+                            EvenSuccessor -> ForAll[{TypedImplicit[n, NonNegativeIntegers], Typed[h, Odd[n]]}, Even[n + 1]],
+                            OddSuccessor -> ForAll[{TypedImplicit[n, NonNegativeIntegers], Typed[h, Even[n]]}, Odd[n + 1]]
+                        }
+                    ],
+                    TypeTheoryTheorem[TwoEven, Even[2], EvenSuccessor[OddSuccessor[EvenZero]]]
+                }],
+                TwoEven
+            ]
+        },
+        {StringContainsQ[source, "mutual\ninductive TypeTheory.Even"], FailureQ[LeanImportString[source]]}
+    ],
+    {True, False},
+    TestID -> "TypeTheoryToLean-a-mutual-block-is-written-as-Lean's-mutual-block"
+]
+
 $funext = LeanToTypeTheory[$lean, "funext"]
 
 VerificationTest[
