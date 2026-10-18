@@ -375,7 +375,8 @@ cleanBinderName[binderName_String] := Replace[First[StringSplit[binderName, "._@
 
 (* TypeTheory's prelude constants that Lean has in Init, with the same definitions, except Plus, which
    becomes Nat.add: they compute the same on constructors, so a proof that does not depend on how Plus
-   is defined checks in Lean too. *)
+   is defined checks in Lean too. The prelude's axioms are Lean's, with the same types; Lean proves
+   funext from quotients. *)
 
 $preludeLeanNames = <|
     HoldComplete[True] -> "True",
@@ -391,6 +392,9 @@ $preludeLeanNames = <|
     HoldComplete[OrIntroductionLeft] -> "Or.inl",
     HoldComplete[OrIntroductionRight] -> "Or.inr",
     HoldComplete[InductiveRecursor[Or]] -> "Or.rec",
+    HoldComplete[Equivalent] -> "Iff",
+    HoldComplete[EquivalentIntroduction] -> "Iff.intro",
+    HoldComplete[InductiveRecursor[Equivalent]] -> "Iff.rec",
     HoldComplete[Equal] -> "Eq",
     HoldComplete[EqualityReflexivity] -> "Eq.refl",
     HoldComplete[InductiveRecursor[Equal]] -> "Eq.rec",
@@ -401,7 +405,16 @@ $preludeLeanNames = <|
     HoldComplete[NaturalNumberZero] -> "Nat.zero",
     HoldComplete[NaturalNumberSuccessor] -> "Nat.succ",
     HoldComplete[InductiveRecursor[NonNegativeIntegers]] -> "Nat.rec",
-    HoldComplete[Plus] -> "Nat.add"
+    HoldComplete[Plus] -> "Nat.add",
+    HoldComplete[Nonempty] -> "Nonempty",
+    HoldComplete[NonemptyIntroduction] -> "Nonempty.intro",
+    HoldComplete[InductiveRecursor[Nonempty]] -> "Nonempty.rec",
+    HoldComplete[Subtype] -> "Subtype",
+    HoldComplete[SubtypeIntroduction] -> "Subtype.mk",
+    HoldComplete[InductiveRecursor[Subtype]] -> "Subtype.rec",
+    HoldComplete[PropositionalExtensionality] -> "propext",
+    HoldComplete[FunctionExtensionality] -> "funext",
+    HoldComplete[Choice] -> "Classical.choice"
 |>
 
 $leanKeywords = {

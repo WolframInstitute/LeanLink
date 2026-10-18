@@ -96,6 +96,18 @@ VerificationTest[
 ]
 
 VerificationTest[
+    With[{source = TypeTheoryToLean[$prelude, ExcludedMiddle]},
+        {
+            StringFreeQ[source, "axiom "],
+            AllTrue[{"@propext", "@funext", "@Classical.choice"}, Function[name, StringContainsQ[source, name]]],
+            LeanImportString[source]["TypeTheory.ExcludedMiddle"]["TypeForm"]
+        }
+    ],
+    {True, True, "\[ForAll] (p : Prop), p \[Or] \[Not]p"},
+    TestID -> "TypeTheoryToLean-the-prelude-axioms-are-Lean-axioms"
+]
+
+VerificationTest[
     First @ TypeTheoryToLean[$prelude, NotAConstant],
     "UnknownConstant",
     TestID -> "TypeTheoryToLean-unknown-constant"
