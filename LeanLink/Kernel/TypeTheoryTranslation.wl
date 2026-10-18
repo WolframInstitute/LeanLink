@@ -277,7 +277,8 @@ checkRecursor[environment_, name_String] := Block[
             ours = TypeTheoryTerm @@ Append[heldSurface[surfaceConstruct[constantSurface[LeanConst[recursor, levels]]]], environment],
             theirs = TypeTheoryTerm @@ heldSurface[leanSurface[leanType, {}]]
         },
-        If[ ! TrueQ[TypeTheoryCheck[ours, theirs]],
+        (* TypeTheory 0.8 gives a Success where earlier versions gave True *)
+        If[ ! MatchQ[TypeTheoryCheck[ours, theirs], True | _Success],
             bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
         ]
     ]
@@ -636,6 +637,9 @@ addBinderText[{texts_List, scope_Association}, binder_HoldComplete] := Block[{pa
 binderParts[HoldComplete[Typed[name_, type_]]] := <|"Name" -> HoldComplete[name], "Type" -> HoldComplete[type], "Kind" -> "Explicit"|>
 
 binderParts[HoldComplete[Annotation[Typed[name_, type_], kind_String]]] := <|"Name" -> HoldComplete[name], "Type" -> HoldComplete[type], "Kind" -> kind|>
+
+(* TypeTheory 0.8 reads implicit binders back as TypedImplicit *)
+binderParts[HoldComplete[TypedImplicit[name_, type_]]] := <|"Name" -> HoldComplete[name], "Type" -> HoldComplete[type], "Kind" -> "Implicit"|>
 
 binderParts[HoldComplete[other_]] := bridgeFailure["UnsupportedBinder", "`1` cannot be written as a Lean binder.", {HoldForm[other]}]
 

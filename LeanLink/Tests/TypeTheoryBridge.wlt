@@ -21,22 +21,25 @@ VerificationTest[
 ]
 
 VerificationTest[
-    With[{env = LeanToTypeTheory[$lean, "And.comm"]}, {Head[env], KeyExistsQ[env, InductiveRecursor["And"]], TypeTheoryCheck[env]}],
+    With[{env = LeanToTypeTheory[$lean, "And.comm"]}, {Head[env], KeyExistsQ[env, InductiveRecursor["And"]], MatchQ[TypeTheoryCheck[env], True | _Success]}],
     {TypeTheoryEnvironment, True, True},
     TestID -> "LeanToTypeTheory-And-comm-replays"
 ]
 
 VerificationTest[
     $zeroAdd = LeanToTypeTheory[$lean, "Nat.zero_add"];
-    {Length[$zeroAdd], Information[$zeroAdd, "NaturalNumbers"]["Type"], TypeTheoryCheck[$zeroAdd]},
+    {Length[$zeroAdd], Information[$zeroAdd, "NaturalNumbers"]["Type"], MatchQ[TypeTheoryCheck[$zeroAdd], True | _Success]},
     {43, "Nat", True},
     TestID -> "LeanToTypeTheory-Nat-zero_add-cone-with-structures"
 ]
 
 VerificationTest[
-    TypeTheoryCheck[
-        TypeTheoryTerm[Construct["Nat.zero_add", 5], $zeroAdd],
-        TypeTheoryTerm[Construct[Subscript["Eq", 1], "Nat", Construct[Subscript["HAdd.hAdd", 0, 0, 0], "Nat", "Nat", "Nat", Construct[Subscript["instHAdd", 0], "Nat", "instAddNat"], 0, 5], 5]]
+    MatchQ[
+        TypeTheoryCheck[
+            TypeTheoryTerm[Construct["Nat.zero_add", 5], $zeroAdd],
+            TypeTheoryTerm[Construct[Subscript["Eq", 1], "Nat", Construct[Subscript["HAdd.hAdd", 0, 0, 0], "Nat", "Nat", "Nat", Construct[Subscript["instHAdd", 0], "Nat", "instAddNat"], 0, 5], 5]]
+        ],
+        True | _Success
     ],
     True,
     TestID -> "LeanToTypeTheory-imported-theorem-is-usable"
