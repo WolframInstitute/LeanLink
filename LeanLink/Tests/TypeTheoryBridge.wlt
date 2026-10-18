@@ -67,6 +67,20 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-Lean-arithmetic-computes-on-literals"
 ]
 
+VerificationTest[
+    With[
+        {
+            environment = LeanToTypeTheory[
+                LeanImportString["mutual\ninductive Even : Nat → Prop\n  | zero : Even 0\n  | succ {n : Nat} : Odd n → Even (n + 1)\ninductive Odd : Nat → Prop\n  | succ {n : Nat} : Even n → Odd (n + 1)\nend\ninductive Rose where\n  | node : Nat → List Rose → Rose"],
+                {"Even", "Rose"}
+            ]
+        },
+        {Select[Keys[environment], Function[key, ! FreeQ[key, "Even" | "Odd" | "Rose"]]], MatchQ[TypeTheoryCheck[environment], _Success]}
+    ],
+    {{"Even", "Odd", InductiveRecursor["Even"], InductiveRecursor["Odd"], "Rose", InductiveRecursor["Rose"], InductiveRecursor["Rose", 1]}, True},
+    TestID -> "LeanToTypeTheory-mutual-and-nested-types-import-with-Lean's-recursors"
+]
+
 $funext = LeanToTypeTheory[$lean, "funext"]
 
 VerificationTest[

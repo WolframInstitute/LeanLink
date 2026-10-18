@@ -160,11 +160,16 @@ coneOrder[roots_List] := Block[{visited = <||>, stack = CreateDataStructure["Sta
     Normal[order]
 ]
 
+(* the types of a block come with its first type, as their constructors and recursors do *)
 primaryName[name_String] := Switch[constantKind[name],
-    "constructor", constructorInductive[name],
-    "recursor", StringDrop[name, -4],
+    "constructor", First[inductiveInformation[constructorInductive[name]]["Block"]],
+    "recursor", First[inductiveInformation[recursorInductive[name]]["Block"]],
+    "inductive", First[inductiveInformation[name]["Block"]],
     _, name
 ]
+
+(* X.rec, and X.rec_k on the k-th type nested in X's block *)
+recursorInductive[name_String] := StringReplace[name, RegularExpression["\\.rec(_\\d+)?$"] -> ""]
 
 (* an inductive type mentions what its constructors mention; Quot.lift and Quot.ind compute on Quot.mk, so
    they come after it, with their computation rule; a string literal is written with the constants that
@@ -172,7 +177,7 @@ primaryName[name_String] := Switch[constantKind[name],
 
 constantDependencies[name_String] := DeleteDuplicates @ Join[
     If[ constantKind[name] === "inductive",
-        Catenate[usedConstants /@ Prepend[inductiveInformation[name]["Constructors"], name]],
+        Catenate[usedConstants /@ blockMembers[name]],
         usedConstants[name]
     ],
     If[MemberQ[{"Quot.lift", "Quot.ind"}, name], {"Quot.mk"}, {}],
@@ -183,7 +188,7 @@ $stringLiteralConstants = {"String.ofList", "List.cons", "List.nil", "Char.ofNat
 
 stringLiteralQ[name_String] := ! FreeQ[
     Switch[constantKind[name],
-        "inductive", Function[constructor, leanExpression[constructor, "Type"]] /@ Prepend[inductiveInformation[name]["Constructors"], name],
+        "inductive", Function[member, leanExpression[member, "Type"]] /@ blockMembers[name],
         "def" | "theorem", {leanExpression[name, "Type"], leanExpression[name, "Term"]},
         _, {leanExpression[name, "Type"]}
     ],
@@ -191,8 +196,16 @@ stringLiteralQ[name_String] := ! FreeQ[
 ]
 
 ownNames[name_String] := If[ constantKind[name] === "inductive",
-    Join[{name, name <> ".rec"}, inductiveInformation[name]["Constructors"]],
+    Join[blockMembers[name], blockRecursors[name]],
     {name}
+]
+
+(* the types declared with an inductive type, and all their constructors *)
+blockMembers[name_String] := Join[inductiveInformation[name]["Block"], inductiveInformation[name]["BlockConstructors"]]
+
+(* the recursor of each type of the block, then X.rec_k on each container a type is nested in *)
+blockRecursors[name_String] := With[{block = inductiveInformation[name]["Block"]},
+    Join[Function[type, type <> ".rec"] /@ block, Table[First[block] <> ".rec_" <> ToString[index], {index, inductiveInformation[name]["Nested"]}]]
 ]
 
 usedConstants[name_String] := Block[{used = Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]]},
@@ -221,29 +234,53 @@ constructorInductive[name_String] := Replace[First[leanSpine[Last[forallTelescop
 
 (* === Inductive types === *)
 
-(* Lean's recursor X.rec takes the parameters, the motive, one minor premise per constructor, the indices
-   and the major premise; its minor premises name the constructors in order. A motive is the binder whose
-   type ends in a universe and takes a term of an inductive type: a parameter cannot mention X, so the
-   first such binder ends the parameters, and more than one means a mutual or nested family. *)
+(* Lean's recursor X.rec takes the parameters, a motive for each type of X's block, a minor premise for
+   each constructor of all of them, the indices and the major premise. It ends in X's motive, and the
+   motives come right after the parameters: first those of the types declared together, each taking a term
+   of its type applied to exactly the parameters, then those of the containers a type of the block is
+   nested in. The minor premises name the constructors in order. *)
 
 inductiveInformation[name_String] := Lookup[$inductives, name, $inductives[name] = readInductiveInformation[name]]
 
-readInductiveInformation[name_String] := Block[{typeBinders, recursorBinders, numberOfParameters, numberOfIndices, motives},
+readInductiveInformation[name_String] := Block[
+    {typeBinders, recursorBinders, conclusion, motivePosition, numberOfParameters, motiveTypes, block, numberOfMinors, constructors},
     typeBinders = First[forallTelescope[leanExpression[name, "Type"]]];
-    recursorBinders = First[forallTelescope[leanExpression[name <> ".rec", "Type"]]];
-    motives = Position[recursorBinders, {_, type_ /; motiveTypeQ[type, name]}, {1}, Heads -> False];
-    If[ Length[motives] =!= 1,
-        bridgeFailure["MutualInductive", "`1` is a mutual or nested inductive type, which TypeTheory does not have yet.", {name}]
+    {recursorBinders, conclusion} = forallTelescope[leanExpression[name <> ".rec", "Type"]];
+    motivePosition = Replace[First[leanSpine[conclusion]], {
+        LeanBVar[index_Integer] :> Length[recursorBinders] - index,
+        _ :> bridgeFailure["Recursor", "The recursor of `1` does not end in a motive.", {name}]
+    }];
+    (* the parameters are as many as the motive of X takes X applied to; fewer would fit too *)
+    numberOfParameters = Replace[
+        SelectFirst[Range[motivePosition - 1, 0, -1], Function[count, blockTypeOfMotive[Last[recursorBinders[[motivePosition]]], count, motivePosition - count] === {name}], None],
+        None :> bridgeFailure["Recursor", "The parameters of `1` could not be read from its recursor.", {name}]
     ];
-    numberOfParameters = First[First[motives]] - 1;
-    numberOfIndices = Length[typeBinders] - numberOfParameters;
+    motiveTypes = Last /@ TakeWhile[Drop[recursorBinders, numberOfParameters], Function[binder, MatchQ[Last[forallTelescope[Last[binder]]], _LeanSort]]];
+    block = Catenate[MapIndexed[Function[{motiveType, position}, blockTypeOfMotive[motiveType, numberOfParameters, First[position]]], motiveTypes]];
+    numberOfMinors = Length[recursorBinders] - Length[motiveTypes] - Length[typeBinders] - 1;
+    constructors = minorConstructor /@ Take[recursorBinders, {numberOfParameters + Length[motiveTypes] + 1, numberOfParameters + Length[motiveTypes] + numberOfMinors}];
     <|
         "Parameters" -> numberOfParameters,
-        "Constructors" -> Map[minorConstructor, Take[recursorBinders, {numberOfParameters + 2, Length[recursorBinders] - numberOfIndices - 1}]]
+        "Block" -> block,
+        "Nested" -> Length[motiveTypes] - Length[block],
+        "BlockConstructors" -> Select[constructors, Function[constructor, MemberQ[block, constructorInductive[constructor]]]],
+        "Constructors" -> Select[constructors, Function[constructor, constructorInductive[constructor] === name]]
     |>
 ]
 
-motiveTypeQ[type_, name_String] := MatchQ[Last[forallTelescope[type]], _LeanSort] && ! FreeQ[First[forallTelescope[type]], LeanConst[name, _]]
+(* {type} when the motive at that position takes a term of a type of the block: one applied to exactly the
+   parameters, bound outside the motive and the motives before it, and then the motive's own indices; {}
+   for a container, whose parameters mention the block *)
+blockTypeOfMotive[motiveType_, numberOfParameters_Integer, position_Integer] := With[
+    {binders = First[forallTelescope[motiveType]], numberOfIndices = Length[First[forallTelescope[motiveType]]] - 1},
+    Replace[leanSpine[Last[Last[binders]]], {
+        {LeanConst[type_String, _], arguments_} /; arguments === Join[
+            Table[LeanBVar[numberOfParameters - parameter + position - 1 + numberOfIndices], {parameter, numberOfParameters}],
+            Table[LeanBVar[numberOfIndices - index], {index, numberOfIndices}]
+        ] :> {type},
+        _ :> {}
+    }]
+]
 
 minorConstructor[{_, minorType_}] := Replace[First[leanSpine[Last[Last[leanSpine[Last[forallTelescope[minorType]]]]]]], {
     LeanConst[constructor_String, _] :> constructor,
@@ -292,7 +329,12 @@ placeholderLevels[n_Integer] := LeanLevelParam /@ placeholderNames[n]
 
 (* === Declarations === *)
 
-constantName[name_String] := If[constantKind[name] === "recursor", InductiveRecursor[StringDrop[name, -4]], name]
+constantName[name_String] := If[constantKind[name] === "recursor", recursorConstantName[name], name]
+
+recursorConstantName[name_String] := Replace[StringCases[name, RegularExpression["^(.*)\\.rec_(\\d+)$"] :> {"$1", "$2"}], {
+    {{type_, index_}} :> InductiveRecursor[type, ToExpression[index]],
+    _ :> InductiveRecursor[StringDrop[name, -4]]
+}]
 
 leanDeclarations[name_String] := Block[{$currentConstant = name, universes = universeParameters[name]},
     Switch[constantKind[name],
@@ -319,13 +361,17 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
 inductiveDeclarations[name_String, universes_List] := Block[{information = inductiveInformation[name]},
     With[
         {
-            type = leanTerm[leanExpression[name, "Type"]],
-            constructors = Function[constructor, constructor -> leanTerm[leanExpression[constructor, "Type"]]] /@ information["Constructors"],
+            types = Function[type, type -> leanTerm[leanExpression[type, "Type"]]] /@ information["Block"],
+            constructors = Function[constructor, constructor -> leanTerm[leanExpression[constructor, "Type"]]] /@ information["BlockConstructors"],
             parameters = information["Parameters"]
         },
         Join[
-            {TypeTheoryInductiveType[name, type, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]},
-            If[name === "Nat" && information["Constructors"] === {"Nat.zero", "Nat.succ"}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ"]}, {}]
+            (* a type nested in a container is declared alone: TypeTheory finds the nesting as Lean's kernel does *)
+            If[ Length[types] == 1,
+                With[{type = Last[First[types]]}, {TypeTheoryInductiveType[name, type, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}],
+                {TypeTheoryInductiveType[types, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
+            ],
+            If[name === "Nat" && information["BlockConstructors"] === {"Nat.zero", "Nat.succ"}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ"]}, {}]
         ]
     ]
 ]
@@ -360,8 +406,10 @@ natOperationsQ[] := natOperationsQ[] = MatchQ[Information[TypeTheoryEnvironment[
 
 (* the recursor TypeTheory generated must have Lean's type, compared at the same placeholder levels *)
 
-checkRecursor[environment_, name_String] := Block[
-    {recursor = name <> ".rec", levels, leanType},
+checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecursorType[environment, name, recursor]], blockRecursors[name]]
+
+checkRecursorType[environment_, name_String, recursor_String] := Block[
+    {levels, leanType},
     levels = placeholderLevels[Length[universeParameters[recursor]]];
     leanType = typeCheck[LeanConst[recursor, levels], $handle]["Type"];
     With[
