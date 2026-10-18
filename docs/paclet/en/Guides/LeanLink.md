@@ -7,7 +7,7 @@ Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/guide/LeanLink
 Description: Native bridge to the Lean 4 theorem prover - import Mathlib, inspect proof terms, run tactics, transpile ProofObjects, and compile Lean to native code.
 Keywords: [Lean, Lean 4, theorem prover, proof, theorem, tactic, term, Mathlib, dependent types, type theory, LibraryLink, ProofObject, interactive proof]
-RelatedTutorials: [LeanLinkIntro, ExploringMathlib, ImportGraph]
+RelatedTutorials: [LeanLinkIntro, ExploringMathlib, ImportGraph, CheckingMathlib]
 Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)](https://github.com/leanprover-community/mathlib4)"]
 ---
 

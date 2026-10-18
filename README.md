@@ -36,7 +36,7 @@ PacletInstall[ResourceObject["https://www.wolframcloud.com/obj/wolframinstitute/
 - **Builds and evaluation** — `LeanBuild` builds a Lake project; `LeanEvaluate` runs `#eval` and returns the value as Wolfram data
 - **Graphs** — expression trees and the dependency graph of a proof
 - **ProofToLean** — transpile Wolfram `ProofObject` to Lean environments
-- **TypeTheory bridge**: `LeanToTypeTheory` imports Lean constants into the Wolfram Language proof engine [TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), whose own kernel checks them again; `TypeTheoryToLean` writes TypeTheory proofs as Lean source for Lean's kernel
+- **TypeTheory bridge**: `LeanToTypeTheory` imports Lean constants into the Wolfram Language proof engine [TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), whose own kernel checks them again, whole Mathlib modules such as `Mathlib.Logic.Nonempty` and Lean's quotients with their computation rule included; `TypeTheoryToLean` writes TypeTheory proofs as Lean source for Lean's kernel
 - **LeanCompile** — lower Lean definitions to native code through `FunctionCompile`
 
 ## Quick Start
@@ -69,11 +69,12 @@ LeanEvaluate["(List.range 10).map (· ^ 2)"]
 
 ## Documentation
 
-The [documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink) has a reference page for every symbol, the guide [Lean 4 from the Wolfram Language](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#guide/LeanLink), and three tutorials:
+The [documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink) has a reference page for every symbol, the guide [Lean 4 from the Wolfram Language](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#guide/LeanLink), and four tutorials:
 
 - [Getting Started with LeanLink](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/LeanLinkIntro) — environments, terms, proof states and tactics
 - [Exploring Mathlib with LeanLink](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ExploringMathlib) — Mathlib theorems, their binders and typeclasses
 - [An Import Graph for Mathlib](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ImportGraph) — Mathlib's module dependencies, by namespace
+- [Checking Mathlib with TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/CheckingMathlib) — a whole module of Mathlib, checked again by TypeTheory's kernel
 
 The same pages install with the paclet and open in the Documentation Center.
 

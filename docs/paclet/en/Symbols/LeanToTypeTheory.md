@@ -8,6 +8,7 @@ URI: Wolfram/LeanLink/ref/LeanToTypeTheory
 Keywords: [Lean, TypeTheory, import, kernel, type checking, Calculus of Inductive Constructions, proof checking, recursor]
 SeeAlso: [TypeTheoryToLean, LeanImport, LeanImportString, LeanEnvironment, LeanTerm]
 RelatedGuides: [LeanLink]
+RelatedTutorials: [CheckingMathlib]
 ---
 
 ## Usage
@@ -25,7 +26,8 @@ RelatedGuides: [LeanLink]
 - Lean names stay strings, so the imported theorem `"Nat.zero_add"` is the constant `"Nat.zero_add"` of the TypeTheory environment, and Lean's `Nat` becomes its natural numbers, so literals mean the same.
 - Every application is imported with all its arguments given, so nothing is filled in again on the TypeTheory side, and every universe level is written out.
 - The option `"Environment"` gives a [TypeTheoryEnvironment](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory#ref/TypeTheoryEnvironment) to import into; constants it already declares are not imported again.
-- TypeTheory does not have string literals, mutual or nested inductive types, or the computation rule of Lean's quotient types yet. A constant that needs one gives a [Failure]() that says so.
+- TypeTheory does not have string literals or mutual and nested inductive types yet. A constant that needs one gives a [Failure]() that says so.
+- Lean's kernel has the computation rule of its quotient types built in. The import adds it as the TypeTheory rewrite rules `"Quot.lift computes"` and `"Quot.ind computes"`, so a cone with quotients, such as that of `funext`, is imported under the rules of the calculus of inductive constructions with rewrite rules allowed, unless the option `"Environment"` gives an environment of other rules.
 - The first call loads the paclet `WolframInstitute/TypeTheory`, which must be installed.
 
 ## Basic Examples
@@ -74,7 +76,7 @@ TypeTheory replays the whole import from scratch:
 TypeTheoryCheck[zeroAdd]
 ```
 
-<!-- => True -->
+<!-- => Success["EnvironmentChecked", ...] -->
 
 ---
 
@@ -86,6 +88,18 @@ Length[LeanToTypeTheory[lean["probe"]]]
 ```
 
 <!-- => 44 -->
+
+---
+
+`funext` is proved with Lean's quotient types, and checks with their computation rule:
+
+```wl
+lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"];
+funext = LeanToTypeTheory[lean, "funext"];
+Information[funext, "RewriteRules"]
+```
+
+<!-- => {"Quot.lift computes"} -->
 
 ## Possible Issues
 

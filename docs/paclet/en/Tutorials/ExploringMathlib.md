@@ -7,7 +7,7 @@ Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/tutorial/ExploringMathlib
 Keywords: [Lean, Mathlib, theorem, type, binder, typeclass, instance, proof]
 RelatedGuides: [LeanLink]
-RelatedTutorials: [LeanLinkIntro, ImportGraph]
+RelatedTutorials: [LeanLinkIntro, ImportGraph, CheckingMathlib]
 ---
 
 [Mathlib](https://github.com/leanprover-community/mathlib4) is Lean's community mathematics library. LeanLink imports any built Mathlib module and lets you read theorem statements, dissect their binder structure, and inspect the typeclass machinery behind them - all from the Wolfram Language. Every example below is guarded so the page still builds where Mathlib is absent.
