@@ -90,6 +90,16 @@ checked["Classical.arbitrary"]
 
 <!-- => definition Classical.arbitrary : ∀_α∶Sort u_3 ∀_[h∶Nonempty[α]] α := (α∶Sort u_3) [h∶Nonempty[α]] ↦ Classical.choice[h] -->
 
+Lean's notation, such as `↔` for `Iff`, belongs to Lean's syntax, not to its constants. TypeTheory shows a constant applied to its explicit arguments by giving that expression to [MakeBoxes](), so definitions of [MakeBoxes]() give a Lean name, a string, a notation:
+
+```wl
+MakeBoxes["Iff"[a_, b_], form_] := MakeBoxes[Equivalent[a, b], form];
+MakeBoxes["Eq"[a_, b_], form_] := MakeBoxes[a == b, form];
+TypeTheoryCheck[TypeTheoryTerm["Nonempty.forall", checked]]
+```
+
+<!-- => ∀_{α∶Sort u_3} ∀_{p∶Nonempty[α] → Prop} (∀_h∶Nonempty[α] p[h]) ⧦ (∀_a∶α p[Nonempty.intro[a]]) -->
+
 ## Checking It Again
 
 The environment can be checked again from scratch: [TypeTheoryCheck](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory#ref/TypeTheoryCheck) replays every declaration on an empty environment and compares what it gets with what is stored:
@@ -115,7 +125,7 @@ Information[funext, "RewriteRules"]
 funext["Quot.lift computes"]
 ```
 
-<!-- => rewrite Quot.lift computes : ∀_α∶Sort u ∀_r∶α → α → Prop ∀_β∶Sort v ∀_f∶α → β ∀_h∶∀_a∶α ∀_b∶α r[a, b] ⇒ Eq[f[a], f[b]] ∀_a∶α Quot.lift[f, h, Quot.mk[r, a]] ⟶ f[a] -->
+<!-- => rewrite Quot.lift computes : ∀_α∶Sort u ∀_r∶α → α → Prop ∀_β∶Sort v ∀_f∶α → β ∀_h∶∀_a∶α ∀_b∶α r[a, b] ⇒ f[a] == f[b] ∀_a∶α Quot.lift[f, h, Quot.mk[r, a]] ⟶ f[a] -->
 
 ## What TypeTheory Does Not Check Yet
 
