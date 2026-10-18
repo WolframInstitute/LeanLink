@@ -101,16 +101,21 @@ locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = ba
 
 (* Constructors and recursors come with their inductive type; the others come after what they mention. *)
 
-coneOrder[roots_List] := Block[{$visited = <||>},
-    Flatten[Last[Reap[Scan[visitConstant, roots], $coneTag]]]
-]
-
-visitConstant[name_String] := Block[{primary = primaryName[name]},
-    If[ ! KeyExistsQ[$visited, primary],
-        $visited[primary] = True;
-        Scan[visitConstant, DeleteCases[constantDependencies[primary], Alternatives @@ ownNames[primary]]];
-        Sow[primary, $coneTag]
-    ]
+coneOrder[roots_List] := Block[{visited = <||>, stack = CreateDataStructure["Stack"], order = CreateDataStructure["DynamicArray"]},
+    Scan[Function[root, stack["Push", {root, False}]], Reverse[roots]];
+    While[ ! stack["EmptyQ"],
+        Replace[stack["Pop"], {
+            {primary_, True} :> order["Append", primary],
+            {name_, False} :> With[{primary = primaryName[name]},
+                If[ ! KeyExistsQ[visited, primary],
+                    visited[primary] = True;
+                    stack["Push", {primary, True}];
+                    Scan[Function[dependency, stack["Push", {dependency, False}]], Reverse[DeleteCases[constantDependencies[primary], Alternatives @@ ownNames[primary]]]]
+                ]
+            ]
+        }]
+    ];
+    Normal[order]
 ]
 
 primaryName[name_String] := Switch[constantKind[name],
