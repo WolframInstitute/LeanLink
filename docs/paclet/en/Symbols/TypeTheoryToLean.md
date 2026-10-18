@@ -29,15 +29,14 @@ RelatedGuides: [LeanLink]
 Prove `0 + n == n` by induction in TypeTheory, then write the proof as Lean source:
 
 ```wl
-prelude = TypeTheoryEnvironment["Prelude"];
-proof = TypeTheoryProof[ForAll[{Typed[n, NonNegativeIntegers]}, 0 + n == n], prelude, {
+proof = TypeTheoryProof[ForAll[{Typed[n, NonNegativeIntegers]}, 0 + n == n], {
     TypeTheoryTactic["Introduce", n],
     TypeTheoryTactic["Induction", n],
     TypeTheoryTactic["Reflexivity"],
     TypeTheoryTactic["Introduce", k, ih],
     TypeTheoryTactic["Exact", EqualityCongruence[NaturalNumberSuccessor, ih]]
 }];
-proved = Append[prelude, TypeTheoryTheorem[AdditionZeroLeft, proof]];
+proved = TypeTheoryEnvironment[{TypeTheoryTheorem[AdditionZeroLeft, proof]}];
 source = TypeTheoryToLean[proved, AdditionZeroLeft]
 ```
 
@@ -69,7 +68,7 @@ TypeTheoryToLean[imported, "Eq.symm"]
 A constant the environment does not declare:
 
 ```wl
-TypeTheoryToLean[TypeTheoryEnvironment["Prelude"], NotAConstant]
+TypeTheoryToLean[TypeTheoryEnvironment[{TypeTheoryTheorem[TwoPlusTwo, 2 + 2 == 4, EqualityReflexivity[4]]}], NotAConstant]
 ```
 
 <!-- => Failure["UnknownConstant", ...] -->
