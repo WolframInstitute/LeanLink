@@ -21,10 +21,17 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+A Lean theorem, compiled from source:
+
+```wl
+env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 Export an environment to a temporary `.lean` file:
 
 ```wl
-env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
 file = LeanExport[FileNameJoin[{$TemporaryDirectory, "out.lean"}], env]
 ```
 

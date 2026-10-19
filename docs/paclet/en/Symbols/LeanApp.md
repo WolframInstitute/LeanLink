@@ -40,10 +40,17 @@ LeanApp[LeanApp[LeanConst["Nat.add"], LeanLitNat[2]], LeanLitNat[3]]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 Bound to an environment, an applied expression type-checks - `Nat.succ 42 : Nat`:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]["TypeForm"]
 ```
 

@@ -40,18 +40,27 @@ Load the bundled example environment:
 env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
 ```
 
-<!-- => LeanEnvironment summary box: 25 constants -->
+<!-- => LeanEnvironment summary box: 32 constants -->
 
 ---
 
-How many constants, and of what kinds:
+The example environment bundled with the paclet:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
+How many constants:
+
+```wl
 Length[env]
 ```
 
-<!-- => 25 -->
+<!-- => 32 -->
+
+Of what kinds:
 
 ```wl
 Information[env, "Kinds"]
@@ -61,10 +70,17 @@ Information[env, "Kinds"]
 
 ---
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 A single constant is a [LeanTerm]() summary box:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]
 ```
 
@@ -76,7 +92,7 @@ Its type, pretty-printed as Lean source - the proposition it proves:
 env["id_proof"]["TypeForm"]
 ```
 
-<!-- => "∀ (P : Prop) (a : P), P" -->
+<!-- => "∀ (P : Prop), P → P" -->
 
 And the proof term:
 
@@ -88,10 +104,17 @@ env["id_proof"]["TermForm"]
 
 ---
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 Every expression is a tree; `"ExprGraph"` draws it:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]["ExprGraph"]
 ```
 
@@ -123,10 +146,17 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 
 ---
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 The `"Parameters"` property unfolds a theorem's binder chain - explicit, implicit, and instance arguments - as a [Dataset]():
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["modus_ponens"]["Parameters"] // Dataset
 ```
 
@@ -134,18 +164,50 @@ env["modus_ponens"]["Parameters"] // Dataset
 
 ## Applications
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 Open any theorem as a proof goal and step through it with tactics:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 s0 = LeanState[env["id_proof"]]
 ```
 
-<!-- => LeanState summary box, 1 goal: ⊢ ∀ (P : Prop), P → P -->
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
+
+Introduce the proposition:
 
 ```wl
-s1 = LeanTactic[{"intro P", "intro h", "exact h"}][s0];
-s1["Complete"]
+s1 = LeanTactic["intro P"][s0]
+```
+
+<!-- => 1 goal: P : Prop ⊢ P → P -->
+
+Then the hypothesis:
+
+```wl
+s2 = LeanTactic["intro h"][s1]
+```
+
+<!-- => 1 goal: P : Prop, h : P ⊢ P -->
+
+And close the goal with the hypothesis:
+
+```wl
+s3 = LeanTactic["exact h"][s2]
+```
+
+<!-- => No goals -->
+
+The proof is complete:
+
+```wl
+s3["Complete"]
 ```
 
 <!-- => True -->
@@ -155,11 +217,20 @@ s1["Complete"]
 Transpile a Wolfram [ProofObject]() into a checkable Lean environment:
 
 ```wl
-leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]]
+```
+
+<!-- => LeanEnvironment summary box: 5 constants -->
+
+The generated constants - premises, derived step, and goal:
+
+```wl
 Keys[leanEnv]
 ```
 
 <!-- => {"Ax1", "Ax2", "Hyp1", "SL1", "FinalGoal"} -->
+
+Opening the final goal confirms the transpiled proof:
 
 ```wl
 LeanState[leanEnv["FinalGoal"]]["Complete"]
@@ -169,11 +240,25 @@ LeanState[leanEnv["FinalGoal"]]["Complete"]
 
 ---
 
+A Lean definition, compiled from source:
+
+```wl
+addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 Lower a (non-dependent) Lean definition to native code via [FunctionCompile]():
 
 ```wl
-addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"];
-cf = LeanCompile[addEnv["myAdd"]];
+cf = LeanCompile[addEnv["myAdd"]]
+```
+
+<!-- => CompiledCodeFunction summary box: Type {Integer64, Integer64} → Integer64 -->
+
+Run it:
+
+```wl
 cf[3, 4]
 ```
 
@@ -181,14 +266,29 @@ cf[3, 4]
 
 ## Properties and Relations
 
-[LeanImportString]() round-trips with [LeanExportString](): import a source string, query it, and export an environment back to Lean source:
+[LeanImportString]() round-trips with [LeanExportString](). Import a source string:
 
 ```wl
-imported = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
+imported = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
+Query it:
+
+```wl
 imported["myT"]["TypeForm"]
 ```
 
 <!-- => "Nat.succ 0 = 1" -->
+
+And export it back to Lean source:
+
+```wl
+LeanExportString[imported]
+```
+
+<!-- => "theorem myT : (Nat.succ (OfNat.ofNat Nat 0 (instOfNatNat 0))) = (OfNat.ofNat Nat 1 (instOfNatNat 1)) := sorry" -->
 
 [ProofToLean]() complements [MetamathImport]() - both bring an external formal-proof corpus into the Wolfram Language; LeanLink targets Lean 4 / Mathlib and additionally drives the prover interactively.
 

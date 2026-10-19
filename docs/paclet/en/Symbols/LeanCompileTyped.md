@@ -21,10 +21,17 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+A Lean definition, compiled from source:
+
+```wl
+addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 On a non-dependent definition it compiles to a runnable function:
 
 ```wl
-addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"];
 cf = LeanCompileTyped[addEnv["myAdd"]];
 cf[3, 4]
 ```

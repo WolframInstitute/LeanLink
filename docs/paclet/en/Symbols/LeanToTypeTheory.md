@@ -34,11 +34,25 @@ RelatedTutorials: [CheckingMathlib]
 
 ## Basic Examples
 
-Import `Eq.symm` with what it depends on, and see the constants TypeTheory checked:
+A Lean theorem, compiled from source:
 
 ```wl
-lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"];
-env = LeanToTypeTheory[lean, "Eq.symm"];
+lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
+Import `Eq.symm` with what it depends on:
+
+```wl
+env = LeanToTypeTheory[lean, "Eq.symm"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 5 constants -->
+
+The constants TypeTheory checked:
+
+```wl
 Keys[env]
 ```
 
@@ -54,11 +68,25 @@ env["Eq.symm"]
 
 ## Scope
 
+A Lean theorem, compiled from source:
+
+```wl
+lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 A theorem about natural number addition brings Lean's structures and its compiled recursion with it:
 
 ```wl
-lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"];
-zeroAdd = LeanToTypeTheory[lean, "Nat.zero_add"];
+zeroAdd = LeanToTypeTheory[lean, "Nat.zero_add"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 43 constants -->
+
+What it brought, by kind:
+
+```wl
 Information[zeroAdd, "Kinds"]
 ```
 
@@ -82,22 +110,43 @@ TypeTheoryCheck[zeroAdd]
 
 ---
 
+A Lean theorem, compiled from source:
+
+```wl
+lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 The constant of a [LeanTerm]():
 
 ```wl
-lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"];
-Length[LeanToTypeTheory[lean["probe"]]]
+LeanToTypeTheory[lean["probe"]]
 ```
 
-<!-- => 44 -->
+<!-- => TypeTheoryEnvironment summary box: 44 constants -->
 
 ---
+
+A Lean theorem, compiled from source:
+
+```wl
+lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
 
 `funext` is proved with Lean's quotient types, and checks with their computation rule:
 
 ```wl
-lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"];
-funext = LeanToTypeTheory[lean, "funext"];
+funext = LeanToTypeTheory[lean, "funext"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 13 constants -->
+
+Its rewrite rules:
+
+```wl
 Information[funext, "RewriteRules"]
 ```
 
@@ -105,10 +154,17 @@ Information[funext, "RewriteRules"]
 
 ---
 
+A Lean definition of a string, imported into TypeTheory:
+
+```wl
+greeting = LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 374 constants -->
+
 A string literal is written as Lean's kernel reads it:
 
 ```wl
-greeting = LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"];
 greeting["greeting"]
 ```
 
@@ -116,7 +172,7 @@ greeting["greeting"]
 
 ---
 
-Mutually inductive types import together, each with its recursor:
+Two mutually inductive types, imported from Lean:
 
 ```wl
 parity = LeanToTypeTheory[LeanImportString["mutual
@@ -125,7 +181,14 @@ inductive Even : Nat → Prop
   | succ {n : Nat} : Odd n → Even (n + 1)
 inductive Odd : Nat → Prop
   | succ {n : Nat} : Even n → Odd (n + 1)
-end"], "Even"];
+end"], "Even"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 40 constants -->
+
+Mutually inductive types import together, each with its recursor:
+
+```wl
 Select[Keys[parity], Function[key, ! FreeQ[key, "Even" | "Odd"]]]
 ```
 

@@ -21,11 +21,25 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
+Its identity theorem, opened as a proof state:
+
+```wl
+s0 = LeanState[env["id_proof"]]
+```
+
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
+
 The goal of a freshly opened state:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
-s0 = LeanState[env["id_proof"]];
 g = s0["Goals"][[1]]
 ```
 
@@ -49,11 +63,25 @@ g["Context"]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
+Its identity theorem, opened as a proof state:
+
+```wl
+s0 = LeanState[env["id_proof"]]
+```
+
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
+
 A [LeanState]() holds one or more [LeanGoal]()s; `"GoalCount"` is the length of its `"Goals"` list.
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
-s0 = LeanState[env["id_proof"]];
 Length[s0["Goals"]] == s0["GoalCount"]
 ```
 

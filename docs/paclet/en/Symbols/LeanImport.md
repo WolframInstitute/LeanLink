@@ -38,7 +38,7 @@ Import the bundled example environment from its file path:
 env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
 ```
 
-<!-- => LeanEnvironment summary box: 25 constants -->
+<!-- => LeanEnvironment summary box: 32 constants -->
 
 How many constants it holds:
 
@@ -46,7 +46,7 @@ How many constants it holds:
 Length[env]
 ```
 
-<!-- => 25 -->
+<!-- => 32 -->
 
 The constant names:
 
@@ -80,10 +80,17 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 
 <!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" -->
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 The breakdown of the bundled environment's constants by kind:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 Information[env, "Kinds"]
 ```
 

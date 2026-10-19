@@ -32,10 +32,17 @@ LeanCallGraph["or_comm_proof", "Files" -> {ex}]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 For a constant already in a [LeanEnvironment](), the in-process `"CallGraph"` property gives the same dependency view without a subprocess:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 VertexList @ env["or_comm_proof"]["CallGraph"]
 ```
 

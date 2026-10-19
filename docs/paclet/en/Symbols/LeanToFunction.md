@@ -20,10 +20,17 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+A Lean definition, compiled from source:
+
+```wl
+addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 Turn a Lean definition into a typed [Function]():
 
 ```wl
-addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"];
 LeanToFunction[addEnv["myAdd"]]
 ```
 
@@ -31,10 +38,17 @@ LeanToFunction[addEnv["myAdd"]]
 
 ## Properties and Relations
 
+A Lean definition, compiled from source:
+
+```wl
+addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 [LeanCompile]() is [LeanToFunction]() followed by [FunctionCompile]():
 
 ```wl
-addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"];
 FunctionCompile[LeanToFunction[addEnv["myAdd"]]][3, 4]
 ```
 

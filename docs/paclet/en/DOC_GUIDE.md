@@ -119,6 +119,12 @@ like $\forall P : \mathrm{Prop},\; P \to P$ in a tutorial heading - stays in
 - **No `Needs`.** MTN loads the package from the frontmatter `Context:`
   (`Context: Wolfram``LeanLink```) before it evaluates the cells, so an example
   never needs <code>Needs["Wolfram``LeanLink```"]</code>.
+- **Never hide what a main function returns.** A cell that calls [LeanImport](),
+  [LeanImportString](), [LeanToTypeTheory](), [LeanState](), [LeanTactic]() or
+  another function the page is about shows its result: the environment's
+  summary box, the proof state, the generated source. Do not end it with `;` to
+  ask the result something in the same cell; ask in the next cell. Only helpers
+  stay hidden: paths, module names, file lists, definitions.
 - **One output per cell.** Never show `{t["TypeForm"], t["TermForm"]}` to save a
   cell - split into two, each with its own caption.
 - **Show the summary box, not its guts.** [LeanTerm](), [LeanEnvironment](),

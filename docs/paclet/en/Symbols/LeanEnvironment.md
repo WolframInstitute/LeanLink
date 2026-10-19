@@ -27,15 +27,17 @@ Import the bundled environment:
 env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
 ```
 
-<!-- => LeanEnvironment summary box: 25 constants -->
+<!-- => LeanEnvironment summary box: 32 constants -->
 
-Its size and constant names:
+Its size:
 
 ```wl
 Length[env]
 ```
 
-<!-- => 25 -->
+<!-- => 32 -->
+
+Its constant names:
 
 ```wl
 Keys[env]
@@ -53,10 +55,17 @@ env["id_proof"]
 
 ## Scope
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 The available metadata properties:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 Information[env, "Properties"]
 ```
 
@@ -72,10 +81,17 @@ Information[env, "Kinds"]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 [Normal]() recovers the underlying [Association]() of [LeanTerm]() values:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 Head @ Normal[env]
 ```
 

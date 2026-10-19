@@ -30,10 +30,17 @@ LeanLam["x", LeanConst["Nat"], LeanBVar[0], "default"]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 A proof term is a [LeanLam]() - the identity proof's body is `fun x hp => hp`:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]["Term"] // Head
 ```
 

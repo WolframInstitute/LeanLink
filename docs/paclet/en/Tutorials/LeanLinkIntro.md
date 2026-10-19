@@ -20,7 +20,7 @@ LeanLink embeds the [Lean 4](https://lean-lang.org/) theorem prover in the Wolfr
 env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
 ```
 
-<!-- => LeanEnvironment summary box: 25 constants -->
+<!-- => LeanEnvironment summary box: 32 constants -->
 
 It holds a handful of definitions and proofs:
 
@@ -79,7 +79,14 @@ env["modus_ponens"]["ExprGraph"]
 You can build a Lean expression from the CIC heads and bind it to an environment for type-checking with <code>[LeanTerm]()[*expr*, *env*]</code>. Applying `Nat.succ` to a literal:
 
 ```wl
-t = LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env];
+t = LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]
+```
+
+<!-- => LeanTerm summary box -->
+
+Its type, as Lean writes it:
+
+```wl
 t["TypeForm"]
 ```
 
@@ -101,14 +108,35 @@ LeanTerm[LeanForall["n", LeanConst["Nat"], LeanConst["Nat"], "default"], env]["T
 s0 = LeanState[env["id_proof"]]
 ```
 
-<!-- => LeanState summary box, 1 goal -->
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
 
-Introduce the proposition and hypothesis, then close with the hypothesis:
+Introduce the proposition:
 
 ```wl
-s1 = LeanTactic["intro P"][s0];
-s2 = LeanTactic["intro h"][s1];
-s3 = LeanTactic["exact h"][s2];
+s1 = LeanTactic["intro P"][s0]
+```
+
+<!-- => 1 goal: P : Prop ⊢ P → P -->
+
+Then the hypothesis:
+
+```wl
+s2 = LeanTactic["intro h"][s1]
+```
+
+<!-- => 1 goal: P : Prop, h : P ⊢ P -->
+
+And close the goal with the hypothesis:
+
+```wl
+s3 = LeanTactic["exact h"][s2]
+```
+
+<!-- => No goals -->
+
+The proof is complete:
+
+```wl
 s3["Complete"]
 ```
 
@@ -134,25 +162,31 @@ LeanTactic[{"intro P Q hPQ hnQ hP", "apply hnQ", "exact hPQ hP"}][LeanState[env[
 
 ### And commutativity: $P \land Q \to Q \land P$
 
+```wl
+andComm = LeanState[env["and_comm_proof"]]
+```
+
+<!-- => 1 goal: ⊢ ∀ (P Q : Prop), P ∧ Q → Q ∧ P -->
+
 `constructor` splits the conjunction goal into two:
 
 ```wl
-s0 = LeanState[env["and_comm_proof"]];
-LeanTactic["constructor"][LeanTactic["intro P Q h"][s0]]["GoalCount"]
+LeanTactic["constructor"][LeanTactic["intro P Q h"][andComm]]
 ```
 
-<!-- => 2 -->
+<!-- => 2 goals: P Q : Prop, h : P ∧ Q ⊢ Q, and the same context ⊢ P -->
 
 ## Goal Properties
 
 A [LeanState]() exposes its goal stack. Each goal is a [LeanGoal]() with a `"Target"` and a `"Context"`:
 
 ```wl
-s0 = LeanState[env["id_proof"]];
 s0["Goals"][[1]]["Target"]
 ```
 
 <!-- => "∀ (P : Prop), P → P" -->
+
+Whether the proof is complete:
 
 ```wl
 s0["Complete"]
@@ -185,7 +219,14 @@ LeanExportString[env["id_proof"]]
 [LeanImportString]() compiles Lean source on the fly:
 
 ```wl
-imported = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
+imported = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
+The theorem's statement:
+
+```wl
 imported["myT"]["TypeForm"]
 ```
 
@@ -196,7 +237,14 @@ imported["myT"]["TypeForm"]
 [ProofToLean]() turns a Wolfram [ProofObject]() into a checkable [LeanEnvironment]() of axioms, lemmas, and a final theorem:
 
 ```wl
-leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]]
+```
+
+<!-- => LeanEnvironment summary box: 5 constants -->
+
+Its constants:
+
+```wl
 Keys[leanEnv]
 ```
 
@@ -262,13 +310,26 @@ LeanTactic["exact", LeanConst["h"]]
 
 <!-- => LeanTactic["exact", LeanConst["h", {}]] -->
 
-Applied the same way as string tactics:
+Applied the same way as string tactics, here to the identity's goal again:
 
 ```wl
-s0 = LeanState[env["id_proof"]];
-s1 = LeanTactic["intro", {"P"}][s0];
-s2 = LeanTactic["intro", {"h"}][s1];
-LeanTactic["exact", LeanConst["h"]][s2]["Complete"]
+structured = LeanTactic["intro", {"P"}][s0]
 ```
 
-<!-- => True -->
+<!-- => 1 goal: P : Prop ⊢ P → P -->
+
+Then the hypothesis:
+
+```wl
+structured = LeanTactic["intro", {"h"}][structured]
+```
+
+<!-- => 1 goal: P : Prop, h : P ⊢ P -->
+
+And close the goal with it:
+
+```wl
+LeanTactic["exact", LeanConst["h"]][structured]
+```
+
+<!-- => No goals -->

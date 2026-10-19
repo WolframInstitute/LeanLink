@@ -39,10 +39,17 @@ LeanForall["a", LeanConst["G"], LeanBVar[0], "implicit"]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 A theorem's type is a chain of [LeanForall]()s - here the identity proof `∀ (P : Prop) (a : P), P`:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]["Type"] // Head
 ```
 

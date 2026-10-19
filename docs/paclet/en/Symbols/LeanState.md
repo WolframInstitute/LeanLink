@@ -23,22 +23,31 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 Open a theorem as a goal:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 s0 = LeanState[env["id_proof"]]
 ```
 
 <!-- => LeanState summary box, 1 goal -->
 
-How many goals remain, and whether it is finished:
+How many goals remain:
 
 ```wl
 s0["GoalCount"]
 ```
 
 <!-- => 1 -->
+
+Whether it is finished:
 
 ```wl
 s0["Complete"]
@@ -56,11 +65,25 @@ s0["Goals"][[1]]["Target"]
 
 ## Scope
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
+Its identity theorem, opened as a proof state:
+
+```wl
+s0 = LeanState[env["id_proof"]]
+```
+
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
+
 Drive the proof to completion with a sequence of tactics:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
-s0 = LeanState[env["id_proof"]];
 LeanTactic[{"intro P", "intro h", "exact h"}][s0]["Complete"]
 ```
 

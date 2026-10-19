@@ -26,11 +26,18 @@ mathlibReady = DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]]
 
 ## Loading a Module
 
-`Mathlib.Logic.Nonempty` imports nothing of Mathlib but its initialization, so it sits at the bottom of the library. [LeanImport]() loads it with everything it imports, and the module's own constants are those whose `"Module"` it is:
+`Mathlib.Logic.Nonempty` imports nothing of Mathlib but its initialization, so it sits at the bottom of the library. [LeanImport]() loads it with everything it imports:
 
 ```wl
 module = "Mathlib.Logic.Nonempty";
-lean = If[mathlibReady, LeanImport[module, "ProjectDir" -> mathlibDir], <||>];
+lean = If[mathlibReady, LeanImport[module, "ProjectDir" -> mathlibDir], <||>]
+```
+
+<!-- => LeanEnvironment summary box: 106304 constants -->
+
+The module's own constants are those whose `"Module"` it is:
+
+```wl
 own = Select[Keys[lean], lean[#]["Module"] === module &];
 Length[own]
 ```
@@ -50,11 +57,10 @@ lean["Nonempty.forall"]["TypeForm"]
 [LeanToTypeTheory]() imports the 37 constants, and with them every constant they depend on, from Lean's core library and Mathlib's, into one environment, which TypeTheory's kernel checks declaration by declaration:
 
 ```wl
-checked = LeanToTypeTheory[lean, own];
-Length[checked]
+checked = LeanToTypeTheory[lean, own]
 ```
 
-<!-- => 155 -->
+<!-- => TypeTheoryEnvironment summary box: 155 constants -->
 
 What the environment holds, by kind; each inductive type comes with its constructors and the recursor TypeTheory generates for it, which the import compares with Lean's:
 
@@ -116,11 +122,20 @@ TypeTheoryCheck[checked]
 Lean's kernel has the computation rule of its quotient types built in: lifting a function to a quotient and applying it to a class gives the function's value. `funext` is proved with it. The import adds the rule as a TypeTheory rewrite rule, under the rules of the calculus of inductive constructions with rewrite rules allowed:
 
 ```wl
-funext = LeanToTypeTheory[lean, "funext"];
+funext = LeanToTypeTheory[lean, "funext"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 13 constants -->
+
+Its rewrite rules:
+
+```wl
 Information[funext, "RewriteRules"]
 ```
 
 <!-- => {"Quot.lift computes"} -->
+
+The rule, as declared:
 
 ```wl
 funext["Quot.lift computes"]
@@ -135,7 +150,14 @@ Lean's first file, `Init.Prelude`, depends on 1,381 constants, and TypeTheory ch
 Lean's syntax trees are a nested inductive type: a node holds an array of trees. TypeTheory checks the nesting as Lean's kernel does, and generates a recursor on each container the trees are nested in, the array and the list inside it, which the import compares with Lean's `Lean.Syntax.rec_1` and `Lean.Syntax.rec_2`:
 
 ```wl
-syntax = LeanToTypeTheory[lean, "Lean.Syntax"];
+syntax = LeanToTypeTheory[lean, "Lean.Syntax"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 375 constants -->
+
+The recursors of `Lean.Syntax`, one for the type and one for each container:
+
+```wl
 Select[Keys[syntax], MatchQ[InductiveRecursor["Lean.Syntax", ___]]]
 ```
 
@@ -144,7 +166,14 @@ Select[Keys[syntax], MatchQ[InductiveRecursor["Lean.Syntax", ___]]]
 A string literal is the list of its characters, as Lean's kernel reads it, so the names of the syntax kinds import:
 
 ```wl
-kinds = LeanToTypeTheory[lean, "Lean.nullKind"];
+kinds = LeanToTypeTheory[lean, "Lean.nullKind"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 381 constants -->
+
+The name of the null kind, a list of characters:
+
+```wl
 kinds["Lean.nullKind"]
 ```
 
@@ -153,7 +182,14 @@ kinds["Lean.nullKind"]
 And Lean's kernel computes `Nat.add`, `Nat.mul`, `Nat.ble` and the other operations on natural number literals with GMP. The import registers each with TypeTheory, which then computes it with integers, so a statement about the size of machine words, 2^32 or 2^64, checks at once:
 
 ```wl
-words = LeanToTypeTheory[lean, "USize.size_eq"];
+words = LeanToTypeTheory[lean, "USize.size_eq"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 113 constants -->
+
+The statement, checked:
+
+```wl
 TypeTheoryCheck[TypeTheoryTerm["USize.size_eq", words]]
 ```
 
@@ -161,6 +197,6 @@ TypeTheoryCheck[TypeTheoryTerm["USize.size_eq", words]]
 
 ## Beyond the Prelude
 
-LeanLink's repository has a script, `typetheory_coverage.wls`, that imports every constant of a list of modules, with what it depends on in order, into one TypeTheory environment and reports what checks. The 25 modules at the bottom of Mathlib, from the logic of `Nonempty` and unique existence to options, orderings and folds over lists, check completely, with all 5,113 constants they depend on, in about three minutes. So does `Real.sqrt_nonneg`, with the 11,177 constants it depends on through Mathlib's construction of the real numbers, in under seven minutes.
+LeanLink's repository has a script, `typetheory_coverage.wls`, that imports every constant of a list of modules, with what it depends on in order, into one TypeTheory environment and reports what checks. The 25 modules at the bottom of Mathlib, from the logic of `Nonempty` and unique existence to options, orderings and folds over lists, check completely, with all 5,291 constants they depend on, in under four minutes. So does `Real.sqrt_nonneg`, with the 11,177 constants it depends on through Mathlib's construction of the real numbers, in under seven minutes.
 
 TypeTheory rejects none of these constants. A proof that a tactic writes shares its subterms in Lean, and the import shares them too, translating each distinct subterm once: a proof that `grind` writes in `Mathlib.Data.Int.Init` has 3.6 million nodes written out and under 6,000 distinct ones, and TypeTheory checks it, with the 2,889 constants it depends on, in a minute and a half.

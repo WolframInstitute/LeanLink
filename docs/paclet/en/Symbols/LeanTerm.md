@@ -37,22 +37,31 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 A constant from an imported environment:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["id_proof"]
 ```
 
 <!-- => LeanTerm summary box: Name id_proof, Kind theorem -->
 
-Its type as Lean source, and its proof body:
+Its type as Lean source:
 
 ```wl
 env["id_proof"]["TypeForm"]
 ```
 
-<!-- => "∀ (P : Prop) (a : P), P" -->
+<!-- => "∀ (P : Prop), P → P" -->
+
+Its proof body:
 
 ```wl
 env["id_proof"]["TermForm"]
@@ -70,10 +79,17 @@ env["id_proof"]["Type"]
 
 ## Scope
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 The binder chain as a [Dataset]():
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 env["modus_ponens"]["Parameters"] // Dataset
 ```
 
@@ -89,10 +105,17 @@ env["id_proof"]["ExprGraph"]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 A hand-built expression, bound to an environment, type-checks against it:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]["TypeForm"]
 ```
 
@@ -103,7 +126,14 @@ LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]["TypeForm"]
 `"Axioms"` reports what `#print axioms` reports, and trusts what it trusts: that every declaration passed Lean's kernel when its module was built. A module can skip that check, with `set_option debug.skipKernelTC true` or by adding a declaration directly with `addDecl`, and a forged proof then shows no axioms. Here a theorem of type `False` is "proved" by `True.intro`:
 
 ```wl
-forged = LeanImportString["import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"]["Forged.falseProof"];
+forged = LeanImportString["import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"]["Forged.falseProof"]
+```
+
+<!-- => LeanTerm summary box: Name Forged.falseProof, Kind theorem -->
+
+It reports no axioms:
+
+```wl
 forged["Axioms"]
 ```
 

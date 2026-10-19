@@ -45,16 +45,30 @@ Several declarations at once, separated by newlines:
 
 ```wl
 env = LeanImportString["def double (n : Nat) : Nat := n + n
-theorem myT : Nat.succ 0 = 1 := rfl"];
+theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 2 constants -->
+
+Their names:
+
+```wl
 Keys[env]
 ```
 
 <!-- => {"double", "myT"} -->
 
-An inductive type:
+An inductive type, with everything Lean declares for it:
 
 ```wl
-defs = LeanImportString["inductive Dir where | L | R deriving Repr"];
+defs = LeanImportString["inductive Dir where | L | R deriving Repr"]
+```
+
+<!-- => LeanEnvironment summary box: 11 constants -->
+
+Its type:
+
+```wl
 defs["Dir"]["TypeForm"]
 ```
 
@@ -75,11 +89,25 @@ Keys[LeanImportString["import Demo\nopen Demo\ntheorem tri4 : triangle 4 = 10 :=
 
 ## Properties and Relations
 
-[LeanImportString]() round-trips with [LeanExportString](): import source, query it, and export an environment back to Lean source.
+A Lean theorem, compiled from source:
 
 ```wl
-env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
-src = LeanExportString[env];
+env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
+Exported back to Lean source:
+
+```wl
+src = LeanExportString[env]
+```
+
+<!-- => "theorem myT : (Nat.succ (OfNat.ofNat Nat 0 (instOfNatNat 0))) = (OfNat.ofNat Nat 1 (instOfNatNat 1)) := sorry" -->
+
+[LeanImportString]() round-trips with [LeanExportString](): the exported source imports again to the same constant names:
+
+```wl
 Keys @ LeanImportString[src]
 ```
 

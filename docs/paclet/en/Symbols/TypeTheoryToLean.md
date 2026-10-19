@@ -28,7 +28,7 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
-Prove `0 + n == n` by induction in TypeTheory, then write the proof as Lean source:
+Prove `0 + n == n` by induction in TypeTheory:
 
 ```wl
 proof = TypeTheoryProof[ForAll[{Typed[n, NonNegativeIntegers]}, 0 + n == n], {
@@ -37,8 +37,22 @@ proof = TypeTheoryProof[ForAll[{Typed[n, NonNegativeIntegers]}, 0 + n == n], {
     TypeTheoryTactic["Reflexivity"],
     TypeTheoryTactic["Introduce", k, ih],
     TypeTheoryTactic["Exact", EqualityCongruence[NaturalNumberSuccessor, ih]]
-}];
-proved = TypeTheoryEnvironment[{TypeTheoryTheorem[ZeroLeftIdentity, proof]}];
+}]
+```
+
+<!-- => Proof complete -->
+
+A theorem with that proof, added to the prelude:
+
+```wl
+proved = TypeTheoryEnvironment[{TypeTheoryTheorem[ZeroLeftIdentity, proof]}]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 110 constants -->
+
+Write the theorem as Lean source:
+
+```wl
 source = TypeTheoryToLean[proved, ZeroLeftIdentity]
 ```
 
@@ -47,7 +61,14 @@ source = TypeTheoryToLean[proved, ZeroLeftIdentity]
 Lean compiles it, and its kernel accepts the proof:
 
 ```wl
-leanEnv = LeanImportString[source];
+leanEnv = LeanImportString[source]
+```
+
+<!-- => LeanEnvironment summary box: 2 constants -->
+
+The theorem, as Lean states it:
+
+```wl
 leanEnv["TypeTheory.ZeroLeftIdentity"]["TypeForm"]
 ```
 
@@ -55,11 +76,25 @@ leanEnv["TypeTheory.ZeroLeftIdentity"]["TypeForm"]
 
 ## Scope
 
+A Lean theorem, compiled from source:
+
+```wl
+lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
+Lean's `Eq.symm`, imported into TypeTheory:
+
+```wl
+imported = LeanToTypeTheory[lean, "Eq.symm"]
+```
+
+<!-- => TypeTheoryEnvironment summary box: 5 constants -->
+
 A constant imported from Lean keeps its name, so an imported environment exports nothing again:
 
 ```wl
-lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"];
-imported = LeanToTypeTheory[lean, "Eq.symm"];
 TypeTheoryToLean[imported, "Eq.symm"]
 ```
 
@@ -70,7 +105,14 @@ TypeTheoryToLean[imported, "Eq.symm"]
 The prelude proves the excluded middle from its axioms, which are Lean's, so Lean checks the proof with its own axioms:
 
 ```wl
-classical = LeanImportString[TypeTheoryToLean[TypeTheoryEnvironment["Prelude"], ExcludedMiddle]];
+classical = LeanImportString[TypeTheoryToLean[TypeTheoryEnvironment["Prelude"], ExcludedMiddle]]
+```
+
+<!-- => LeanEnvironment summary box: 6 constants -->
+
+The theorem, as Lean states it:
+
+```wl
 classical["TypeTheory.ExcludedMiddle"]["TypeForm"]
 ```
 

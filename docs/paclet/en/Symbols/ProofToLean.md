@@ -48,10 +48,17 @@ leanEnv["FinalGoal"]["TypeForm"]
 
 ## Scope
 
+An equational proof, transpiled to Lean:
+
+```wl
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]]
+```
+
+<!-- => LeanEnvironment summary box: 5 constants -->
+
 The whole transpiled environment as Lean 4 source:
 
 ```wl
-leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
 LeanExportString[leanEnv]
 ```
 
@@ -72,10 +79,17 @@ theorem FinalGoal : a = c := by
 
 ## Properties and Relations
 
+An equational proof, transpiled to Lean:
+
+```wl
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]]
+```
+
+<!-- => LeanEnvironment summary box: 5 constants -->
+
 The transpiled goal re-checks: opening it with [LeanState]() and stepping the generated proof drives it to completion.
 
 ```wl
-leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
 LeanState[leanEnv["FinalGoal"]]["Complete"]
 ```
 

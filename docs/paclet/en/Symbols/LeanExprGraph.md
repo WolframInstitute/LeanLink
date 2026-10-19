@@ -32,10 +32,17 @@ LeanExprGraph["id_proof", "Files" -> {ex}]
 
 ## Properties and Relations
 
+The example environment bundled with the paclet:
+
+```wl
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
 For a constant already in a [LeanEnvironment](), the in-process `"ExprGraph"` property gives the same picture without a subprocess:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
 VertexCount @ env["id_proof"]["ExprGraph"]
 ```
 

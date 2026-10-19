@@ -21,19 +21,22 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
+A proof found by [FindEquationalProof](), transpiled to Lean:
+
+```wl
+leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]]
+```
+
+<!-- => LeanEnvironment summary box: 5 constants -->
+
 Export a transpiled proof - the cleanest round-trip, since [ProofToLean]() emits real tactic bodies:
 
 ```wl
-leanEnv = ProofToLean[FindEquationalProof[a == c, {a == b, b == c}]];
 LeanExportString[leanEnv]
 ```
 
 <!-- =>
 axiom U : Type
-
-axiom a : U
-axiom b : U
-axiom c : U
 
 axiom Ax1 : b = a
 axiom Ax2 : b = c
@@ -49,10 +52,17 @@ theorem FinalGoal : a = c := by
 
 ## Scope
 
+A Lean theorem, compiled from source:
+
+```wl
+env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 Exporting an imported environment renders each declaration's type, with `sorry` standing in for bodies that are not reconstructible from compiled data:
 
 ```wl
-env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
 LeanExportString[env]
 ```
 
@@ -60,10 +70,17 @@ LeanExportString[env]
 
 ## Properties and Relations
 
+A Lean theorem, compiled from source:
+
+```wl
+env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
 [LeanExportString]() round-trips with [LeanImportString](): exported source re-imports to the same constant names.
 
 ```wl
-env = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
 Keys @ LeanImportString @ LeanExportString[env]
 ```
 

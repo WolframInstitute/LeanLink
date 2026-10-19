@@ -43,11 +43,10 @@ mathlibReady = DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]]
 ```wl
 algEnv = If[ mathlibReady,
     LeanImport["Mathlib.Algebra.Group.Basic", "ProjectDir" -> mathlibDir, "Filter" -> "mul"],
-    <||>];
-If[mathlibReady, Length[algEnv], "Mathlib not built"]
+    "Mathlib not built"]
 ```
 
-<!-- => 2272 -->
+<!-- => LeanEnvironment summary box: 3387 constants -->
 
 ## Reading a Theorem's Type
 
@@ -57,7 +56,7 @@ A theorem's `"TypeForm"` is the proposition it proves. `mul_comm` states commuta
 If[mathlibReady, algEnv["mul_comm"]["TypeForm"], "Mathlib not built"]
 ```
 
-<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" -->
+<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a b : G), a * b = b * a" -->
 
 And `one_mul` - one is a left identity:
 
@@ -104,17 +103,26 @@ A different module, the same workflow. Load the logic basics, filtered to the co
 ```wl
 logicEnv = If[ mathlibReady,
     LeanImport["Mathlib.Logic.Basic", "ProjectDir" -> mathlibDir, "Filter" -> "comm"],
-    <||>];
+    "Mathlib not built"]
+```
+
+<!-- => LeanEnvironment summary box: 476 constants -->
+
+`And.comm`, commutativity of conjunction:
+
+```wl
 If[mathlibReady, logicEnv["And.comm"]["TypeForm"], "Mathlib not built"]
 ```
 
-<!-- => "∀ {a : Prop} {b : Prop}, a ∧ b ⇔ b ∧ a" -->
+<!-- => "∀ {a b : Prop}, a ∧ b ↔ b ∧ a" -->
+
+And of disjunction, `Or.comm`:
 
 ```wl
 If[mathlibReady, logicEnv["Or.comm"]["TypeForm"], "Mathlib not built"]
 ```
 
-<!-- => "∀ {a : Prop} {b : Prop}, a ∨ b ⇔ b ∨ a" -->
+<!-- => "∀ {a b : Prop}, a ∨ b ↔ b ∨ a" -->
 
 ## Expression Graphs
 

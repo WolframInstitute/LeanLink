@@ -35,26 +35,83 @@ LeanTactic["intro P"]
 
 <!-- => LeanTactic["intro P"] -->
 
-Apply a sequence to a proof state and check it closes:
+The example environment bundled with the paclet:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
-s0 = LeanState[env["id_proof"]];
-LeanTactic[{"intro P", "intro h", "exact h"}][s0]["Complete"]
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
+Its identity theorem, opened as a proof state:
+
+```wl
+s0 = LeanState[env["id_proof"]]
+```
+
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
+
+Apply a sequence to the proof state:
+
+```wl
+s1 = LeanTactic[{"intro P", "intro h", "exact h"}][s0]
+```
+
+<!-- => No goals -->
+
+It closes the goal:
+
+```wl
+s1["Complete"]
 ```
 
 <!-- => True -->
 
 ## Scope
 
-Step one tactic at a time, threading the state:
+The example environment bundled with the paclet:
 
 ```wl
-env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]];
-s0 = LeanState[env["id_proof"]];
-s1 = LeanTactic["intro P"][s0];
-s2 = LeanTactic["intro h"][s1];
-s3 = LeanTactic["exact h"][s2];
+env = LeanImport[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]]
+```
+
+<!-- => LeanEnvironment summary box: 32 constants -->
+
+Its identity theorem, opened as a proof state:
+
+```wl
+s0 = LeanState[env["id_proof"]]
+```
+
+<!-- => 1 goal: ⊢ ∀ (P : Prop), P → P -->
+
+Step one tactic at a time, threading the state. Introduce the proposition:
+
+```wl
+s1 = LeanTactic["intro P"][s0]
+```
+
+<!-- => 1 goal: P : Prop ⊢ P → P -->
+
+Then the hypothesis:
+
+```wl
+s2 = LeanTactic["intro h"][s1]
+```
+
+<!-- => 1 goal: P : Prop, h : P ⊢ P -->
+
+And close the goal with the hypothesis:
+
+```wl
+s3 = LeanTactic["exact h"][s2]
+```
+
+<!-- => No goals -->
+
+The proof is complete:
+
+```wl
 s3["Complete"]
 ```
 
@@ -68,8 +125,10 @@ LeanTactic["exact", LeanConst["h"]]
 
 <!-- => LeanTactic["exact", LeanConst["h", {}]] -->
 
+It applies to a state as a string tactic does. After two structured `intro` steps, it closes the identity's goal:
+
 ```wl
-LeanTactic["exact", LeanConst["h"]][LeanTactic["intro", {"h"}][LeanTactic["intro", {"P"}][s0]]]["Complete"]
+LeanTactic["exact", LeanConst["h"]][LeanTactic["intro", {"h"}][LeanTactic["intro", {"P"}][s0]]]
 ```
 
-<!-- => True -->
+<!-- => No goals -->

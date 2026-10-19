@@ -23,14 +23,23 @@ RelatedGuides: [LeanLink]
 
 ## Basic Examples
 
-Compile a Lean definition to a native function and run it:
+A Lean definition, compiled from source:
 
 ```wl
-addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"];
+addEnv = LeanImportString["def myAdd (x y : Nat) : Nat := x + y"]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
+
+Compile a Lean definition to a native function:
+
+```wl
 cf = LeanCompile[addEnv["myAdd"]]
 ```
 
-<!-- => CompiledCodeFunction[...] (signature {MachineInteger, MachineInteger} -> MachineInteger) -->
+<!-- => CompiledCodeFunction summary box: Type {Integer64, Integer64} → Integer64 -->
+
+Run it:
 
 ```wl
 cf[3, 4]
@@ -40,16 +49,25 @@ cf[3, 4]
 
 ## Scope
 
-Compiling a whole environment returns an [Association]() of the eligible definitions:
+Two Lean definitions, compiled from source:
 
 ```wl
 env = LeanImportString["def myAdd (x y : Nat) : Nat := x + y
-def myMul (x y : Nat) : Nat := x * y"];
+def myMul (x y : Nat) : Nat := x * y"]
+```
+
+<!-- => LeanEnvironment summary box: 2 constants -->
+
+Compiling a whole environment returns an [Association]() of the eligible definitions:
+
+```wl
 compiled = LeanCompile[env];
 Head[compiled]
 ```
 
 <!-- => Association -->
+
+Run one of them:
 
 ```wl
 compiled["myMul"][6, 7]
