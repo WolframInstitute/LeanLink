@@ -135,7 +135,6 @@ LeanLink/
 │   │   ├── ProofToLean.wl     # ProofObject -> Lean transpiler
 │   │   ├── TypeTheoryBridge.wl       # LeanToTypeTheory, TypeTheoryToLean: entry points
 │   │   ├── TypeTheoryTranslation.wl  # The bridge, loaded with TypeTheory on first use
-│   │   ├── Compiler.wl        # Dependent types for the Wolfram Compiler
 │   │   └── Utilities.wl       # ImportDOT and other helpers
 │   ├── Assets/                # Bundled .lean files, hero image
 │   ├── Tests/                 # .wlt test suite

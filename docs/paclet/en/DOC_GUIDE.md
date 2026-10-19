@@ -186,20 +186,14 @@ the build degrades to an explanatory string instead of an error:
   ~5000 files) are fine in a tutorial but keep them out of `## Basic Examples`
   on a Symbol page.
 
-## Deferred: the compiler-backed pages
+## The compiler-backed pages
 
-[LeanCompile](), [LeanToFunction](), and [LeanCompileTyped]() lower a Lean term
-to a [FunctionCompile]() function. The **dependent-type** path (`TypePi`,
-Vector-sized signatures) needs a *forked* Wolfram compiler (`TypePi.m`,
-`TypeSort.m`, ...) reached through the `compiler` symlink. Where that fork is
-absent the dependent path cannot be verified, so:
-
-- The non-dependent examples *are* verifiable - `LeanCompile` of a
-  `Nat -> Nat -> Nat` definition compiles and runs - and belong on those Symbol
-  pages now.
-- The **Dependent Types** and **Turing Machine** tutorials are **deferred** until
-  the fork is present on the build machine; do not ship unverified output for
-  them. (If you have the fork, build them and drop this note.)
+[LeanCompile]() and [LeanToFunction]() lower a Lean term to a
+[FunctionCompile]() function with the stock Wolfram compiler: `LeanCompile` of a
+`Nat -> Nat -> Nat` definition compiles and runs, so their examples are
+verified like any other. A dependent type, such as a `Vector Int n` signature,
+has no compiler type and does not compile. The **Turing Machine** tutorial is
+deferred; the standalone notebook linked from the README covers it for now.
 
 ## Page shape
 

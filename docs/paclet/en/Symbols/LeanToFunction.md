@@ -5,7 +5,7 @@ Context: Wolfram`LeanLink`
 Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/ref/LeanToFunction
 Keywords: [Lean, function, Typed, FunctionCompile, convert, native]
-SeeAlso: [LeanCompile, LeanCompileTyped, LeanTerm]
+SeeAlso: [LeanCompile, LeanTerm]
 RelatedGuides: [LeanLink]
 ---
 

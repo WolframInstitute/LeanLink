@@ -3943,33 +3943,9 @@ LeanToFunction[term_LeanTerm] := Block[
     If[Length[argSpecs] === 1, Function @@ {argSpecs[[1]], bodyWL}, Function @@ {argSpecs, bodyWL}]
 ]
 
-(* ---- Dependent type detection ---- *)
-
-(* Check if a Lean type expression has any dependent forall binder.
-   A forall is dependent when the bound variable (LeanBVar[0] at that depth)
-   appears free in the body - i.e., the return type depends on the argument. *)
-
-hasDependentBinderQ[LeanForall[_, _, body_, "default"]] := ! FreeQ[body, LeanBVar[0]] || hasDependentBinderQ[body]
-
-hasDependentBinderQ[LeanForall[_, _, body_, _]] := hasDependentBinderQ[body]
-
-hasDependentBinderQ[_] := False
-
 (* ---- LeanCompile: convenience for FunctionCompile ---- *)
 
-LeanCompile[term_LeanTerm] := Block[
-    {typeExpr, fn}
-    ,
-(* If the type has dependent binders, use the TypePi-aware path 
-    *)
-    typeExpr = term["Type"];
-    If[ ! MatchQ[typeExpr, _Missing | $Failed] && hasDependentBinderQ[typeExpr],
-        With[{cf = Quiet[LeanCompileTyped[term]]},
-            If[MatchQ[cf, _CompiledCodeFunction], Return[cf]]
-        ]
-    ];
-    (* Fallback: simple path *)
-    fn = LeanToFunction[term];
+LeanCompile[term_LeanTerm] := Block[{fn = LeanToFunction[term]},
     If[FailureQ[fn], $Failed, FunctionCompile[fn]]
 ]
 

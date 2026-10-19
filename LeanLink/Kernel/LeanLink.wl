@@ -240,5 +240,3 @@ Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Proof
 (* The bridge to WolframInstitute/TypeTheory: its entry points only; the rest loads on the first call *)
 
 Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "TypeTheoryBridge.wl"}]];
-
-(* Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Compiler.wl"}]]; *)

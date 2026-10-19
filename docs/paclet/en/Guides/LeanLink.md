@@ -86,8 +86,6 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 
 - [LeanToFunction]() convert a [LeanTerm]() into a [Function]() with [Typed]() arguments
 - [LeanCompile]() compile a [LeanTerm]() (or whole environment) via [FunctionCompile]()
-- [LeanCompileTyped]() compile and annotate the result with its dependent type
-- [LeanExprToType]() translate a Lean type expression into a compiler type object
 
 ### Out-of-process project queries
 

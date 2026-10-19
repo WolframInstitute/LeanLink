@@ -320,7 +320,7 @@ When practical, organize a `.wl` file in this order:
 
 `LeanLink/Kernel/LeanLink.wl` is the entry point (the context
 `Wolfram``LeanLink``` resolves to it); it `Get`s `Utilities.wl`,
-`Lean.wl`, `ProofToLean.wl`, and `Compiler.wl` in dependency order.
+`Lean.wl`, `ProofToLean.wl`, and `TypeTheoryBridge.wl` in dependency order.
 
 ## Comments
 

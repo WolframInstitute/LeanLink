@@ -5,7 +5,7 @@ Context: Wolfram`LeanLink`
 Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/ref/LeanCompile
 Keywords: [Lean, compile, FunctionCompile, native, code, CompiledCodeFunction]
-SeeAlso: [LeanToFunction, LeanCompileTyped, LeanImportString, LeanTerm]
+SeeAlso: [LeanToFunction, LeanImportString, LeanTerm]
 RelatedGuides: [LeanLink]
 ---
 
@@ -19,7 +19,7 @@ RelatedGuides: [LeanLink]
 
 - The Lean definition's argument and result types are mapped to Wolfram compiler types - `Nat` and `Int` to `"MachineInteger"`, `Bool` to `"Boolean"`, `Float` to `"Real64"`, `String` to `"String"` - and the body is lowered through [FunctionCompile]().
 - Only computational definitions compile; propositions and theorems are skipped by the environment form.
-- The **non-dependent** path runs against the stock Wolfram compiler. The **dependent-type** path (`Vector` sizes carried in a `TypePi` signature) needs a forked compiler; see [LeanCompileTyped]() and [Possible Issues].
+- A dependent type, such as `Vector Int n`, where the size `n` appears in the type, has no compiler type, so a definition of that type does not compile.
 
 ## Basic Examples
 
@@ -74,7 +74,3 @@ compiled["myMul"][6, 7]
 ```
 
 <!-- => 42 -->
-
-## Possible Issues
-
-A definition whose type is **dependent** (for example `Vector Int n`, where the size `n` appears in the type) compiles through [LeanCompileTyped](), which annotates the result with a `TypePi` signature and requires a forked Wolfram compiler. Where that fork is absent, restrict [LeanCompile]() to non-dependent definitions.
