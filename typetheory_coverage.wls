@@ -12,7 +12,9 @@
    defaults to ~/src/mathlib4; the time limit for each constant to 300 seconds. TypeTheory loads from
    --typetheory, by default the checkout next to this one when there is one, and otherwise as
    installed. --out saves the status of every constant to a file, <|name -> "OK" | {"Failed", tag,
-   message} | {"Blocked", dependency}|>, which Get reads back. *)
+   message} | {"Blocked", dependency}|>, which Get reads back; it is saved every 100 constants as well,
+   and the constant being checked is in the file of the same name with ".current" added, so a run that
+   crashes leaves what it found and where it stopped. *)
 
 $RecursionLimit = 20000;
 
@@ -61,6 +63,11 @@ coverageVisit[name_String] := With[{primary = Replace[Catch[primaryName[name], $
 	]
 ]
 
+(* the constant being checked, in a file of its own, so a crash of the kernel names it *)
+recordCurrent[name_String] := If[ StringQ[$statusFile],
+	With[{stream = OpenWrite[$statusFile <> ".current"]}, WriteString[stream, name]; Close[stream]]
+]
+
 failureStatus[failure_] := {
 	"Failed",
 	If[FailureQ[failure], First[failure], "Other"],
@@ -98,12 +105,16 @@ coverage[handle_, rootGroups_List] := Block[
 			Function[group,
 				Scan[
 					Function[name,
+						recordCurrent[name];
 						With[{outcome = coverageStatus[name, environment]},
 							$status[name] = First[outcome];
+							(* an environment lives for the session, so the one replaced is removed, or each would stay *)
+							If[ Last[outcome] =!= environment, Remove @@ {First[environment]}];
 							environment = Last[outcome]
 						];
+						If[ Mod[Length[$status], 100] == 0 && StringQ[$statusFile], Put[$status, $statusFile]];
 						If[ Mod[Length[$status], 200] == 0,
-							Print[Length[$status], " constants, ", Count[$status, "OK"], " check, ", Round[AbsoluteTime[] - start], " s"]
+							Print[Length[$status], " constants, ", Count[$status, "OK"], " check, ", Round[AbsoluteTime[] - start], " s, ", Round[MemoryInUse[] / 2.^30, 0.1], " GB"]
 						]
 					],
 					Flatten[Last[Reap[Scan[coverageVisit, group], $coneTag]]]
