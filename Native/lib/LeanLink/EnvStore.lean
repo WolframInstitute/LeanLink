@@ -497,9 +497,13 @@ def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteAr
     let structConsts := allUsed.toArray.foldl (init := #[]) fun acc n =>
       if typeSet.contains n || valueSet.contains n then acc
       else acc.push (WXF.string n.toString)
+    -- whether a string literal occurs, which the kernel reads as String.ofList of its characters
+    let hasString (e : Expr) : Bool := (e.find? fun | .lit (.strVal _) => true | _ => false).isSome
+    let strings := hasString ci.type || (ci.value? true).any hasString
     let result := WXF.wlAssociation #[
       (WXF.string "type", WXF.wlList typeConsts),
-      (WXF.string "value", WXF.wlList (valueConsts ++ structConsts))
+      (WXF.string "value", WXF.wlList (valueConsts ++ structConsts)),
+      (WXF.string "stringLiterals", WXF.symbol (if strings then "True" else "False"))
     ]
     return WXF.serialize result
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")

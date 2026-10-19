@@ -188,9 +188,16 @@ constantDependencies[name_String] := DeleteDuplicates @ Join[
 
 $stringLiteralConstants = {"String.ofList", "List.cons", "List.nil", "Char.ofNat", "Char"}
 
-stringLiteralQ[name_String] := ! FreeQ[
+(* Lean reports whether a constant has a string literal with the constants it mentions, so a proof of
+   millions of nodes is not read just to look; a shim from before LeanLink 1.1.7 does not, and then the
+   expressions are read *)
+stringLiteralQ[name_String] := AnyTrue[
+    If[constantKind[name] === "inductive", blockMembers[name], {name}],
+    Function[member, Replace[Lookup[usedInformation[member], "stringLiterals", None], None :> stringLiteralReadQ[member]]]
+]
+
+stringLiteralReadQ[name_String] := ! FreeQ[
     Switch[constantKind[name],
-        "inductive", Function[member, leanExpression[member, "Type"]] /@ blockMembers[name],
         "def" | "theorem", {leanExpression[name, "Type"], leanExpression[name, "Term"]},
         _, {leanExpression[name, "Type"]}
     ],
@@ -210,9 +217,9 @@ blockRecursors[name_String] := With[{block = inductiveInformation[name]["Block"]
     Join[Function[type, type <> ".rec"] /@ block, Table[First[block] <> ".rec_" <> ToString[index], {index, inductiveInformation[name]["Nested"]}]]
 ]
 
-usedConstants[name_String] := Block[{used = Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]]},
-    If[AssociationQ[used], Join[Lookup[used, "type", {}], Lookup[used, "value", {}]], {}]
-]
+usedConstants[name_String] := With[{used = usedInformation[name]}, Join[Lookup[used, "type", {}], Lookup[used, "value", {}]]]
+
+usedInformation[name_String] := Replace[Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]], Except[_Association] -> <||>]
 
 constantKind[name_String] := Lookup[$kinds, name, $kinds[name] = Replace[Quiet[decodeWXF[$getConstantFn[$handle, name]]], {
     LeanConstant[_, kind_String, ___] :> kind,
