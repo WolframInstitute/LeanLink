@@ -317,6 +317,9 @@ def typeCheckExport (handle : UInt64) (exprWXF : @& ByteArray) : IO ByteArray :=
     -- Type-check in MetaM
     let ctx : Core.Context := {
       fileName := "<typecheck>"
+      -- inferring a type does not run tactics, and in a session that has done much work a heartbeat limit
+      -- counted from the start of the process could stop it
+      maxHeartbeats := 0
       fileMap := { source := "", positions := #[0] }
     }
     let st : Core.State := { env }
@@ -338,9 +341,9 @@ def typeCheckExport (handle : UInt64) (exprWXF : @& ByteArray) : IO ByteArray :=
         return WXF.serialize (WXF.wlAssociation #[
           (WXF.string "Type", tyWXF),
           (WXF.string "TypeForm", ppWXF)])
-      | .error _ => return WXF.serialize (WXF.string "ERROR: type check failed")
-    catch _ =>
-      return WXF.serialize (WXF.string "ERROR: type check exception")
+      | .error e => return WXF.serialize (WXF.string s!"ERROR: type check failed: {← e.toMessageData.toString}")
+    catch e =>
+      return WXF.serialize (WXF.string s!"ERROR: type check exception: {e}")
 
 /-- Get full constant info as WXF. -/
 @[export leanlink_get_constant]

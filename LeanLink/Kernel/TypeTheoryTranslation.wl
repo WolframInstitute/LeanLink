@@ -309,7 +309,9 @@ readUniverseParameters[name_String] := Block[{count, raw, instantiated, pairs, m
     If[ count === None && Length[DeleteDuplicates[raw]] <= 1,
         Return[DeleteDuplicates[raw], Block]
     ];
-    If[count === None, bridgeFailure["UniverseParameters", "The universe parameters of `1` could not be read from Lean.", {name}]];
+    If[ count === None,
+        bridgeFailure["UniverseParameters", "The universe parameters of `1` could not be read from Lean: `2`", {name, typeCheckError[LeanConst[name, placeholderLevels[Length[DeleteDuplicates[raw]]]]]}]
+    ];
     If[ count === 0,
         {},
         instantiated = Cases[typeCheck[LeanConst[name, placeholderLevels[count]], $handle]["Type"], LeanLevelParam[parameter_] :> parameter, Infinity];
@@ -320,6 +322,9 @@ readUniverseParameters[name_String] := Block[{count, raw, instantiated, pairs, m
         ] /@ placeholderNames[count]
     ]
 ]
+
+(* what Lean's type check says when it does not give a type *)
+typeCheckError[expression_] := Replace[Quiet[decodeWXF[$typeCheckFn[$handle, Normal[BinarySerialize[expression]]]]], {message_String :> message, other_ :> ToString[Short[other]]}]
 
 (* placeholders must be Lean names, and distinct, or Lean merges them *)
 
@@ -411,7 +416,10 @@ checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecurso
 checkRecursorType[environment_, name_String, recursor_String] := Block[
     {levels, leanType},
     levels = placeholderLevels[Length[universeParameters[recursor]]];
-    leanType = typeCheck[LeanConst[recursor, levels], $handle]["Type"];
+    leanType = Replace[typeCheck[LeanConst[recursor, levels], $handle], {
+        result_Association :> result["Type"],
+        _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]
+    }];
     With[
         {
             ours = TypeTheoryTerm @@ Append[heldSurface[surfaceConstruct[constantSurface[LeanConst[recursor, levels]]]], environment],
