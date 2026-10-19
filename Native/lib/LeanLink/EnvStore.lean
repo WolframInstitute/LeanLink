@@ -503,7 +503,10 @@ def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteAr
     let result := WXF.wlAssociation #[
       (WXF.string "type", WXF.wlList typeConsts),
       (WXF.string "value", WXF.wlList (valueConsts ++ structConsts)),
-      (WXF.string "stringLiterals", WXF.symbol (if strings then "True" else "False"))
+      (WXF.string "stringLiterals", WXF.symbol (if strings then "True" else "False")),
+      -- in the order the constant declares them, which a universe parameter that does not occur in the type
+      -- has as well
+      (WXF.string "levelParams", WXF.wlList (ci.levelParams.toArray.map fun n => WXF.string n.toString))
     ]
     return WXF.serialize result
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")

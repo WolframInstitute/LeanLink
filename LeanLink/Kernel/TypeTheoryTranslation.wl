@@ -308,7 +308,9 @@ leanSpine[expression_] := {expression, {}}
 
 (* === Universe parameters === *)
 
-universeParameters[name_String] := Lookup[$universes, name, $universes[name] = readUniverseParameters[name]]
+(* Lean reports a constant's universe parameters with the constants it mentions; a shim before LeanLink 1.1.7
+   does not, and then they are read off the constant's type, which misses one that does not occur in it *)
+universeParameters[name_String] := Lookup[$universes, name, $universes[name] = Replace[Lookup[usedInformation[name], "levelParams", None], None :> readUniverseParameters[name]]]
 
 readUniverseParameters[name_String] := Block[{count, raw, instantiated, pairs, mapping},
     count = SelectFirst[Range[0, 8], Function[n, AssociationQ[typeCheck[LeanConst[name, placeholderLevels[n]], $handle]]], None];

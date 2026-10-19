@@ -59,6 +59,15 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-a-string-literal-is-written-as-Lean-reads-it"
 ]
 
+(* a universe parameter that occurs in a field but not in the type, as Lean.ToLevel's *)
+VerificationTest[
+    With[{environment = LeanToTypeTheory[LeanImportString["structure FieldLevel.{u} : Type where\n  level : Nat\n  proof : Sort u → True"], "FieldLevel"]},
+        {KeyExistsQ[environment, "FieldLevel"], KeyExistsQ[environment, "FieldLevel.mk"]}
+    ],
+    {True, True},
+    TestID -> "LeanToTypeTheory-a-universe-parameter-only-a-field-mentions"
+]
+
 (* a definition a macro makes has a hygienic name, x._@.M.3._hygCtx._hyg.8, which String.toName cannot parse *)
 VerificationTest[
     With[{environment = LeanToTypeTheory[LeanImportString["macro \"hygienic\" : command => `(def hidden : Nat := 1\ndef $(Lean.mkIdent `visible) : Nat := hidden + 1)\nhygienic"], "visible"]},
