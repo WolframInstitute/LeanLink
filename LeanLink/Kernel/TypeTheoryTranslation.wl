@@ -64,7 +64,7 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
    with Lean's quotient types is imported, by default, under rules that allow their computation rule. *)
 
 importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ Block[
-    {$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
+    {$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
     cone = coneOrder[roots];
     baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
     order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
@@ -346,16 +346,16 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
         "inductive",
             inductiveDeclarations[name, universes],
         "def",
-            With[{value = leanTerm[leanExpression[name, "Term"]], type = leanTerm[leanExpression[name, "Type"]], levels = universes},
+            With[{value = declarationTerm[leanExpression[name, "Term"]], type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
                 Prepend[natOperationRegistration[name], TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels]]
             ],
         "theorem",
-            With[{statement = leanTerm[leanExpression[name, "Type"]], proof = leanTerm[leanExpression[name, "Term"]], levels = universes},
+            With[{statement = declarationTerm[leanExpression[name, "Type"]], proof = declarationTerm[leanExpression[name, "Term"]], levels = universes},
                 {TypeTheoryTheorem[name, statement, proof, "UniverseParameters" -> levels]}
             ],
         (* an opaque constant's value never unfolds, and a quotient's computation rule is not in TypeTheory yet *)
         "axiom" | "opaque" | "quot",
-            With[{type = leanTerm[leanExpression[name, "Type"]], levels = universes}, {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}],
+            With[{type = declarationTerm[leanExpression[name, "Type"]], levels = universes}, {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}],
         _,
             bridgeFailure["UnsupportedConstant", "`1` is a `2`, which the bridge cannot translate.", {name, constantKind[name]}]
     ]
@@ -366,8 +366,8 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
 inductiveDeclarations[name_String, universes_List] := Block[{information = inductiveInformation[name]},
     With[
         {
-            types = Function[type, type -> leanTerm[leanExpression[type, "Type"]]] /@ information["Block"],
-            constructors = Function[constructor, constructor -> leanTerm[leanExpression[constructor, "Type"]]] /@ information["BlockConstructors"],
+            types = Function[type, type -> declarationTerm[leanExpression[type, "Type"]]] /@ information["Block"],
+            constructors = Function[constructor, constructor -> declarationTerm[leanExpression[constructor, "Type"]]] /@ information["BlockConstructors"],
             parameters = information["Parameters"]
         },
         Join[
@@ -439,6 +439,74 @@ checkRecursorType[environment_, name_String, recursor_String] := Block[
    cleaned of hygiene and made distinct from the names in scope and from the constants. *)
 
 leanTerm[expression_] := TypeTheoryTerm @@ heldSurface[leanSurface[expression, {}]]
+
+(* === Core terms === *)
+
+(* Lean's terms and TypeTheory's core terms both number bound variables from the innermost binder, so a
+   Lean term goes into a declaration as a core term, with no names to choose and each distinct subterm
+   translated once: a proof that a tactic writes shares its subterms thousands of times over, and the core
+   term shares them as Lean's does. TypeTheory 0.11 takes a core term in a declaration as it is, and its
+   kernel checks the declaration; with an earlier TypeTheory, the declaration gets the term's surface
+   syntax. *)
+
+declarationTerm[expression_] := If[coreTermsQ[], leanCore[expression], leanTerm[expression]]
+
+coreTermsQ[] := coreTermsQ[] = With[{type = coreHead["universeSort"][1]},
+    ! FailureQ[Quiet[TypeTheoryEnvironment[TypeTheoryEnvironment[], {TypeTheoryAxiom["coreTermsProbe", type]}]]]
+]
+
+coreHead[name_String] := coreHead[name] = Symbol["WolframInstitute`TypeTheory`PackageScope`" <> name]
+
+(* each distinct subterm once, for the length of an import *)
+leanCore[expression_] := If[ AssociationQ[$coreTerms],
+    Lookup[$coreTerms, Key[expression], $coreTerms[expression] = leanCoreNode[expression]],
+    Block[{$coreTerms = <||>}, leanCore[expression]]
+]
+
+$coreTerms = None
+
+leanCoreNode[LeanBVar[index_Integer]] := coreHead["boundVariable"][index]
+
+leanCoreNode[LeanSort[level_]] := coreHead["universeSort"][coreLevel[level]]
+
+leanCoreNode[LeanConst[name_String, levels_List]] := coreHead["constantReference"][HoldComplete @@ {constantName[name]}, coreLevel /@ levels]
+
+leanCoreNode[LeanApp[function_, argument_]] := coreHead["application"][leanCore[function], leanCore[argument]]
+
+leanCoreNode[LeanLam[binderName_String, type_, body_, binder_String]] := coreHead["lambdaAbstraction"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[body], coreBinder[binder]]
+
+leanCoreNode[LeanForall[binderName_String, type_, body_, binder_String]] := coreHead["dependentFunctionType"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[body], coreBinder[binder]]
+
+leanCoreNode[LeanLet[binderName_String, type_, value_, body_]] := coreHead["localDefinition"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[value], leanCore[body]]
+
+leanCoreNode[LeanLitNat[n_Integer]] := coreHead["naturalLiteral"][n]
+
+leanCoreNode[LeanProj[structure_String, index_Integer, term_]] := coreHead["projection"][HoldComplete @@ {constantName[structure]}, index, leanCore[term]]
+
+(* a string literal is String.ofList of its characters, as in the surface syntax below *)
+leanCoreNode[LeanLitStr[string_String]] := With[{application = coreHead["application"], char = coreConstant["Char"]},
+    application[coreConstant["String.ofList"], Fold[
+        Function[{list, code}, application[application[application[coreHead["constantReference"][HoldComplete["List.cons"], {0}], char], application[coreConstant["Char.ofNat"], coreHead["naturalLiteral"][code]]], list]],
+        application[coreHead["constantReference"][HoldComplete["List.nil"], {0}], char],
+        Reverse[ToCharacterCode[string]]
+    ]]
+]
+
+leanCoreNode[other_] := bridgeFailure["UnsupportedExpression", "`1` contains `2`, which the bridge cannot translate.", {$currentConstant, Short[other]}]
+
+coreConstant[name_String] := coreHead["constantReference"][HoldComplete[name], {}]
+
+coreBinder[binder_String] := Replace[binder, {"default" -> "Explicit", "implicit" -> "Implicit", "instImplicit" -> "InstanceImplicit", "strictImplicit" -> "StrictImplicit", _ -> "Implicit"}]
+
+coreLevel[LeanLevelZero[]] := 0
+
+coreLevel[LeanLevelSucc[level_]] := coreHead["normalizeLevel"][coreHead["levelSuccessor"][coreLevel[level], 1]]
+
+coreLevel[LeanLevelMax[first_, second_]] := coreHead["normalizeLevel"][coreHead["levelMaximum"][coreLevel[first], coreLevel[second]]]
+
+coreLevel[LeanLevelIMax[first_, second_]] := coreHead["normalizeLevel"][coreHead["levelImpredicativeMaximum"][coreLevel[first], coreLevel[second]]]
+
+coreLevel[LeanLevelParam[name_String]] := coreHead["levelParameter"][HoldComplete[name]]
 
 heldSurface[surface_] := ReplaceAll[HoldComplete @@ {surface}, $surfaceHeads]
 
