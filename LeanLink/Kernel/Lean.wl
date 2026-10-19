@@ -3073,11 +3073,16 @@ LeanEnvironment /: LeanEnvironment[data_Association][key_String] := Block[{val =
     ]
 ]
 
-LeanEnvironment /: Keys[LeanEnvironment[data_Association]] := Select[Keys[data], ! StringStartsQ[#, "_"]&]
+(* An environment's constants are its LeanTerm values. Its other keys, such as "_Handle" and "_Source", describe
+   it; a constant's own name can start with "_" too, as Lean's private names do. *)
 
-LeanEnvironment /: Values[LeanEnvironment[data_Association]] := Values[KeySelect[data, ! StringStartsQ[#, "_"]&]]
+environmentConstants[data_Association] := Select[data, MatchQ[#, _LeanTerm]&]
 
-LeanEnvironment /: Length[LeanEnvironment[data_Association]] := Length[Select[Keys[data], ! StringStartsQ[#, "_"]&]]
+LeanEnvironment /: Keys[LeanEnvironment[data_Association]] := Keys[environmentConstants[data]]
+
+LeanEnvironment /: Values[LeanEnvironment[data_Association]] := Values[environmentConstants[data]]
+
+LeanEnvironment /: Length[LeanEnvironment[data_Association]] := Length[environmentConstants[data]]
 
 LeanEnvironment /: KeyExistsQ[LeanEnvironment[data_Association], key_] := KeyExistsQ[data, key]
 
@@ -3091,10 +3096,10 @@ LeanEnvironment /: Information[env : LeanEnvironment[data_Association], "Propert
 
 LeanEnvironment /: Information[env : LeanEnvironment[data_Association], prop_String] := Switch[ prop,
     "Constants",
-        Select[Keys[data], ! StringStartsQ[#, "_"]&]
+        Keys[environmentConstants[data]]
     ,
     "Kinds",
-        Counts[Lookup[#[[1]], "Kind", "?"]& /@ Select[Values[data], MatchQ[#, _LeanTerm]&]]
+        Counts[Lookup[#[[1]], "Kind", "?"]& /@ Values[environmentConstants[data]]]
     ,
     "Handle",
         Lookup[data, "_Handle", None]
@@ -3115,8 +3120,8 @@ LeanEnvironment /: Information[env : LeanEnvironment[data_Association], prop_Str
 (* MakeBoxes for LeanEnvironment -- summary box *)
 
 LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardForm] := Block[{n, kinds, handle, hasSource, icon},
-    n = Length[Select[data, MatchQ[#, _LeanTerm]&]];
-    kinds = Counts[Lookup[#[[1]], "Kind", "?"]& /@ Select[Values[data], MatchQ[#, _LeanTerm]&]];
+    n = Length[environmentConstants[data]];
+    kinds = Counts[Lookup[#[[1]], "Kind", "?"]& /@ Values[environmentConstants[data]]];
     handle = Lookup[data, "_Handle", None];
     hasSource = StringQ[Lookup[data, "_Source", None]];
     icon = Graphics[{Hue[0.6, 0.5, 0.8], Disk[]}, ImageSize -> 12];
@@ -3965,7 +3970,7 @@ LeanCompile[term_LeanTerm] := Block[
 ]
 
 LeanCompile[env_LeanEnvironment] := Block[{data = env[[1]], names, results = <||>},
-    names = Select[Keys[data], ! StringStartsQ[#, "_"]&];
+    names = Keys[environmentConstants[data]];
     Do[
         With[{term = env[name]},
             If[ MatchQ[term, _LeanTerm],

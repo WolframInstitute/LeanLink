@@ -1049,4 +1049,14 @@ VerificationTest[
     TestID -> "LeanImport-names-with-macro-scopes-are-internal"
 ]
 
+VerificationTest[
+    With[{env = LeanEnvironment[<|"_private.M.0.helper" -> LeanTerm[<|"Kind" -> "theorem"|>], "f" -> LeanTerm[<|"Kind" -> "def"|>], "_Source" -> "", "_DeclOrder" -> {}|>]},
+        {Keys[env], Length[env], Length[Values[env]], Information[env, "Constants"]}
+    ]
+    ,
+    {{"_private.M.0.helper", "f"}, 2, 2, {"_private.M.0.helper", "f"}}
+    ,
+    TestID -> "LeanEnvironment-private-constants-are-constants"
+]
+
 EndTestSection[]
