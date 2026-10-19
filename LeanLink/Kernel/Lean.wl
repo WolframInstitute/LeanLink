@@ -98,7 +98,7 @@ LeanBuild::version = "The project pins `1` but LeanLink's runtime is `2`: LeanIm
 
 LeanEvaluate::usage = "LeanEvaluate[expr] evaluates the Lean expression expr (a string) with #eval and returns its value as a Wolfram Language expression, through JSON: Nat and Int give integers, Bool gives True or False, String gives strings, List and Array give lists. \"ProjectDir\" and \"Imports\" make a built project's modules available, \"Source\" adds declarations (definitions, opens) the expression uses, \"Open\" opens namespaces, \"TimeLimit\" bounds the run in seconds. The value is computed by Lean's interpreter, not checked by its kernel."
 
-LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
+LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. LeanImportString[{src1, src2, ...}] compiles the sources joined with newlines. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
 
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment."
 
@@ -2368,6 +2368,10 @@ LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFil
     If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
     result
 ]
+
+(* A list of sources is one source, the sources joined with newlines *)
+
+LeanImportString[sources : {__String}, opts : OptionsPattern[LeanImport]] := LeanImportString[StringRiffle[sources, "\n"], opts]
 
 (* --- LeanImport URL support --- *)
 

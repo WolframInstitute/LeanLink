@@ -1059,4 +1059,12 @@ VerificationTest[
     TestID -> "LeanEnvironment-private-constants-are-constants"
 ]
 
+VerificationTest[
+    Sort[Keys[LeanImportString[{"def f1 (n : Nat) : Nat := n + 1", "theorem f1_zero : f1 0 = 1 := rfl"}]]]
+    ,
+    {"f1", "f1_zero"}
+    ,
+    TestID -> "LeanImportString-list-of-sources-is-joined-with-newlines"
+]
+
 EndTestSection[]

@@ -126,7 +126,12 @@ LeanTerm[LeanApp[LeanConst["Nat.succ"], LeanLitNat[42]], env]["TypeForm"]
 `"Axioms"` reports what `#print axioms` reports, and trusts what it trusts: that every declaration passed Lean's kernel when its module was built. A module can skip that check, with `set_option debug.skipKernelTC true` or by adding a declaration directly with `addDecl`, and a forged proof then shows no axioms. Here a theorem of type `False` is "proved" by `True.intro`:
 
 ```wl
-forged = LeanImportString["import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"]["Forged.falseProof"]
+forged = LeanImportString[{
+    "import Lean",
+    "open Lean Elab Command",
+    "set_option debug.skipKernelTC true in",
+    "run_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"
+}]["Forged.falseProof"]
 ```
 
 <!-- => LeanTerm summary box: Name Forged.falseProof, Kind theorem -->

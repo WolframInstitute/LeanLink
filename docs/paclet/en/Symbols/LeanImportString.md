@@ -13,12 +13,15 @@ RelatedGuides: [LeanLink]
 
 <code>[LeanImportString]()[*src*]</code> compiles a Lean 4 source string and returns a [LeanEnvironment]() of the constants it declares.
 
+<code>[LeanImportString]()[{*src1*, *src2*, ...}]</code> compiles the sources joined with newlines.
+
 ## Details & Options
 
 - *src* is ordinary Lean 4 source: any mix of `def`, `theorem`, `inductive`, `structure`, and so on. Each top-level declaration becomes one [LeanTerm]() in the result.
 - The string is compiled by the `lean` of LeanLink's pinned toolchain and loaded into the embedded runtime. A type error in *src* returns [$Failed]() with a `LeanImport::err` message carrying Lean's diagnostic, as `lake build` would report it.
 - With `"ProjectDir" -> *dir*`, *src* can `import` the modules of the built Lake project in *dir*, of its packages, and of its path dependencies (`path = "../x"` in the lakefile). A theorem proved `by decide` against the project's definitions is then a kernel-checked claim about them.
 - Declarations inside a `namespace` are kept under their full names.
+- A list of sources is one source, joined with newlines: an `import` line, a few declarations and generated source go in as they are, with no string joining.
 - Use [LeanImportString]() for ad-hoc definitions and round-trips; use [LeanImport]() to pull constants from a compiled module such as Mathlib.
 
 ## Basic Examples
@@ -41,11 +44,10 @@ imported["myT"]["TypeForm"]
 
 ## Scope
 
-Several declarations at once, separated by newlines:
+Several declarations at once, as a list of sources:
 
 ```wl
-env = LeanImportString["def double (n : Nat) : Nat := n + n
-theorem myT : Nat.succ 0 = 1 := rfl"]
+env = LeanImportString[{"def double (n : Nat) : Nat := n + n", "theorem myT : Nat.succ 0 = 1 := rfl"}]
 ```
 
 <!-- => LeanEnvironment summary box: 2 constants -->
@@ -74,18 +76,25 @@ defs["Dir"]["TypeForm"]
 
 <!-- => "Type" -->
 
-Import a built project and check a claim about its definitions with the kernel:
+A small project, built with [LeanBuild]():
 
 ```wl
 dir = CreateDirectory[];
-Export[FileNameJoin[{dir, "lakefile.toml"}], "name = \"demo\"\n[[lean_lib]]\nname = \"Demo\"\n", "Text"];
+Export[FileNameJoin[{dir, "lakefile.toml"}], {"name = \"demo\"", "[[lean_lib]]", "name = \"Demo\""}, "Lines"];
 Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"];
-Export[FileNameJoin[{dir, "Demo.lean"}], "namespace Demo\ndef triangle (n : Nat) : Nat := n * (n + 1) / 2\nend Demo\n", "Text"];
-LeanBuild[dir, {"Demo"}];
-Keys[LeanImportString["import Demo\nopen Demo\ntheorem tri4 : triangle 4 = 10 := by decide", "ProjectDir" -> dir]]
+Export[FileNameJoin[{dir, "Demo.lean"}], {"namespace Demo", "def triangle (n : Nat) : Nat := n * (n + 1) / 2", "end Demo"}, "Lines"];
+LeanBuild[dir, {"Demo"}]
 ```
 
-<!-- => {"tri4"} -->
+<!-- => Success["Built", ...] -->
+
+Import it and check a claim about its definitions with the kernel:
+
+```wl
+LeanImportString[{"import Demo", "open Demo", "theorem tri4 : triangle 4 = 10 := by decide"}, "ProjectDir" -> dir]
+```
+
+<!-- => LeanEnvironment summary box: 1 constant -->
 
 ## Properties and Relations
 
