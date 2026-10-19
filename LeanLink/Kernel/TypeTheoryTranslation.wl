@@ -4,10 +4,12 @@
 
    From Lean: LeanToTypeTheory collects a constant's dependency cone through the native environment,
    orders it so each constant comes after the ones it mentions, and writes each constant as a TypeTheory
-   declaration whose terms are exact: every application is Construct[f, arguments...], so TypeTheory
-   fills in no implicit argument, and every universe level is given with Subscript. Lean names stay
-   strings; the recursor X.rec is TypeTheory's InductiveRecursor["X"], which TypeTheory generates itself
-   and the bridge then compares with Lean's. TypeTheory's kernel checks every declaration again.
+   declaration whose terms are TypeTheory's core terms, which share their subterms as Lean's do. With a
+   TypeTheory before 0.11, the terms are exact surface syntax instead: every application is
+   Construct[f, arguments...], so TypeTheory fills in no implicit argument, and every universe level is
+   given with Subscript. Lean names stay strings; the recursor X.rec is TypeTheory's
+   InductiveRecursor["X"], which TypeTheory generates itself and the bridge then compares with Lean's.
+   TypeTheory's kernel checks every declaration again.
 
    To Lean: TypeTheoryToLean reads declarations back from a TypeTheory environment exactly (Normal) and
    prints them as Lean source with every application explicit (@f a b). Constants that came from Lean
