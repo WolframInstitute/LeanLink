@@ -3255,20 +3255,21 @@ LeanGoal /: LeanGoal[data_Association][prop_String] := Switch[ prop,
         data[prop]
 ]
 
-(* Helper: pretty-print a goal target using leanPP when expression available *)
+(* Helper: a goal target as Lean prints it in the goal's context, which names its free variables;
+   leanPP, which cannot, only when the expression is all there is *)
 
-ppGoalTarget[g_Association] := If[ KeyExistsQ[g, "targetExpr"] && ! MatchQ[g["targetExpr"], _String | _Missing],
-    leanPP[g["targetExpr"]]
-    ,
-    Lookup[g, "target", "?"]
+ppGoalTarget[g_Association] := Which[
+    StringQ[Lookup[g, "target", None]], g["target"],
+    KeyExistsQ[g, "targetExpr"] && ! MatchQ[g["targetExpr"], _String | _Missing], leanPP[g["targetExpr"]],
+    True, "?"
 ]
 
-(* Helper: pretty-print a context entry type *)
+(* Helper: a context entry type, the same way *)
 
-ppCtxType[entry_Association] := If[ KeyExistsQ[entry, "typeExpr"] && ! MatchQ[entry["typeExpr"], _String | _Missing],
-    leanPP[entry["typeExpr"]]
-    ,
-    Lookup[entry, "type", "?"]
+ppCtxType[entry_Association] := Which[
+    StringQ[Lookup[entry, "type", None]], entry["type"],
+    KeyExistsQ[entry, "typeExpr"] && ! MatchQ[entry["typeExpr"], _String | _Missing], leanPP[entry["typeExpr"]],
+    True, "?"
 ]
 
 (* MakeBoxes for LeanState *)
