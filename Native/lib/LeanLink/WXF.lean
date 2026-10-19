@@ -351,6 +351,17 @@ partial def parseWVal (s : ParseState) : Option (WVal × ParseState) :=
             else some (.fn headName args, s4)
     else none  -- unsupported token
 
+/-- The name `Name.toString` writes as `s`. `String.toName` reads back what that writes, except a
+    name written without escapes, as a hygienic one is (`x._@.M.3._hygCtx._hyg.8`), whose `_@` it
+    cannot parse: such a name is split at its dots, with each component of decimal digits a number. -/
+def nameOfString (s : String) : Lean.Name :=
+  match s.toName with
+  | .anonymous =>
+    if s.isEmpty then .anonymous
+    else (s.splitOn ".").foldl (fun n part =>
+      if !part.isEmpty && part.all Char.isDigit then .num n part.toNat! else .str n part) .anonymous
+  | name => name
+
 /-- Convert parsed WVal to Lean Level -/
 partial def wvalToLevel : WVal → Option Lean.Level
   | .fn "Wolfram`LeanLink`LeanLevelZero" _ => some .zero
@@ -360,8 +371,8 @@ partial def wvalToLevel : WVal → Option Lean.Level
     let la ← wvalToLevel a; let lb ← wvalToLevel b; return .max la lb
   | .fn "Wolfram`LeanLink`LeanLevelIMax" #[a, b] => do
     let la ← wvalToLevel a; let lb ← wvalToLevel b; return .imax la lb
-  | .fn "Wolfram`LeanLink`LeanLevelParam" #[.str name] => some (.param name.toName)
-  | .fn "Wolfram`LeanLink`LeanLevelMVar" #[.str name] => some (.mvar ⟨name.toName⟩)
+  | .fn "Wolfram`LeanLink`LeanLevelParam" #[.str name] => some (.param (nameOfString name))
+  | .fn "Wolfram`LeanLink`LeanLevelMVar" #[.str name] => some (.mvar ⟨nameOfString name⟩)
   | _ => none
 
 /-- Convert parsed WVal to BinderInfo -/
@@ -374,28 +385,28 @@ def wvalToBinderInfo : WVal → Lean.BinderInfo
 /-- Convert parsed WVal to Lean Expr -/
 partial def wvalToExpr : WVal → Option Lean.Expr
   | .fn "Wolfram`LeanLink`LeanBVar" #[.int idx] => some (.bvar idx.toNat)
-  | .fn "Wolfram`LeanLink`LeanFVar" #[.str name] => some (.fvar ⟨name.toName⟩)
-  | .fn "Wolfram`LeanLink`LeanMVar" #[.str name] => some (.mvar ⟨name.toName⟩)
+  | .fn "Wolfram`LeanLink`LeanFVar" #[.str name] => some (.fvar ⟨nameOfString name⟩)
+  | .fn "Wolfram`LeanLink`LeanMVar" #[.str name] => some (.mvar ⟨nameOfString name⟩)
   | .fn "Wolfram`LeanLink`LeanSort" #[lvl] => do
     let l ← wvalToLevel lvl; return .sort l
   | .fn "Wolfram`LeanLink`LeanConst" #[.str name, .list levels] => do
     let ls ← levels.mapM wvalToLevel
-    return .const name.toName ls.toList
+    return .const (nameOfString name) ls.toList
   | .fn "Wolfram`LeanLink`LeanApp" #[fn, arg] => do
     let f ← wvalToExpr fn; let a ← wvalToExpr arg; return .app f a
   | .fn "Wolfram`LeanLink`LeanForall" #[.str name, dom, body, bi] => do
     let d ← wvalToExpr dom; let b ← wvalToExpr body
-    return .forallE name.toName d b (wvalToBinderInfo bi)
+    return .forallE (nameOfString name) d b (wvalToBinderInfo bi)
   | .fn "Wolfram`LeanLink`LeanLam" #[.str name, ty, body, bi] => do
     let t ← wvalToExpr ty; let b ← wvalToExpr body
-    return .lam name.toName t b (wvalToBinderInfo bi)
+    return .lam (nameOfString name) t b (wvalToBinderInfo bi)
   | .fn "Wolfram`LeanLink`LeanLet" #[.str name, ty, val, body] => do
     let t ← wvalToExpr ty; let v ← wvalToExpr val; let b ← wvalToExpr body
-    return .letE name.toName t v b false
+    return .letE (nameOfString name) t v b false
   | .fn "Wolfram`LeanLink`LeanLitNat" #[.int n] => some (.lit (.natVal n.toNat))
   | .fn "Wolfram`LeanLink`LeanLitStr" #[.str s] => some (.lit (.strVal s))
   | .fn "Wolfram`LeanLink`LeanProj" #[.str name, .int idx, struct] => do
-    let s ← wvalToExpr struct; return .proj name.toName idx.toNat s
+    let s ← wvalToExpr struct; return .proj (nameOfString name) idx.toNat s
   | _ => none
 
 /-- Deserialize WXF bytes (without header) into Lean Expr -/

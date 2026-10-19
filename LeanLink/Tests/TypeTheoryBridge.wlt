@@ -59,6 +59,15 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-a-string-literal-is-written-as-Lean-reads-it"
 ]
 
+(* a definition a macro makes has a hygienic name, x._@.M.3._hygCtx._hyg.8, which String.toName cannot parse *)
+VerificationTest[
+    With[{environment = LeanToTypeTheory[LeanImportString["macro \"hygienic\" : command => `(def hidden : Nat := 1\ndef $(Lean.mkIdent `visible) : Nat := hidden + 1)\nhygienic"], "visible"]},
+        {KeyExistsQ[environment, "visible"], AnyTrue[Keys[environment], StringQ[#] && StringStartsQ[#, "hidden._@."] &]}
+    ],
+    {True, True},
+    TestID -> "LeanToTypeTheory-a-hygienic-name-imports"
+]
+
 VerificationTest[
     With[{environment = LeanToTypeTheory[LeanImportString["theorem belowPower : 2 ^ 64 - 1 < 2 ^ 64 := by decide"], "belowPower"]},
         {KeyExistsQ[environment, "belowPower"], Information[environment, "NaturalNumbers"]["Operations"][["LessEqual"]]}

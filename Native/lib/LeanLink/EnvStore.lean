@@ -135,7 +135,7 @@ def listConstantKindsExport (handle : UInt64) (filterStr : @& String) : IO ByteA
 def getTypeExport (handle : UInt64) (constName : @& String) (depth : UInt32) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci => return WXF.serialize (WXF.exprToWXF ci.type depth.toNat)
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
@@ -145,7 +145,7 @@ def getTypeExport (handle : UInt64) (constName : @& String) (depth : UInt32) : I
 def getValueExport (handle : UInt64) (constName : @& String) (depth : UInt32) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci =>
     match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
@@ -202,7 +202,7 @@ def getTypeUnfoldedExport (handle : UInt64) (constName : @& String)
     (unfoldLevel : UInt32) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci =>
     let ty := unfoldExpr env ci.type unfoldLevel.toNat
@@ -215,7 +215,7 @@ def getValueUnfoldedExport (handle : UInt64) (constName : @& String)
     (unfoldLevel : UInt32) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci =>
     match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
@@ -262,7 +262,7 @@ def ppTypeExport (handle : UInt64) (constName : @& String)
     (unfoldLevel : UInt32) (opens : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci =>
     let ty := if unfoldLevel.toNat > 0
@@ -278,7 +278,7 @@ def ppValueExport (handle : UInt64) (constName : @& String)
     (unfoldLevel : UInt32) (opens : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci =>
     match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
@@ -350,7 +350,7 @@ def typeCheckExport (handle : UInt64) (exprWXF : @& ByteArray) : IO ByteArray :=
 def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci => return WXF.serialize (WXF.constantToWXF ci)
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
@@ -363,7 +363,7 @@ def getConstantExport (handle : UInt64) (constName : @& String) : IO ByteArray :
 def collectAxiomsExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   unless env.contains name do
     return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
   let ctx : Core.Context := {
@@ -408,7 +408,7 @@ def moduleConstantKindsExport (handle : UInt64) (moduleStr : @& String) : IO Byt
 def kernelCheckExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   let some idx := env.getModuleIdxFor? name
     | return WXF.serialize (WXF.string s!"ERROR: {constName} is not from an imported module")
   let some data := env.header.moduleData[idx.toNat]?
@@ -437,7 +437,7 @@ def kernelCheckExport (handle : UInt64) (constName : @& String) : IO ByteArray :
 def constantModuleExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   unless env.contains name do
     return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
   let some idx := env.getModuleIdxFor? name
@@ -453,7 +453,7 @@ def constantModuleExport (handle : UInt64) (constName : @& String) : IO ByteArra
 def declRangeExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   unless env.contains name do
     return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
   let ctx : Core.Context := {
@@ -481,7 +481,7 @@ def declRangeExport (handle : UInt64) (constName : @& String) : IO ByteArray := 
 def getUsedConstantsExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   match env.find? name with
   | some ci =>
     let typeNames := ci.type.getUsedConstants
@@ -555,7 +555,7 @@ def goalToWXF (env : Environment) (mstate : Meta.State) (goalId : MVarId) : IO B
 def openGoalExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let name := constName.toName
+  let name := WXF.nameOfString constName
   let some ci := env.find? name
     | return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
   let ctx : Core.Context := {
