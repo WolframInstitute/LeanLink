@@ -48,7 +48,7 @@ FileExistsQ[file]
 Read the first line back:
 
 ```wl
-First @ StringSplit[Import[file, "Text"], "\n"]
+First[Import[file, "Lines"]]
 ```
 
 <!-- => "theorem myT : (Nat.succ (OfNat.ofNat Nat 0 (instOfNatNat 0))) = (OfNat.ofNat Nat 1 (instOfNatNat 1)) := sorry" -->

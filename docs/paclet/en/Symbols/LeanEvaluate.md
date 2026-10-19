@@ -47,14 +47,21 @@ LeanEvaluate["decide (2 ^ 10 = 1024)"]
 
 ## Scope
 
-Use the definitions of a built project, here one made with [LeanBuild]():
+A small project, built with [LeanBuild]():
 
 ```wl
 dir = CreateDirectory[];
-Export[FileNameJoin[{dir, "lakefile.toml"}], "name = \"demo\"\n[[lean_lib]]\nname = \"Demo\"\n", "Text"];
+Export[FileNameJoin[{dir, "lakefile.toml"}], {"name = \"demo\"", "[[lean_lib]]", "name = \"Demo\""}, "Lines"];
 Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"];
-Export[FileNameJoin[{dir, "Demo.lean"}], "namespace Demo\ndef triangle (n : Nat) : Nat := n * (n + 1) / 2\nend Demo\n", "Text"];
-LeanBuild[dir, {"Demo"}];
+Export[FileNameJoin[{dir, "Demo.lean"}], {"namespace Demo", "def triangle (n : Nat) : Nat := n * (n + 1) / 2", "end Demo"}, "Lines"];
+LeanBuild[dir, {"Demo"}]
+```
+
+<!-- => Success["Built", ...] -->
+
+Evaluate with its definitions:
+
+```wl
 LeanEvaluate["(List.range 8).map triangle", "ProjectDir" -> dir, "Imports" -> {"Demo"}, "Open" -> {"Demo"}]
 ```
 

@@ -29,16 +29,26 @@ Build a module of a small Lake project, then import it:
 
 ```wl
 dir = CreateDirectory[];
-Export[FileNameJoin[{dir, "lakefile.toml"}], "name = \"demo\"\n[[lean_lib]]\nname = \"Demo\"\n", "Text"];
+Export[FileNameJoin[{dir, "lakefile.toml"}], {"name = \"demo\"", "[[lean_lib]]", "name = \"Demo\""}, "Lines"];
 Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"];
-Export[FileNameJoin[{dir, "Demo.lean"}], "theorem two_eq : 1 + 1 = 2 := rfl\n", "Text"];
+Export[FileNameJoin[{dir, "Demo.lean"}], "theorem two_eq : 1 + 1 = 2 := rfl", "Text"];
 LeanBuild[dir, {"Demo"}]
 ```
 
 <!-- => Success["Built", ...] -->
 
+Import the module:
+
 ```wl
-LeanImport["Demo", "ProjectDir" -> dir, "Filter" -> "two_eq"]["two_eq"]["TypeForm"]
+demo = LeanImport["Demo", "ProjectDir" -> dir, "Filter" -> "two_eq"]
+```
+
+<!-- => LeanEnvironment summary box: 34 constants -->
+
+Its theorem:
+
+```wl
+demo["two_eq"]["TypeForm"]
 ```
 
 <!-- => "1 + 1 = 2" -->
@@ -49,11 +59,18 @@ A module that does not compile gives a [Failure]() whose `"Output"` carries Lean
 
 ```wl
 dir = CreateDirectory[];
-Export[FileNameJoin[{dir, "lakefile.toml"}], "name = \"demo\"\n[[lean_lib]]\nname = \"Demo\"\n", "Text"];
+Export[FileNameJoin[{dir, "lakefile.toml"}], {"name = \"demo\"", "[[lean_lib]]", "name = \"Demo\""}, "Lines"];
 Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"];
-Export[FileNameJoin[{dir, "Demo.lean"}], "theorem bad : 1 + 1 = 3 := rfl\n", "Text"];
-r = LeanBuild[dir, {"Demo"}];
-{r["Tag"], StringContainsQ[r["Output"], "error"]}
+Export[FileNameJoin[{dir, "Demo.lean"}], "theorem bad : 1 + 1 = 3 := rfl", "Text"];
+r = LeanBuild[dir, {"Demo"}]
 ```
 
-<!-- => {"LeanBuildFailed", True} -->
+<!-- => Failure["LeanBuildFailed", ...] -->
+
+Its output has Lean's error:
+
+```wl
+StringContainsQ[r["Output"], "error"]
+```
+
+<!-- => True -->
