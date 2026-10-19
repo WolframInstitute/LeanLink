@@ -95,10 +95,11 @@ Lean's notation, such as `↔` for `Iff`, belongs to Lean's syntax, not to its c
 ```wl
 MakeBoxes["Iff"[a_, b_], form_] := MakeBoxes[Equivalent[a, b], form];
 MakeBoxes["Eq"[a_, b_], form_] := MakeBoxes[a == b, form];
+MakeBoxes["Or"[a_, b_], form_] := MakeBoxes[Or[a, b], form];
 TypeTheoryCheck[TypeTheoryTerm["Nonempty.forall", checked]]
 ```
 
-<!-- => ∀_{α∶Sort u_3} ∀_{p∶Nonempty[α] → Prop} (∀_h∶Nonempty[α] p[h]) ⧦ (∀_a∶α p[Nonempty.intro[a]]) -->
+<!-- => ∀_{α∶Sort u_3} ∀_{p∶Nonempty[α] → Prop} ((∀_h∶Nonempty[α] p[h]) ⧦ ∀_a∶α p[Nonempty.intro[a]]) -->
 
 ## Checking It Again
 
@@ -127,24 +128,39 @@ funext["Quot.lift computes"]
 
 <!-- => rewrite Quot.lift computes : ∀_α∶Sort u ∀_r∶α → α → Prop ∀_β∶Sort v ∀_f∶α → β ∀_h∶∀_a∶α ∀_b∶α r[a, b] ⇒ f[a] == f[b] ∀_a∶α Quot.lift[f, h, Quot.mk[r, a]] ⟶ f[a] -->
 
-## What TypeTheory Does Not Check Yet
+## Lean's Prelude
 
-Lean's first file, `Init.Prelude`, depends on 1,381 constants, and TypeTheory checks 1,182 of them. The 199 it does not check fall into three kinds. The syntax of Lean's own macros and notation uses string literals, which TypeTheory does not have, and 38 constants need one:
+Lean's first file, `Init.Prelude`, depends on 1,381 constants, and TypeTheory checks them all. Three things in it go beyond an inductive family of one type and a sum of literals, and the import follows Lean's kernel in each.
 
-```wl
-First @ LeanToTypeTheory[lean, "Lean.nullKind"]
-```
-
-<!-- => "StringLiteral" -->
-
-Lean's syntax trees are a nested inductive type, holding an array of themselves, and TypeTheory has single inductive families only; 137 constants need them:
+Lean's syntax trees are a nested inductive type: a node holds an array of trees. TypeTheory checks the nesting as Lean's kernel does, and generates a recursor on each container the trees are nested in, the array and the list inside it, which the import compares with Lean's `Lean.Syntax.rec_1` and `Lean.Syntax.rec_2`:
 
 ```wl
-First @ LeanToTypeTheory[lean, "Lean.Syntax"]
+syntax = LeanToTypeTheory[lean, "Lean.Syntax"];
+Select[Keys[syntax], MatchQ[InductiveRecursor["Lean.Syntax", ___]]]
 ```
 
-<!-- => "MutualInductive" -->
+<!-- => {InductiveRecursor["Lean.Syntax"], InductiveRecursor["Lean.Syntax", 1], InductiveRecursor["Lean.Syntax", 2]} -->
 
-And Lean's kernel computes the arithmetic of natural number literals with GMP: `Nat.add`, `Nat.mul`, `Nat.ble` and the others. TypeTheory adds literals as integers but unfolds the other operations, so a proof that a number is below `UInt64.size`, which is 2^64, does not finish; 24 constants, the machine integers and characters, need such arithmetic.
+A string literal is the list of its characters, as Lean's kernel reads it, so the names of the syntax kinds import:
 
-The theorems and definitions of a module about logic need none of the three. Of the sixteen modules at the bottom of Mathlib, thirteen check completely, `Mathlib.Logic.Nonempty`, `Mathlib.Logic.IsEmpty.Defs`, `Mathlib.Logic.Nontrivial.Defs` and `Mathlib.Data.Option.NAry` among them. `Mathlib.Logic.ExistsUnique` and `Mathlib.Logic.Function.Defs` check except for the notation they declare, whose macros are syntax, and two lemmas of `Mathlib.Data.Int.DivMod` reach the empty string through an instance.
+```wl
+kinds = LeanToTypeTheory[lean, "Lean.nullKind"];
+kinds["Lean.nullKind"]
+```
+
+<!-- => definition Lean.nullKind : Lean.SyntaxNodeKind := Lean.Name.mkStr1[String.ofList[List.cons[Char.ofNat[110], List.cons[Char.ofNat[117], List.cons[Char.ofNat[108], List.cons[Char.ofNat[108], List.nil]]]]]] -->
+
+And Lean's kernel computes `Nat.add`, `Nat.mul`, `Nat.ble` and the other operations on natural number literals with GMP. The import registers each with TypeTheory, which then computes it with integers, so a statement about the size of machine words, 2^32 or 2^64, checks at once:
+
+```wl
+words = LeanToTypeTheory[lean, "USize.size_eq"];
+TypeTheoryCheck[TypeTheoryTerm["USize.size_eq", words]]
+```
+
+<!-- => USize.size == OfNat.ofNat[4294967296] ∨ USize.size == OfNat.ofNat[18446744073709551616] -->
+
+## Beyond the Prelude
+
+LeanLink's repository has a script, `typetheory_coverage.wls`, that imports every constant of a list of modules, with what it depends on in order, into one TypeTheory environment and reports what checks. Of the 25 modules at the bottom of Mathlib, from the logic of `Nonempty` and unique existence to options, orderings and folds over lists, 20 check completely when each constant gets two minutes, and so do 4,981 of the 5,113 constants they depend on. Given fifteen minutes a constant, 24 of the 25 check completely; in the last, `Mathlib.Data.Int.Init`, 97 of its 99 constants do, and the other two wait on a proof that takes longer still.
+
+TypeTheory rejects none of these constants; some take it a long time. Lean shares the subterms of a proof that a tactic writes, and the import writes out each of them: a proof that `omega` writes in Lean's tree maps, which the next modules up, such as `Mathlib.Logic.Basic`, depend on, has 694,207 nodes this way.

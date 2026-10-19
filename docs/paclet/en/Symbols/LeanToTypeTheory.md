@@ -26,7 +26,9 @@ RelatedTutorials: [CheckingMathlib]
 - Lean names stay strings, so the imported theorem `"Nat.zero_add"` is the constant `"Nat.zero_add"` of the TypeTheory environment, and Lean's `Nat` becomes its natural numbers, so literals mean the same.
 - Every application is imported with all its arguments given, so nothing is filled in again on the TypeTheory side, and every universe level is written out.
 - The option `"Environment"` gives a [TypeTheoryEnvironment](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory#ref/TypeTheoryEnvironment) to import into; constants it already declares are not imported again.
-- TypeTheory does not have string literals or mutual and nested inductive types yet. A constant that needs one gives a [Failure]() that says so.
+- A block of mutually inductive types is imported as one declaration of all its types, and a type nested in a container, as Lean's syntax trees are in `Array`, as itself: TypeTheory checks the nesting as Lean's kernel does. Every recursor of the block, `X.rec_k` on a container included as <code>[InductiveRecursor](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory#ref/InductiveRecursor)["X", k]</code>, is compared with Lean's.
+- A string literal is written as Lean's kernel reads it: `String.ofList` applied to the list of its characters, each `Char.ofNat` of its code point.
+- The operations Lean's kernel computes on literals with GMP, `Nat.add`, `Nat.mul`, `Nat.pow`, `Nat.div`, `Nat.ble` and the others, are registered with TypeTheory as they are imported, so it computes them on literals with integers too, and a proof about numbers near 2^64 checks at once.
 - Lean's kernel has the computation rule of its quotient types built in. The import adds it as the TypeTheory rewrite rules `"Quot.lift computes"` and `"Quot.ind computes"`, so a cone with quotients, such as that of `funext`, is imported under the rules of the calculus of inductive constructions with rewrite rules allowed, unless the option `"Environment"` gives an environment of other rules.
 - The first call loads the paclet `WolframInstitute/TypeTheory`, which must be installed.
 
@@ -101,12 +103,30 @@ Information[funext, "RewriteRules"]
 
 <!-- => {"Quot.lift computes"} -->
 
-## Possible Issues
+---
 
-TypeTheory has no string literals yet:
+A string literal is written as Lean's kernel reads it:
 
 ```wl
-LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"]
+greeting = LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"];
+greeting["greeting"]
 ```
 
-<!-- => Failure["StringLiteral", ...] -->
+<!-- => definition greeting : String := String.ofList[List.cons[Char.ofNat[104], List.cons[Char.ofNat[105], List.nil]]] -->
+
+---
+
+Mutually inductive types import together, each with its recursor:
+
+```wl
+parity = LeanToTypeTheory[LeanImportString["mutual
+inductive Even : Nat → Prop
+  | zero : Even 0
+  | succ {n : Nat} : Odd n → Even (n + 1)
+inductive Odd : Nat → Prop
+  | succ {n : Nat} : Even n → Odd (n + 1)
+end"], "Even"];
+Select[Keys[parity], Function[key, ! FreeQ[key, "Even" | "Odd"]]]
+```
+
+<!-- => {"Even", "Odd", InductiveRecursor["Even"], InductiveRecursor["Odd"]} -->
