@@ -14,7 +14,8 @@
    installed. --out saves the status of every constant to a file, <|name -> "OK" | {"Failed", tag,
    message} | {"Blocked", dependency}|>, which Get reads back; it is saved every 100 constants as well,
    and the constant being checked is in the file of the same name with ".current" added, so a run that
-   crashes leaves what it found and where it stopped. *)
+   crashes leaves what it found and where it stopped. The constants that took longest to check are
+   listed at the end. *)
 
 $RecursionLimit = 20000;
 
@@ -99,18 +100,19 @@ coverageStatus[name_String, environment_] := Which[
 ]
 
 coverage[handle_, rootGroups_List] := Block[
-	{$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, $seen = <||>, $dependencies = <||>, $walkFailures = <||>, $status = <||>},
+	{$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, $seen = <||>, $dependencies = <||>, $walkFailures = <||>, $status = <||>, $seconds = <||>},
 	Module[{environment = TypeTheoryEnvironment[quotientRules[]], start = AbsoluteTime[]},
 		Scan[
 			Function[group,
 				Scan[
 					Function[name,
 						recordCurrent[name];
-						With[{outcome = coverageStatus[name, environment]},
-							$status[name] = First[outcome];
+						With[{timed = AbsoluteTiming[coverageStatus[name, environment]]},
+							$seconds[name] = First[timed];
+							$status[name] = First[Last[timed]];
 							(* an environment lives for the session, so the one replaced is removed, or each would stay *)
-							If[ Last[outcome] =!= environment, Remove @@ {First[environment]}];
-							environment = Last[outcome]
+							If[ Last[Last[timed]] =!= environment, Remove @@ {First[environment]}];
+							environment = Last[Last[timed]]
 						];
 						If[ Mod[Length[$status], 100] == 0 && StringQ[$statusFile], Put[$status, $statusFile]];
 						If[ Mod[Length[$status], 200] == 0,
@@ -124,7 +126,7 @@ coverage[handle_, rootGroups_List] := Block[
 			rootGroups
 		];
 		(* a constructor or recursor is checked with its inductive type *)
-		{$status, AssociationMap[Function[name, Replace[Catch[primaryName[name], $bridgeTag], Except[_String] -> name]], Flatten[rootGroups]]}
+		{$status, AssociationMap[Function[name, Replace[Catch[primaryName[name], $bridgeTag], Except[_String] -> name]], Flatten[rootGroups]], $seconds}
 	]
 ]
 
@@ -134,7 +136,7 @@ moduleOf = AssociationMap[Function[name, Quiet[lean[name]["Module"]]], Keys[lean
 roots = Function[module, Select[Keys[lean], Function[name, moduleOf[name] === module]]] /@ $modules;
 Print["modules: ", AssociationThread[$modules, Length /@ roots]];
 
-{status, primaryOf} = Wolfram`LeanLink`Private`coverage[Wolfram`LeanLink`Private`extractHandle[lean], roots];
+{status, primaryOf, seconds} = Wolfram`LeanLink`Private`coverage[Wolfram`LeanLink`Private`extractHandle[lean], roots];
 If[ StringQ[$statusFile], Put[status, $statusFile]];
 
 (* a blocked constant is charged to the failure at the end of its chain of blocked dependencies *)
@@ -155,3 +157,5 @@ Scan[
 		Counts[Function[name, Replace[Lookup[status, primaryOf[name], "NotWalked"], {{kind_, ___} :> kind}]] /@ Last[pair]]]],
 	Transpose[{$modules, roots}]
 ];
+Print["\nthe constants that took longest to check:"];
+Scan[Function[name, Print["  ", name, ": ", Round[seconds[name], 0.01], " s"]], Take[ReverseSortBy[Keys[seconds], seconds], UpTo[10]]];
