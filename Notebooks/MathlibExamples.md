@@ -77,7 +77,7 @@ Behind the pretty-printed string is a symbolic expression tree. `"Type"` returns
 algEnv["mul_comm"]["Type"]
 ```
 
-Every Lean expression is built from a small set of constructors: `LeanConst` (named constant), `LeanApp` (function application), `LeanForall` (universal quantifier / function type), `LeanBVar` (bound variable), `LeanLambda`, and `LeanSort`.
+Every Lean expression is built from a small set of constructors: `LeanConst` (named constant), `LeanApp` (function application), `LeanForall` (universal quantifier / function type), `LeanBVar` (bound variable), `LeanLam` (function), and `LeanSort`.
 
 ## Part 2: Understanding Binder Annotations
 
