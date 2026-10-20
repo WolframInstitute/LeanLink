@@ -215,6 +215,14 @@ VerificationTest[
     TestID -> "LeanEvaluate-TimeLimit"
 ]
 
+VerificationTest[
+    {LeanEvaluate["(2.5 : Float) * 2"], LeanEvaluate["(0.1 : Float) + 0.2"], LeanEvaluate["(1e300 : Float) * 1e10"], LeanEvaluate["(0 : Float) / 0"], LeanEvaluate["[(1.5 : Float), 2]"]}
+    ,
+    {5., 0.30000000000000004, Infinity, Indeterminate, {1.5, 2.}}
+    ,
+    TestID -> "LeanEvaluate-Float-is-exact"
+]
+
 (* LeanBuild: the pinned toolchain's lake; Success, or a Failure carrying lake's
    output; never a toolchain download. *)
 

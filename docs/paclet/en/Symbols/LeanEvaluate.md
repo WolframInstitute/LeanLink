@@ -15,7 +15,7 @@ RelatedGuides: [LeanLink]
 
 ## Details & Options
 
-- The value comes back through `Lean.toJson`: `Nat` and `Int` give integers, `Bool` gives [True]() or [False](), `String` gives strings, and `List` and `Array` give lists. A type without a `ToJson` instance fails; wrap the expression in `toString` to get a string instead.
+- The value comes back through `Lean.toJson`: `Nat` and `Int` give integers, `Bool` gives [True]() or [False](), `String` gives strings, `Float` gives machine reals, exactly, with [Infinity]() and [Indeterminate]() for the infinities and NaN, and `List` and `Array` give lists. A type without a `ToJson` instance fails; wrap the expression in `toString` to get a string instead.
 - Options:
 
 | Option | Default | |
@@ -78,6 +78,16 @@ LeanEvaluate["(List.range 8).map (fib 1 1)", "Source" -> "def fib (a b : Nat) : 
 <!-- => {1, 1, 2, 3, 5, 8, 13, 21} -->
 
 Large data goes in as definitions too. Split long list literals into chunks of a few hundred elements; one literal of thousands can overflow Lean's code generator.
+
+---
+
+A `Float` comes back as a machine real, every bit of it:
+
+```wl
+LeanEvaluate["(0.1 : Float) + 0.2"]
+```
+
+<!-- => 0.30000000000000004 -->
 
 ## Possible Issues
 

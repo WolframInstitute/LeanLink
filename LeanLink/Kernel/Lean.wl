@@ -600,6 +600,8 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
             {"import Lean.Data.Json"},
             ("import " <> #&) /@ OptionValue["Imports"],
             srcImports,
+            (* Lean writes a Float to JSON through its six-digit text; its bits are exact *)
+            {"instance (priority := high) : Lean.ToJson Float where toJson x := Lean.Json.mkObj [(\"LeanLinkFloat\", Lean.toJson x.toBits.toNat)]"},
             If[StringTrim[srcBody] === "", {}, {srcBody}],
             If[opens === {}, {}, {"open " <> StringRiffle[opens, " "] <> " in"}],
             {"#eval IO.println (\"LEANLINK_EVAL_JSON \" ++ (Lean.Json.arr #[Lean.toJson (" <> expr <> ")]).compress)"}
@@ -623,7 +625,7 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
     json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_EVAL_JSON "]&, None];
     If[ json =!= None,
         With[{v = Quiet[ImportString[StringDrop[json, StringLength["LEANLINK_EVAL_JSON "]], "RawJSON"]]},
-            If[ListQ[v] && Length[v] === 1, Return[First[v], Module]]
+            If[ListQ[v] && Length[v] === 1, Return[withFloats[First[v]], Module]]
         ]
     ];
     diag = StringTrim @ Quiet @ Check[
@@ -636,6 +638,16 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
         "Output" -> diag, "ExitCode" -> res["ExitCode"]
     |>]
 ]
+
+(* a Float from its IEEE 754 bits: a machine real, Infinity, -Infinity or Indeterminate *)
+
+floatFromBits[bits_Integer] := First[ImportByteArray[ByteArray[IntegerDigits[bits, 256, 8]], "Real64", ByteOrdering -> 1]]
+
+withFloats[float_Association /; Keys[float] === {"LeanLinkFloat"}] := floatFromBits[float["LeanLinkFloat"]]
+
+withFloats[value : (_Association | _List)] := withFloats /@ value
+
+withFloats[value_] := value
 
 (* ---- LeanBuild ----
    Builds with the lake of the toolchain the project pins, called directly: the
