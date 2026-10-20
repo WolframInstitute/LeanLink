@@ -896,7 +896,8 @@ leanText[With[{Set[name_, value_]}, body_], scope_Association] := Block[{identif
 
 leanText[Part[structure_, index_Integer], scope_Association] := "(" <> leanText[structure, scope] <> ")." <> ToString[index]
 
-leanText[TypeUniverse[level_], scope_Association] := Replace[levelText[level], {"0" -> "Prop", "1" -> "Type", other_ :> "Sort (" <> other <> ")"}]
+(* levelText puts a compound level in parentheses itself *)
+leanText[TypeUniverse[level_], scope_Association] := Replace[levelText[level], {"0" -> "Prop", "1" -> "Type", other_ :> "Sort " <> other}]
 
 leanText[n_Integer, scope_Association] := "(" <> ToString[n] <> " : Nat)"
 
