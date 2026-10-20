@@ -46,6 +46,16 @@ VerificationTest[
 ]
 
 VerificationTest[
+    With[{rebuilt = TypeTheoryEnvironment[TypeTheoryEnvironment[Information[$zeroAdd, "Rules"]], Normal[$zeroAdd]]},
+        {Sort[Keys[rebuilt]] === Sort[Keys[$zeroAdd]], AllTrue[Keys[$zeroAdd], rebuilt[#] === $zeroAdd[#]&]}
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "LeanToTypeTheory-an-imported-environment-rebuilds-from-Normal"
+]
+
+VerificationTest[
     Last[Keys[LeanToTypeTheory[$lean["bridgeProbe"]]]],
     "bridgeProbe",
     TestID -> "LeanToTypeTheory-LeanTerm"
