@@ -1094,6 +1094,22 @@ VerificationTest[
 ]
 
 VerificationTest[
+    With[{file = PacletObject["Wolfram/LeanLink"]["AssetLocation", "Examples"]},
+        {
+            AllTrue[Keys[LeanImport[file, "Filter" -> "proof"]], StringContainsQ["proof"]],
+            Quiet[LeanImport["/no/such/file.lean"]],
+            Head[LeanImportString[{}]],
+            StringStartsQ[LeanImport[file]["id_proof"]["Source"], "/-- Identity function -/"],
+            LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"]["myT"]["Source"]
+        }
+    ]
+    ,
+    {True, $Failed, LeanEnvironment, True, "theorem myT : Nat.succ 0 = 1 := rfl"}
+    ,
+    TestID -> "LeanImport-file-Filter-missing-file-and-Source"
+]
+
+VerificationTest[
     Module[{env, back},
         env = LeanImportString[{
             "structure Point where", "  x : Nat", "  y : Nat",

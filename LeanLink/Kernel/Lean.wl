@@ -521,6 +521,11 @@ sourceCandidates[dir_String, parts_List, rel_String] := With[
     ]
 ]
 
+(* a module compiled from a file outside the search path, as LeanImport[file] does, names its file *)
+
+moduleSourceFile[h_Integer, module_String] /; FileExistsQ[Lookup[Lookup[Lookup[$handleSource, h, <||>], "Files", <||>], module, None]] :=
+    $handleSource[h, "Files", module]
+
 moduleSourceFile[h_Integer, module_String] := With[
     {parts = StringSplit[module, "."]},
     SelectFirst[
@@ -539,9 +544,10 @@ declarationSource[h_Integer, name_String] := Module[{range, module, file, lines}
     If[ ! AssociationQ[range], Return[Missing["NotAvailable"], Module]];
     module = Quiet[decodeWXF[$constantModuleFn[h, name]]];
     If[ ! StringQ[module] || StringStartsQ[module, "ERROR: "], Return[Missing["NotAvailable"], Module]];
-    file = moduleSourceFile[h, module];
+    (* the text of a module compiled from a string, whose file is gone, is kept *)
+    file = Lookup[Lookup[Lookup[$handleSource, h, <||>], "Texts", <||>], module, moduleSourceFile[h, module]];
     If[ MissingQ[file], Return[file, Module]];
-    lines = StringSplit[Import[file, "Text", CharacterEncoding -> "UTF-8"], "\n", All];
+    lines = StringSplit[If[KeyExistsQ[Lookup[Lookup[$handleSource, h, <||>], "Texts", <||>], module], file, Import[file, "Text", CharacterEncoding -> "UTF-8"]], "\n", All];
     If[ range["EndLine"] > Length[lines], Return[Missing["NotAvailable"], Module]];
     lines = lines[[range["StartLine"] ;; range["EndLine"]]];
 (* trim the end before the start: on a one-line range they are the same line *)
@@ -2167,7 +2173,7 @@ LeanExportString[env_LeanEnvironment] := With[{constants = environmentConstants[
         Join[
             (* a class is declared as a definition here, so an instance binder of one needs this *)
             If[FreeQ[#["Type"]& /@ Values[constants], LeanForall[_, _, _, "instImplicit"] | LeanLam[_, _, _, "instImplicit"]], {}, {"set_option checkBinderAnnotations false"}],
-            KeyValueMap[declarationSource, KeyTake[constants, declarationOrder[constants]]]
+            KeyValueMap[exportedDeclarationSource, KeyTake[constants, declarationOrder[constants]]]
         ],
         "\n\n"
     ]
@@ -2185,7 +2191,7 @@ declarationOrder[constants_Association] := Block[{visited = <||>, order = {}, vi
     order
 ]
 
-declarationSource[name_String, term_LeanTerm] := With[{type = leanSource[term["Type"], "Explicit"]},
+exportedDeclarationSource[name_String, term_LeanTerm] := With[{type = leanSource[term["Type"], "Explicit"]},
     Switch[ term["Kind"],
         "theorem",
             "theorem " <> name <> " : " <> type <> " := sorry"
@@ -2421,14 +2427,17 @@ LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFil
     tmpFile = FileNameJoin[{$TemporaryDirectory, modName <> ".lean"}];
     Export[tmpFile, src, "Text", CharacterEncoding -> "UTF-8"];
     result = LeanImport[tmpFile, opts];
-    (* Cleanup the .lean source -- olean kept for lazy queries *)
+    (* Cleanup the .lean source -- olean kept for lazy queries; its text stays for "Source" *)
     If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
+    With[{handle = If[Head[result] === LeanEnvironment, Lookup[result[[1]], "_Handle", None], None]},
+        If[IntegerQ[handle] && KeyExistsQ[$handleSource, handle], $handleSource[handle, "Texts"] = <|modName -> src|>]
+    ];
     result
 ]
 
 (* A list of sources is one source, the sources joined with newlines *)
 
-LeanImportString[sources : {__String}, opts : OptionsPattern[LeanImport]] := LeanImportString[StringRiffle[sources, "\n"], opts]
+LeanImportString[sources : {___String}, opts : OptionsPattern[LeanImport]] := LeanImportString[StringRiffle[sources, "\n"], opts]
 
 (* --- LeanImport URL support --- *)
 
@@ -2983,7 +2992,12 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         If[ ! TrueQ[OptionValue["IncludeInternal"]],
             kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]
         ];
+        (* "Filter" keeps the names that contain it, as for a module *)
+        If[ OptionValue["Filter"] =!= "",
+            kinds = KeySelect[kinds, StringContainsQ[#, OptionValue["Filter"]]&]
+        ];
         registerHandle[handle, {modName}, searchPath];
+        $handleSource[handle, "Files"] = <|modName -> absFile|>;
         registerHandleNames[handle, Keys[kinds]];
         (* Build lazy LeanTerms *)
         res = LeanEnvironment[
@@ -3004,6 +3018,15 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         res
     ]
 ]
+
+(* a .lean file that is not there *)
+
+LeanImport::nofile = "There is no file `1`."
+
+LeanImport[file_String, OptionsPattern[]] /; StringEndsQ[file, ".lean"] && ! StringStartsQ[file, "http://" | "https://"] && ! FileExistsQ[file] := (
+    Message[LeanImport::nofile, file];
+    $Failed
+)
 
 (* LeanImport[opts] -- base form: instant lazy loading *)
 
