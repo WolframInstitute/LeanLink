@@ -917,7 +917,12 @@ heldLeanText[HoldComplete[term_], scope_Association] := leanText[term, scope]
 
 (* a constant or a variable takes @; any other head is parenthesized *)
 
-applicationText[head_HoldComplete, arguments_List, scope_Association] := "(" <> headText[head, scope] <> StringJoin[Function[argument, " " <> heldLeanText[argument, scope]] /@ arguments] <> ")"
+applicationText[head_HoldComplete, arguments_List, scope_Association] := "(" <> headText[head, scope] <> StringJoin[Function[argument, " " <> argumentText[argument, scope]] /@ arguments] <> ")"
+
+(* Sort u is two words, so as an argument it is parenthesized; every other term is one word or comes
+   parenthesized already *)
+
+argumentText[argument_HoldComplete, scope_Association] := Replace[heldLeanText[argument, scope], text_String /; StringStartsQ[text, "Sort "] :> "(" <> text <> ")"]
 
 headText[HoldComplete[Subscript[constant_, levels___]], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> constantLevelSuffix[HoldComplete[constant], HoldComplete /@ Unevaluated[{levels}]]
 

@@ -192,6 +192,20 @@ VerificationTest[
 ]
 
 VerificationTest[
+    With[
+        {
+            sorts = TypeTheoryEnvironment[$prelude, {
+                TypeTheoryDefinition[PlainIdentity, Function[{TypedImplicit[A, TypeUniverse[u]], Typed[x, A]}, x], "UniverseParameters" -> {u}],
+                TypeTheoryDefinition[SortIdentity, Typed[Function[{Typed[x, TypeUniverse[u]]}, Construct[Subscript[PlainIdentity, u + 1], TypeUniverse[u], x]], ForAll[{Typed[x, TypeUniverse[u]]}, TypeUniverse[u]]], "UniverseParameters" -> {u}]
+            }]
+        },
+        LeanImportString[TypeTheoryToLean[sorts, SortIdentity]]["TypeTheory.SortIdentity"]["TypeForm"]
+    ],
+    "Sort u \[RightArrow] Sort u",
+    TestID -> "TypeTheoryToLean-a-sort-given-as-an-argument-is-parenthesized"
+]
+
+VerificationTest[
     With[{source = TypeTheoryToLean[$prelude, ExcludedMiddle]},
         {
             StringFreeQ[source, "axiom "],
