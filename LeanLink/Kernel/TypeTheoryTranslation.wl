@@ -424,23 +424,27 @@ natOperationsQ[] := natOperationsQ[] = MatchQ[Information[TypeTheoryEnvironment[
 
 checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecursorType[environment, name, recursor]], blockRecursors[name]]
 
+(* TypeTheory's recursor is declared again under a name no Lean constant has, with Lean's recursor type as
+   its type, as a core term: the kernel then checks that the type is a type and that the recursor has it, as
+   it checks every declaration, and nothing elaborates the type, which for a structure of many fields is
+   large. *)
+
 checkRecursorType[environment_, name_String, recursor_String] := Block[
-    {levels, leanType},
+    {levels, leanType, probe},
     levels = placeholderLevels[Length[universeParameters[recursor]]];
     leanType = Replace[typeCheck[LeanConst[recursor, levels], $handle], {
         result_Association :> result["Type"],
         _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]
     }];
-    With[
-        {
-            ours = TypeTheoryTerm @@ Append[heldSurface[surfaceConstruct[constantSurface[LeanConst[recursor, levels]]]], environment],
-            theirs = TypeTheoryTerm @@ heldSurface[leanSurface[leanType, {}]]
-        },
-        (* TypeTheory 0.8 gives a Success where earlier versions gave True *)
-        If[ ! MatchQ[TypeTheoryCheck[ours, theirs], True | _Success],
-            bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
-        ]
-    ]
+    (* a declaration holds its arguments, so the core terms go in evaluated *)
+    probe = With[{value = leanCore[LeanConst[recursor, levels]], type = leanCore[leanType], parameters = placeholderNames[Length[levels]]},
+        TypeTheoryEnvironment[environment, {TypeTheoryDefinition["LeanLink recursor check", Typed[value, type], "UniverseParameters" -> parameters]}]
+    ];
+    If[ ! MatchQ[probe, _TypeTheoryEnvironment],
+        bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
+    ];
+    (* an environment lives for the session, so the probe is removed *)
+    Remove @@ {First[probe]}
 ]
 
 (* === Terms === *)
