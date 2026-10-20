@@ -637,7 +637,7 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
                 Cases[
                     {lhs, rhs}
                     ,
-                    f_Symbol[args___] /; ! MemberQ[excluded, ToString[f]] && StringLength[ToString[f]] > 1
+                    f_Symbol[args___] /; ! MemberQ[excluded, ToString[f]] && (StringLength[ToString[f]] > 1 || Context[f] =!= "System`")
                     :>
                     (opArities[ToString[f]] = Length[{args}])
                     ,

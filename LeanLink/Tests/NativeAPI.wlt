@@ -585,6 +585,17 @@ VerificationTest[
     TestID -> "ProofToLean-gives-the-same-Lean-in-any-context"
 ]
 
+VerificationTest[
+    Module[{source},
+        source = LeanExportString[ProofToLean[FindEquationalProof[g[x, y] == g[y, x], ForAll[{p, q}, g[p, q] == g[q, p]]]]];
+        {StringContainsQ[source, "axiom g : U"], MatchQ[LeanImportString[source], _LeanEnvironment]}
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "ProofToLean-declares-a-function-named-by-one-letter"
+]
+
 (* ================================================================ *)
 
 (* LeanExportString for ProofToLean                                    *)
