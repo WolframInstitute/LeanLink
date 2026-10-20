@@ -28,7 +28,7 @@ RelatedGuides: [LeanLink]
 | `"Filter"` | `""` | keep only constants whose name contains this substring |
 | `"IncludeInternal"` | `False` | include compiler-internal / private declarations |
 
-- Importing a module requires that project to be **built** (`lake build`). An unbuilt or missing module yields an empty environment, not an error.
+- Importing a module requires that project to be **built** (`lake build`). A module with no compiled `.olean` file in the project's search path fails: [LeanImport]() returns [$Failed]() with a message that names it.
 
 ## Basic Examples
 
@@ -110,3 +110,13 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 ```
 
 <!-- => 476 (or "Mathlib not built") -->
+
+---
+
+A module that is not in the search path fails, and the message names it; here the name of Lean's prelude has a typo:
+
+```wl
+LeanImport["Init.Prelud"]
+```
+
+<!-- => LeanImport::err message: Failed to load environment: no directory of the search path has the module Init.Prelud; then $Failed -->
