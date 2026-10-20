@@ -62,7 +62,7 @@ A single constant, indexed by name, is a [LeanTerm]():
 env["id_proof"]["TypeForm"]
 ```
 
-<!-- => "∀ (P : Prop) (a : P), P" -->
+<!-- => "∀ (P : Prop), P → P" -->
 
 ## Scope
 
@@ -78,7 +78,7 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 ]
 ```
 
-<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" -->
+<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a b : G), a * b = b * a" -->
 
 The example environment bundled with the paclet:
 

@@ -142,7 +142,7 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 ]
 ```
 
-<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" -->
+<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a b : G), a * b = b * a" -->
 
 ---
 

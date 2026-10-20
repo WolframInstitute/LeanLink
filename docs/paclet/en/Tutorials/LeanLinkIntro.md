@@ -38,7 +38,7 @@ Index the environment by name to get a [LeanTerm](). Its `"TypeForm"` is the pro
 env["id_proof"]["TypeForm"]
 ```
 
-<!-- => "∀ (P : Prop) (a : P), P" -->
+<!-- => "∀ (P : Prop), P → P" -->
 
 The `"TermForm"` is the proof term itself:
 
@@ -62,7 +62,7 @@ A dependent type from the same file - the head of a length-indexed vector:
 env["Vec.head"]["TypeForm"]
 ```
 
-<!-- => "∀ {α : Type} {n : Nat} (a : Vec α n + 1), α" -->
+<!-- => "{α : Type} → {n : Nat} → Vec α (n + 1) → α" -->
 
 ## Expression Graphs
 
@@ -294,7 +294,7 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 ]
 ```
 
-<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a : G) (b : G), a * b = b * a" -->
+<!-- => "∀ {G : Type u_1} [inst : CommMagma G] (a b : G), a * b = b * a" -->
 
 The [Exploring Mathlib](paclet:Wolfram/LeanLink/tutorial/ExploringMathlib) tutorial goes deeper into types, binders, and typeclasses.
 
