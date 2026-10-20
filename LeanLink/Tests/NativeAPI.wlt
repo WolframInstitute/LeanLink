@@ -1035,6 +1035,24 @@ VerificationTest[
     TestID -> "LeanToFunction-RejectsNonCompilable"
 ]
 
+VerificationTest[
+    Module[{env, compiled},
+        env = LeanImportString[{
+            "def natSub (a b : Nat) : Nat := a - b", "def natDiv (a b : Nat) : Nat := a / b", "def natMod (a b : Nat) : Nat := a % b",
+            "def intDiv (a b : Int) : Int := a / b", "def intMod (a b : Int) : Int := a % b", "def half (x : Float) : Float := x / 2"
+        }];
+        compiled = AssociationMap[LeanCompile[env[#]]&, {"natSub", "natDiv", "natMod", "intDiv", "intMod", "half"}];
+        {
+            compiled["natSub"][2, 5], compiled["natDiv"][5, 0], compiled["natMod"][5, 0],
+            compiled["intDiv"][7, -2], compiled["intMod"][7, -2], compiled["half"][3.]
+        }
+    ]
+    ,
+    {0, 0, 5, -3, 1, 1.5}
+    ,
+    TestID -> "LeanCompile-arithmetic-computes-as-Lean-does"
+]
+
 (* LeanCompile on environment *)
 
 VerificationTest[

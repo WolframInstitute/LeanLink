@@ -3691,10 +3691,16 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HAdd.hAdd" | "instH
     ]
 ]
 
+(* Subtraction, division and remainder compute as Lean's do in the type of the operation, its first argument
+   (@HDiv.hDiv Nat Nat Nat inst a b): on Nat, a - b stops at 0; on Nat and Int, dividing by 0 gives 0 and
+   the remainder by 0 is a; on Int, / and % are Euclidean, the remainder never negative *)
+
+arithmeticType[e_LeanApp] := Replace[First[flattenApp[e][[2]], None], {LeanConst[name_String, _] :> name, _ -> None}]
+
 leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HSub.hSub" | "instHSub.hSub"] := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 2,
         With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
-            If[FailureQ[a] || FailureQ[b], $Failed, a - b]
+            If[FailureQ[a] || FailureQ[b], $Failed, If[arithmeticType[e] === "Nat", Max[a - b, 0], a - b]]
         ]
         ,
         $Failed
@@ -3714,7 +3720,23 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HMul.hMul" | "instH
 leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HDiv.hDiv" | "instHDiv.hDiv"] := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 2,
         With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
-            If[FailureQ[a] || FailureQ[b], $Failed, Quotient[a, b]]
+            If[ FailureQ[a] || FailureQ[b],
+                $Failed
+                ,
+                Switch[ arithmeticType[e],
+                    "Nat",
+                        If[b == 0, 0, Quotient[a, b]]
+                    ,
+                    "Int",
+                        If[b == 0, 0, Sign[b] Quotient[a, Abs[b]]]
+                    ,
+                    "Float",
+                        a / b
+                    ,
+                    _,
+                        $Failed
+                ]
+            ]
         ]
         ,
         $Failed
@@ -3724,7 +3746,20 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HDiv.hDiv" | "instH
 leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HMod.hMod" | "instHMod.hMod"] := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 2,
         With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
-            If[FailureQ[a] || FailureQ[b], $Failed, Mod[a, b]]
+            If[ FailureQ[a] || FailureQ[b],
+                $Failed
+                ,
+                Switch[ arithmeticType[e],
+                    "Nat",
+                        If[b == 0, a, Mod[a, b]]
+                    ,
+                    "Int",
+                        If[b == 0, a, Mod[a, Abs[b]]]
+                    ,
+                    _,
+                        $Failed
+                ]
+            ]
         ]
         ,
         $Failed
