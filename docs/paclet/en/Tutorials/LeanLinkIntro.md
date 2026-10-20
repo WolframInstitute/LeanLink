@@ -206,13 +206,13 @@ Information[env, "Kinds"]
 
 ## Exporting to Lean Source
 
-[LeanExportString]() renders a constant's type back as Lean source (bound variables in a bare type print as de Bruijn indices `#0`, `#1`):
+[LeanExportString]() writes a constant's type back as Lean source:
 
 ```wl
 LeanExportString[env["id_proof"]]
 ```
 
-<!-- => "∀ (P : Prop) (a : #0), #1" -->
+<!-- => "∀ (P : Prop), P → P" -->
 
 ## Importing from a Source String
 

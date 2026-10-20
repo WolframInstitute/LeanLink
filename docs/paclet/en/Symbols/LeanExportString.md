@@ -15,8 +15,9 @@ RelatedGuides: [LeanLink]
 
 ## Details & Options
 
-- Each constant is emitted as a Lean declaration of its type, in declaration order. An environment produced by [ProofToLean]() carries structured tactic proofs, which export as faithful `:= by ...` blocks.
-- For a constant whose body cannot be reconstructed as source (a term imported from compiled `.olean` data), the body is written as `sorry` - the declaration's *type* is still exported exactly.
+- Each constant is emitted as a Lean declaration of its type: a theorem as a `theorem`, an axiom as an `axiom`, and any other constant, definition, inductive type or constructor, as a `def`. The constants come in an order where each follows those its type names.
+- A constant imported from compiled `.olean` data has no body that can be written back, so its body is `sorry`, and its *type* is exported exactly: every constant applied with `@` and every argument written, implicit ones included, raw literals as `nat_lit`, and each bound variable named by its binder, renamed where that name is taken. Compiled again, the source declares the same constants with the same types.
+- An environment produced by [ProofToLean]() carries structured tactic proofs, which export as faithful `:= by ...` blocks.
 - Use [LeanExport]() to write the same text directly to a `.lean` file.
 
 ## Basic Examples

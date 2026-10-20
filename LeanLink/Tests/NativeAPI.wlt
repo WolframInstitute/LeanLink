@@ -1067,4 +1067,40 @@ VerificationTest[
     TestID -> "LeanImportString-list-of-sources-is-joined-with-newlines"
 ]
 
+VerificationTest[
+    Module[{env, back},
+        env = LeanImportString[{
+            "structure Point where", "  x : Nat", "  y : Nat",
+            "class Shape (α : Type) where", "  area : α → Nat",
+            "def fib : Nat → Nat", "  | 0 => 0", "  | 1 => 1", "  | n + 2 => fib n + fib (n + 1)",
+            "axiom unit : 1 = 1",
+            "theorem shadow (a : Nat) (b : Nat) : ∀ a : Nat, a + b = b + a := fun a => Nat.add_comm a b",
+            "universe u v",
+            "def pairUp {α : Sort u} {β : Sort v} (a : α) (b : β) : PProd α β := ⟨a, b⟩",
+            "theorem area_zero (p : Point) (h : p.x = 0) : p.x * p.y = 0 := by simp [h]",
+            "mutual", "inductive Tree where | node : Forest → Tree", "inductive Forest where | nil : Forest | cons : Tree → Forest → Forest", "end"
+        }];
+        back = LeanImportString[LeanExportString[env]];
+        {Sort[Keys[back]] === Sort[Keys[env]], Select[Keys[env], env[#]["TypeForm"] =!= back[#]["TypeForm"]&]}
+    ]
+    ,
+    {True, {}}
+    ,
+    TestID -> "LeanExportString-environment-imports-again-with-the-same-types"
+]
+
+VerificationTest[
+    {
+        LeanExportString[LeanSort[LeanLevelSucc[LeanLevelSucc[LeanLevelParam["u"]]]]],
+        LeanExportString[LeanSort[LeanLevelMax[LeanLevelParam["u"], LeanLevelParam["v"]]]],
+        LeanExportString[LeanLitStr["a\"b\\c\nd"]],
+        LeanExportString[LeanProj["Prod", 0, LeanConst["p"]]],
+        LeanExportString[LeanForall["a", LeanConst["Nat"], LeanForall["a", LeanConst["Nat"], LeanApp[LeanApp[LeanConst["f"], LeanBVar[1]], LeanBVar[0]], "default"], "default"]]
+    }
+    ,
+    {"Type (u + 1)", "Sort (max u v)", "\"a\\\"b\\\\c\\nd\"", "p.1", "∀ (a : Nat) (a_1 : Nat), f a a_1"}
+    ,
+    TestID -> "LeanExportString-levels-strings-projections"
+]
+
 EndTestSection[]

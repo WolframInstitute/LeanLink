@@ -2167,32 +2167,46 @@ LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] := B
 
 LeanExportString[env_LeanEnvironment] /; StringQ[Lookup[env[[1]], "_Source", None]] := env[[1]]["_Source"]
 
-(* Generic environment -- generate theorems *)
+(* Generic environment: each constant declared with its type, a theorem as a theorem, an axiom as an
+   axiom, and any other constant as a definition, whose body is not reconstructed *)
 
-LeanExportString[env_LeanEnvironment] := Block[{terms},
-    terms = Select[Normal[env[[1]]], MatchQ[#[[2]], _LeanTerm]&];
+LeanExportString[env_LeanEnvironment] := With[{constants = environmentConstants[env[[1]]]},
     StringRiffle[
-        First[
-            Last[
-                Reap[
-                    Do[
-                        With[{name = kv[[1]], term = kv[[2]]},
-                            Sow[StringTemplate["theorem `1` : `2` := sorry"][name, leanSource[term["Type"]]]]
-                        ]
-                        ,
-                        {kv, terms}
-                    ]
-                ]
-            ]
-            ,
-            {}
-        ]
-        ,
+        Join[
+            (* a class is declared as a definition here, so an instance binder of one needs this *)
+            If[FreeQ[#["Type"]& /@ Values[constants], LeanForall[_, _, _, "instImplicit"] | LeanLam[_, _, _, "instImplicit"]], {}, {"set_option checkBinderAnnotations false"}],
+            KeyValueMap[declarationSource, KeyTake[constants, declarationOrder[constants]]]
+        ],
         "\n\n"
     ]
 ]
 
-LeanExportString[term_LeanTerm] := leanSource[term["Type"]]
+(* the constants in an order where each comes after the constants its type names *)
+
+declarationOrder[constants_Association] := Block[{visited = <||>, order = {}, visit, $RecursionLimit = Max[$RecursionLimit, 4 Length[constants] + 256]},
+    visit[name_] := If[ ! KeyExistsQ[visited, name],
+        visited[name] = True;
+        Scan[visit, Intersection[constantNamesOf[constants[name]["Type"]], Keys[constants]]];
+        AppendTo[order, name]
+    ];
+    Scan[visit, Keys[constants]];
+    order
+]
+
+declarationSource[name_String, term_LeanTerm] := With[{type = leanSource[term["Type"], "Explicit"]},
+    Switch[ term["Kind"],
+        "theorem",
+            "theorem " <> name <> " : " <> type <> " := sorry"
+        ,
+        "axiom",
+            "axiom " <> name <> " : " <> type
+        ,
+        _,
+            "def " <> name <> " : " <> type <> " := sorry"
+    ]
+]
+
+LeanExportString[term_LeanTerm] := leanSource[term["Type"], "Explicit"]
 
 LeanExportString[expr_] := leanSource[expr]
 
@@ -2200,158 +2214,209 @@ LeanExportString[expr_] := leanSource[expr]
 
 LeanExport[file_String, env_LeanEnvironment] := Export[file, LeanExportString[env], "Text", CharacterEncoding -> "UTF-8"]
 
-leanSource[expr_] := leanSource[expr, 20]
-
-leanSource[e_, 0] := "_"
-
 (* Sugar: LeanConst["name"] <-> LeanConst["name", {}] *)
 
 LeanConst[name_String] := LeanConst[name, {}]
 
-leanSource[LeanConst[name_String, _List], _Integer] := name
+(* ---- Lean source ---- *)
 
-leanSource[LeanSort[LeanLevelZero[]], _] := "Prop"
+(* leanSource[expr] writes an expression as Lean source, each application as it is given, for terms
+   built without their implicit arguments, as ProofToLean builds them. leanSource[expr, "Explicit"] writes
+   each constant applied with @, for terms imported from Lean, which carry every argument. A bound
+   variable is written as the name of its binder, renamed where that name is already taken: by a binder
+   around it, by a constant the expression names (a binder Nat would make Nat.succ a field of it), or by
+   a keyword. *)
 
-leanSource[LeanSort[LeanLevelSucc[LeanLevelZero[]]], _] := "Type"
+leanSource[expr_] := leanSource[expr, "Surface"]
 
-leanSource[LeanSort[LeanLevelSucc[l_]], _] := "Type " <> leanPPLevel[l]
+leanSource[expr_, mode : "Surface" | "Explicit"] := Block[{$sourceMode = mode, $takenNames = If[mode === "Explicit", constantNamesOf[expr], {}]},
+    sourceOf[expr, {}]
+]
 
-leanSource[LeanSort[l_], _] := "Sort " <> leanPPLevel[l]
+constantNamesOf[expr_] := Union[Flatten[Cases[expr, LeanConst[name_String, _] :> {name, First[StringSplit[name, "."], name]}, {0, Infinity}]]]
 
-leanSource[LeanBVar[n_Integer], _] := "#" <> ToString[n]
+$leanKeywords = {
+    "at", "by", "calc", "class", "def", "deriving", "do", "else", "end", "example", "fun", "forall", "from",
+    "have", "if", "import", "in", "inductive", "instance", "let", "match", "mutual", "namespace", "open", "Prop",
+    "return", "section", "show", "Sort", "structure", "suffices", "then", "theorem", "Type", "universe",
+    "variable", "where", "with"
+}
 
-leanSource[LeanFVar[_], _] := "_fvar"
+(* the scope lists the names of the bound variables, innermost first *)
 
-leanSource[LeanMVar[_], _] := "_"
+sourceOf[LeanConst[name_String, _List], _] := name
 
-leanSource[LeanLitNat[n_Integer], _] := ToString[n]
+sourceOf[LeanSort[level_], _] := sortSource[level]
 
-leanSource[LeanLitStr[s_String], _] := "\"" <> s <> "\""
+sourceOf[LeanBVar[index_Integer], scope_List] := If[index < Length[scope], scope[[index + 1]], "#" <> ToString[index]]
 
-(* Forall/Pi *)
+sourceOf[LeanFVar[_], _] := "_fvar"
 
-leanSource[e : LeanForall[_, _, _, _], d_Integer] := Block[{binders, body = e, name, dom, bi, nm, nBinders = 0},
-    binders = First[
-        Last[
-            Reap[
-                While[
-                    MatchQ[body, LeanForall[_, _, _, _]] && d - nBinders > 0
-                    ,
-                    {name, dom, body, bi} = List @@ body;
-                    nm = cleanName[name];
-                    nBinders++;
-                    Sow[
-                        Switch[ bi,
-                            "implicit",
-                                "{" <> nm <> " : " <> leanSource[dom, d - 1] <> "}"
-                            ,
-                            "strictImplicit",
-                                "\[LeftDoubleBracket]" <> nm <> " : " <> leanSource[dom, d - 1] <> "\[RightDoubleBracket]"
-                            ,
-                            "instImplicit",
-                                "[" <> nm <> " : " <> leanSource[dom, d - 1] <> "]"
-                            ,
-                            _,
-                                If[ nm === "" || StringMatchQ[nm, "_" ~~ ___],
-                                    leanSource[dom, d - 1]
-                                    ,
-                                    "(" <> nm <> " : " <> leanSource[dom, d - 1] <> ")"
-                                ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
+sourceOf[LeanMVar[_], _] := "_"
+
+(* a kernel term's literal is raw: in source, 0 alone would be OfNat.ofNat 0 again *)
+
+sourceOf[LeanLitNat[n_Integer], _] := If[$sourceMode === "Explicit", "(nat_lit " <> ToString[n] <> ")", ToString[n]]
+
+sourceOf[LeanLitStr[text_String], _] := "\"" <> StringReplace[text, {"\\" -> "\\\\", "\"" -> "\\\"", "\n" -> "\\n", "\t" -> "\\t", "\r" -> "\\r"}] <> "\""
+
+sourceOf[LeanMData[_, expr_], scope_] := sourceOf[expr, scope]
+
+(* Lean numbers the fields of a structure from 1 *)
+
+sourceOf[LeanProj[_, index_Integer, expr_], scope_] := atomSource[expr, scope] <> "." <> ToString[index + 1]
+
+(* @Eq a lhs rhs -> lhs = rhs: the type of lhs gives a *)
+
+sourceOf[LeanApp[LeanApp[LeanApp[LeanConst["Eq", _], _], lhs_], rhs_], scope_] := atomSource[lhs, scope] <> " = " <> atomSource[rhs, scope]
+
+sourceOf[expr_LeanApp, scope_] := Block[{head = expr, arguments = {}},
+    While[MatchQ[head, LeanApp[_, _]], PrependTo[arguments, head[[2]]]; head = head[[1]]];
+    StringRiffle[Prepend[atomSource[#, scope]& /@ arguments, headSource[head, scope]], " "]
+]
+
+(* An arrow is a binder of the default kind that is not needed: in a kernel term, one whose variable the
+   body does not use; in a term built by name, one with no name. Other binders are gathered into one ∀. *)
+
+sourceOf[expr : LeanForall[_, _, _, _], scope_] := Block[{binders = {}, body = expr, inner = scope, name, domain, binder, bound},
+    While[
+        MatchQ[body, LeanForall[_, _, _, _]] && ! arrowBinderQ[body[[1]], body[[3]], body[[4]]]
         ,
-        {}
+        {name, domain, body, binder} = List @@ body;
+        bound = binderName[name, inner, body];
+        AppendTo[binders, binderSource[bound, sourceOf[domain, inner], binder]];
+        inner = Prepend[inner, bound]
     ];
-    If[ AllTrue[
-        binders
+    If[ binders =!= {},
+        FromCharacterCode[8704] <> " " <> StringRiffle[binders, " "] <> ", " <> sourceOf[body, inner]
         ,
-        ! StringStartsQ[#, "("]
-        &&
-        ! StringStartsQ[#, "{"]
-        &&
-        ! StringStartsQ[#, "["]
-        &&
-        ! StringStartsQ[#, "\[LeftDoubleBracket]"]&
-    ],
-        StringRiffle[Append[binders, leanSource[body, d - 1]], " " <> FromCharacterCode[8594] <> " "]
-        ,
-        FromCharacterCode[8704] <> " " <> StringRiffle[binders, " "] <> ", " <> leanSource[body, d - 1]
+        arrowDomainSource[body[[2]], inner] <> " " <> FromCharacterCode[8594] <> " " <> sourceOf[body[[3]], Prepend[inner, binderName[body[[1]], inner, body[[3]]]]]
     ]
 ]
 
-(* Lambda *)
-
-leanSource[e : LeanLam[_, _, _, _], d_Integer] := Block[{binders, body = e, name, dom, bi, nm, nBinders = 0},
-    binders = First[
-        Last[
-            Reap[
-                While[
-                    MatchQ[body, LeanLam[_, _, _, _]] && d - nBinders > 0
-                    ,
-                    {name, dom, body, bi} = List @@ body;
-                    nm = cleanName[name];
-                    nBinders++;
-                    Sow[
-                        Switch[ bi,
-                            "implicit",
-                                "{" <> nm <> " : " <> leanSource[dom, d - 1] <> "}"
-                            ,
-                            "instImplicit",
-                                "[" <> nm <> " : " <> leanSource[dom, d - 1] <> "]"
-                            ,
-                            _,
-                                "(" <> nm <> " : " <> leanSource[dom, d - 1] <> ")"
-                        ]
-                    ]
-                ]
-            ]
-        ]
+sourceOf[expr : LeanLam[_, _, _, _], scope_] := Block[{binders = {}, body = expr, inner = scope, name, domain, binder, bound},
+    While[
+        MatchQ[body, LeanLam[_, _, _, _]]
         ,
-        {}
+        {name, domain, body, binder} = List @@ body;
+        bound = binderName[name, inner, body];
+        AppendTo[binders, binderSource[bound, sourceOf[domain, inner], binder]];
+        inner = Prepend[inner, bound]
     ];
-    "fun " <> StringRiffle[binders, " "] <> " => " <> leanSource[body, d - 1]
+    "fun " <> StringRiffle[binders, " "] <> " => " <> sourceOf[body, inner]
 ]
 
-leanSource[LeanLet[name_String, type_, val_, body_], d_Integer] := "let " <> cleanName[name] <> " : " <> leanSource[type, d - 1] <> " := " <> leanSource[val, d - 1] <> "; " <> leanSource[body, d - 1]
-
-(* Eq infix: @Eq a lhs rhs -> lhs = rhs *)
-
-leanSource[LeanApp[LeanApp[LeanApp[LeanConst["Eq", _], _], lhs_], rhs_], d_Integer] := leanSource[lhs, d - 1] <> " = " <> leanSource[rhs, d - 1]
-
-(* Application *)
-
-leanSource[e_LeanApp, d_Integer] := Block[{fn = e, args, a},
-    args = Reverse @
-        First[
-            Last[
-                Reap[
-                    While[
-                        MatchQ[fn, LeanApp[_, _]]
-                        ,
-                        a = fn[[2]];
-                        fn = fn[[1]];
-                        Sow[leanSource[a, d - 1]]
-                    ]
-                ]
-            ]
-            ,
-            {}
-        ];
-    "(" <> leanSource[fn, d - 1] <> " " <> StringRiffle[args, " "] <> ")"
+sourceOf[LeanLet[name_, type_, value_, body_, ___], scope_] := With[{bound = binderName[name, scope, body]},
+    "let " <> bound <> " : " <> sourceOf[type, scope] <> " := " <> sourceOf[value, scope] <> "; " <> sourceOf[body, Prepend[scope, bound]]
 ]
 
-leanSource[LeanProj[struct_String, idx_Integer, expr_], d_Integer] := leanSource[expr, d - 1] <> "." <> ToString[idx]
+sourceOf[LeanNoValue[], _] := "sorry"
 
-leanSource[LeanMData[_, expr_], d_Integer] := leanSource[expr, d]
+sourceOf[$Failed, _] := "sorry"
 
-leanSource[LeanNoValue[], _] := "sorry"
+sourceOf[other_, _] := "sorry /- " <> ToString[Short[other, 1]] <> " -/"
 
-leanSource[$Failed, _] := "sorry"
+headSource[head : LeanConst[name_String, _List], scope_] := If[$sourceMode === "Explicit", "@" <> name, name]
 
-leanSource[other_, _] := "sorry /- " <> ToString[Short[other, 1]] <> " -/"
+headSource[head_, scope_] := atomSource[head, scope]
+
+atomSource[expr_, scope_] := With[{source = sourceOf[expr, scope]}, If[atomicExprQ[expr], source, "(" <> source <> ")"]]
+
+atomicExprQ[LeanMData[_, expr_]] := atomicExprQ[expr]
+
+atomicExprQ[LeanSort[level_]] := MatchQ[level, LeanLevelZero[] | LeanLevelSucc[LeanLevelZero[]]]
+
+atomicExprQ[expr_] := MatchQ[expr, _LeanConst | _LeanBVar | _LeanFVar | _LeanMVar | _LeanLitNat | _LeanLitStr | _LeanProj]
+
+(* an arrow binds less tightly than an application, so only a binder or a let needs parentheses *)
+
+arrowDomainSource[domain_, scope_] := With[{source = sourceOf[domain, scope]},
+    If[MatchQ[domain //. LeanMData[_, inner_] :> inner, _LeanForall | _LeanLam | _LeanLet], "(" <> source <> ")", source]
+]
+
+binderSource[bound_String, domain_String, "implicit"] := "{" <> bound <> " : " <> domain <> "}"
+
+binderSource[bound_String, domain_String, "strictImplicit"] := FromCharacterCode[10627] <> bound <> " : " <> domain <> FromCharacterCode[10628]
+
+binderSource[bound_String, domain_String, "instImplicit"] := "[" <> bound <> " : " <> domain <> "]"
+
+binderSource[bound_String, domain_String, _] := "(" <> bound <> " : " <> domain <> ")"
+
+(* A term built by name, as ProofToLean builds one, refers to a binder by its name, so a binder that names
+   a variable is kept even where no bound variable refers to it, and a binder's name only changes where it
+   would hide another binder that a bound variable refers to. In a kernel term every variable is a bound
+   variable, and a binder's name also changes where it would hide a constant. *)
+
+binderName[name_, scope_, body_] := freshBinderName[name, scope, body]
+
+arrowBinderQ[name_, body_, binder_] := binder === "default" && ! looseBVarQ[body, 0] && ($sourceMode === "Explicit" || MatchQ[cleanName[name], "" | _?(StringStartsQ["_"])])
+
+(* A name taken by a binder around is only renamed when the body uses that binder's variable, which the
+   new name would hide. In body, the variable at position p of the scope has the index p. *)
+
+freshBinderName[name_, scope_List, body_] := Block[{base = binderBaseName[name], candidate, index = 0},
+    candidate = base;
+    While[
+        AnyTrue[Flatten[Position[scope, candidate, {1}]], looseBVarQ[body, #]&] || MemberQ[$takenNames, candidate]
+        ,
+        index++;
+        candidate = base <> "_" <> ToString[index]
+    ];
+    candidate
+]
+
+(* a kernel term's binder name may be hygienic or anonymous; a term built by name keeps its names *)
+
+binderBaseName[name_String] := With[{clean = cleanName[name]},
+    If[ $sourceMode =!= "Explicit" && clean =!= "" || StringMatchQ[clean, RegularExpression["[\\p{L}][\\p{L}\\p{N}_'!?\\x{2080}-\\x{209C}]*"]] && ! MemberQ[$leanKeywords, clean],
+        clean
+        ,
+        "x"
+    ]
+]
+
+binderBaseName[_] := "x"
+
+(* whether expr has the bound variable index, counting the binders inside expr *)
+
+looseBVarQ[LeanBVar[j_Integer], index_] := j === index
+
+looseBVarQ[(LeanForall | LeanLam)[_, domain_, body_, _], index_] := looseBVarQ[domain, index] || looseBVarQ[body, index + 1]
+
+looseBVarQ[LeanLet[_, type_, value_, body_, ___], index_] := looseBVarQ[type, index] || looseBVarQ[value, index] || looseBVarQ[body, index + 1]
+
+looseBVarQ[LeanApp[function_, argument_], index_] := looseBVarQ[function, index] || looseBVarQ[argument, index]
+
+looseBVarQ[(LeanProj | LeanMData)[___, expr_], index_] := looseBVarQ[expr, index]
+
+looseBVarQ[_, _] := False
+
+(* Sort 0 is Prop, Sort (l + 1) is Type l *)
+
+sortSource[LeanLevelZero[]] := "Prop"
+
+sortSource[LeanLevelSucc[LeanLevelZero[]]] := "Type"
+
+sortSource[LeanLevelSucc[level_]] := "Type " <> levelAtomSource[level]
+
+sortSource[level_] := "Sort " <> levelAtomSource[level]
+
+levelSource[LeanLevelZero[]] := "0"
+
+levelSource[level_LeanLevelSucc] := Block[{base = level, steps = 0},
+    While[MatchQ[base, _LeanLevelSucc], base = base[[1]]; steps++];
+    If[base === LeanLevelZero[], ToString[steps], levelAtomSource[base] <> " + " <> ToString[steps]]
+]
+
+levelSource[LeanLevelParam[name_String]] := name
+
+levelSource[LeanLevelMax[a_, b_]] := "max " <> levelAtomSource[a] <> " " <> levelAtomSource[b]
+
+levelSource[LeanLevelIMax[a_, b_]] := "imax " <> levelAtomSource[a] <> " " <> levelAtomSource[b]
+
+levelSource[_] := "_"
+
+levelAtomSource[level_] := With[{source = levelSource[level]}, If[StringContainsQ[source, " "], "(" <> source <> ")", source]]
 
 (* ============================================================================ *)
 
