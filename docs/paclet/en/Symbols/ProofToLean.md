@@ -44,7 +44,7 @@ The final goal's type:
 leanEnv["FinalGoal"]["TypeForm"]
 ```
 
-<!-- => "a = c" -->
+<!-- => "∀ (a : U) (c : U), a = c" -->
 
 ## Scope
 
