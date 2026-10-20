@@ -21,7 +21,8 @@ A tactic is applied to a [LeanState]() by function application: <code>[LeanTacti
 
 ## Details & Options
 
-- The string form takes ordinary Lean tactic syntax. The structured form names a tactic and supplies its arguments as Wolfram values: <code>[LeanTactic]()["intro", {"P", "h"}]</code>, <code>[LeanTactic]()["exact", [LeanConst]()["h"]]</code>.
+- A tactic runs directly in Lean's meta-programming monad, without Lean's tactic parser, which an environment loaded from compiled modules lacks. These tactics work: `intro` with or without names, `intros`, `exact` with a constant or hypothesis applied to others (`exact hPQ hP`), `apply` with a constant or hypothesis, `assumption`, `rfl`, `constructor` and `trivial`. Any other tactic, and terms beyond names applied to names, such as `h.1` or `⟨a, b⟩`, give [$Failed]() with a `LeanTactic::err` message.
+- The string form writes the tactic as in Lean. The structured form names a tactic and supplies its arguments as Wolfram values: <code>[LeanTactic]()["intro", {"P", "h"}]</code>, <code>[LeanTactic]()["exact", [LeanConst]()["h"]]</code>.
 - A list groups tactics into a sequence applied left to right, equivalent to applying each in turn.
 - Application is a pure transformation of proof states: each step returns a new [LeanState]() rather than mutating the old one.
 

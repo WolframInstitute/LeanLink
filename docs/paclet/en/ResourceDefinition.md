@@ -288,7 +288,7 @@ And export it back to Lean source:
 LeanExportString[imported]
 ```
 
-<!-- => "theorem myT : (Nat.succ (OfNat.ofNat Nat 0 (instOfNatNat 0))) = (OfNat.ofNat Nat 1 (instOfNatNat 1)) := sorry" -->
+<!-- => "theorem myT : (@Nat.succ (@OfNat.ofNat Nat (nat_lit 0) (@instOfNatNat (nat_lit 0)))) = (@OfNat.ofNat Nat (nat_lit 1) (@instOfNatNat (nat_lit 1))) := sorry" -->
 
 [ProofToLean]() complements [MetamathImport]() - both bring an external formal-proof corpus into the Wolfram Language; LeanLink targets Lean 4 / Mathlib and additionally drives the prover interactively.
 

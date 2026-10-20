@@ -51,7 +51,7 @@ Read the first line back:
 First[Import[file, "Lines"]]
 ```
 
-<!-- => "theorem myT : (Nat.succ (OfNat.ofNat Nat 0 (instOfNatNat 0))) = (OfNat.ofNat Nat 1 (instOfNatNat 1)) := sorry" -->
+<!-- => "theorem myT : (@Nat.succ (@OfNat.ofNat Nat (nat_lit 0) (@instOfNatNat (nat_lit 0)))) = (@OfNat.ofNat Nat (nat_lit 1) (@instOfNatNat (nat_lit 1))) := sorry" -->
 
 ## Properties and Relations
 
