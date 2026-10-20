@@ -1185,6 +1185,18 @@ VerificationTest[
 ]
 
 VerificationTest[
+    With[{evaluation = EvaluationData[LeanImport["NoSuchModule.Anywhere"]]},
+        {evaluation["Result"], AnyTrue[evaluation["MessagesText"], StringContainsQ["NoSuchModule.Anywhere"]]}
+    ]
+    ,
+    {$Failed, True}
+    ,
+    {LeanImport::err}
+    ,
+    TestID -> "LeanImport-names-a-module-it-cannot-find"
+]
+
+VerificationTest[
     Module[{env, back},
         env = LeanImportString[{
             "structure Point where", "  x : Nat", "  y : Nat",

@@ -374,13 +374,24 @@ resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".
 
 $envCache = <||>
 
+(* Lean's loader names a module it cannot find only on standard error, so the message names the imports
+   for which no directory of the search path has an .olean file *)
+
+loadFailureText[imports_List, searchPath_String] := Replace[
+    Select[imports, Function[module, NoneTrue[StringSplit[searchPath, ":"], Function[dir, FileExistsQ[FileNameJoin[Prepend[StringSplit[module, "."], dir]] <> ".olean"]]]]],
+    {
+        {} -> "Failed to load environment",
+        missing_ :> "Failed to load environment: no directory of the search path has the module " <> StringRiffle[missing, ", "]
+    }
+]
+
 getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, searchPath, handle},
     key = {projDir, imports};
     If[KeyExistsQ[$envCache, key], Return[$envCache[key]]];
     searchPath = resolveSearchPath[projDir];
     handle = $loadEnvFn[StringRiffle[imports, ","], searchPath];
     If[ handle === 0 || ! IntegerQ[handle],
-        Message[head::err, "Failed to load environment"];
+        Message[head::err, loadFailureText[imports, searchPath]];
         Return[$Failed]
     ];
     $envCache[key] = handle;
@@ -3098,7 +3109,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             {batch, loadBatches}
         ];
         If[ Length[envAssoc] === 0,
-            Message[LeanImport::err, "Failed to load environment"];
+            Message[LeanImport::err, loadFailureText[imports, resolveSearchPath[projDir]]];
             Return[$Failed]
         ];
         LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]]
