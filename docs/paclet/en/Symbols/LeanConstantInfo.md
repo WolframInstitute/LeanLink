@@ -26,7 +26,7 @@ Full info for a Mathlib theorem (gated on a built checkout):
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
     LeanConstantInfo["And.comm",
-        "Imports" -> {"Mathlib.Logic.Basic"}, "ProjectDir" -> mathlibDir],
+        "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir],
     "Mathlib not built"
 ]
 ```

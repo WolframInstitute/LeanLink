@@ -11,7 +11,7 @@ RelatedGuides: [LeanLink]
 RelatedTutorials: [ExploringMathlib, LeanLinkIntro, ImportGraph]
 ---
 
-LeanLink loads a module of [Mathlib](https://github.com/leanprover-community/mathlib4) straight from a built checkout, and [LeanToTypeTheory]() imports its constants, each with every constant it depends on, into an environment of [WolframInstitute/TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), a proof engine written in the Wolfram Language. TypeTheory's kernel checks every declaration again, independently of Lean's. This tutorial checks a whole module of Mathlib, `Mathlib.Logic.Nonempty`, and shows what TypeTheory does not check yet.
+LeanLink loads a module of [Mathlib](https://github.com/leanprover-community/mathlib4) straight from a built checkout, and [LeanToTypeTheory]() imports its constants, each with every constant it depends on, into an environment of [WolframInstitute/TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), a proof engine written in the Wolfram Language. TypeTheory's kernel checks every declaration again, independently of Lean's. This tutorial checks a whole module of Mathlib, `Mathlib.Basic.Nonempty`, and shows what TypeTheory does not check yet.
 
 ## Prerequisites
 
@@ -26,10 +26,10 @@ mathlibReady = DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]]
 
 ## Loading a Module
 
-`Mathlib.Logic.Nonempty` imports nothing of Mathlib but its initialization, so it sits at the bottom of the library. [LeanImport]() loads it with everything it imports:
+`Mathlib.Basic.Nonempty` imports nothing of Mathlib but its initialization, so it sits at the bottom of the library. [LeanImport]() loads it with everything it imports:
 
 ```wl
-module = "Mathlib.Logic.Nonempty";
+module = "Mathlib.Basic.Nonempty";
 lean = If[mathlibReady, LeanImport[module, "ProjectDir" -> mathlibDir], <||>]
 ```
 

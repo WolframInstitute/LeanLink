@@ -25,7 +25,7 @@ List a filtered slice of a Mathlib module (gated on a built checkout):
 ```wl
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
-    Keys @ LeanListConstants["Imports" -> {"Mathlib.Logic.Basic"},
+    Keys @ LeanListConstants["Imports" -> {"Mathlib.Basic.Logic.Basic"},
         "ProjectDir" -> mathlibDir, "Filter" -> "And.comm"],
     "Mathlib not built"
 ]

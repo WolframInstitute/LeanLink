@@ -303,7 +303,7 @@ The type of a Mathlib theorem, drawn as its expression tree (gated on a built ch
 
 ```wl
 If[ DirectoryQ[FileNameJoin[{$HomeDirectory, "src", "mathlib4", ".lake", "build"}]],
-    LeanImport["Mathlib.Logic.Basic",
+    LeanImport["Mathlib.Basic.Logic.Basic",
         "ProjectDir" -> FileNameJoin[{$HomeDirectory, "src", "mathlib4"}],
         "Filter" -> "And.comm"]["And.comm"]["ExprGraph"],
     "Mathlib not built"

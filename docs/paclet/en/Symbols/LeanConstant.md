@@ -26,7 +26,7 @@ The raw record of a Mathlib theorem (gated on a built checkout):
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
     LeanConstantInfo["And.comm",
-        "Imports" -> {"Mathlib.Logic.Basic"}, "ProjectDir" -> mathlibDir],
+        "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir],
     "Mathlib not built"
 ]
 ```
@@ -39,7 +39,7 @@ The name and kind are the first two parts:
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
     info = LeanConstantInfo["And.comm",
-        "Imports" -> {"Mathlib.Logic.Basic"}, "ProjectDir" -> mathlibDir];
+        "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir];
     {info[[1]], info[[2]]},
     "Mathlib not built"
 ]

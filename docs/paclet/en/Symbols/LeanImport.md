@@ -103,7 +103,7 @@ Information[env, "Kinds"]
 ```wl
 mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
 If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
-    Length @ LeanImport["Mathlib.Logic.Basic",
+    Length @ LeanImport["Mathlib.Basic.Logic.Basic",
         "ProjectDir" -> mathlibDir, "Filter" -> "comm"],
     "Mathlib not built"
 ]

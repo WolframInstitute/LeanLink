@@ -23,7 +23,7 @@ Install `elan` (the Lean version manager), then create a project with Mathlib as
    lake init MathlibTest math
    lake exe cache get
    lake build Mathlib.Algebra.Group.Basic
-   lake build Mathlib.Logic.Basic
+   lake build Mathlib.Basic.Logic.Basic
 *)
 ```
 
@@ -102,7 +102,7 @@ A different module, the same workflow. Load the logic basics, filtered to the co
 
 ```wl
 logicEnv = If[ mathlibReady,
-    LeanImport["Mathlib.Logic.Basic", "ProjectDir" -> mathlibDir, "Filter" -> "comm"],
+    LeanImport["Mathlib.Basic.Logic.Basic", "ProjectDir" -> mathlibDir, "Filter" -> "comm"],
     "Mathlib not built"]
 ```
 
