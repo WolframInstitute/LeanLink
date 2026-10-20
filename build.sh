@@ -25,11 +25,9 @@ download_sysroot() {
     local ext_dir="${CACHE_DIR}/lean-${LEAN_VER_NUM}-${platform}"
     
     if [ ! -d "$ext_dir" ]; then
-        echo "--> Downloading Lean ${LEAN_VER_TAG} for ${platform}..." >&2
-        curl -L -f -s "$url" -o "$zipname" || { echo "Failed to download $url" >&2; exit 1; }
-        echo "--> Extracting ${zipname}..." >&2
-        unzip -q "$zipname"
-        rm -f "$zipname"
+        # Only the headers and the shared runtime libraries, not the whole ~900 MB release
+        echo "--> Fetching what the shim needs from Lean ${LEAN_VER_TAG} for ${platform}..." >&2
+        python3 "$ROOT/Native/shim/fetch_sysroot.py" "$LEAN_VER_NUM" "$platform" "$CACHE_DIR" >&2 || { echo "Failed to fetch from $url" >&2; exit 1; }
     fi
     echo "$ext_dir"
 }
