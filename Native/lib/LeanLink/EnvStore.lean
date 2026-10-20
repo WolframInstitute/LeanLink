@@ -96,7 +96,7 @@ def freeEnvExport (handle : UInt64) : IO Unit := do
 def listTheoremsExport (handle : UInt64) (filterStr : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let filter := filterStr.trim
+  let filter := filterStr.trimAscii.toString
   let entries := env.constants.fold (init := #[]) fun acc name ci =>
     let nameStr := name.toString
     if filter == "" || (nameStr.splitOn filter).length > 1 then
@@ -110,7 +110,7 @@ def listTheoremsExport (handle : UInt64) (filterStr : @& String) : IO ByteArray 
 def listConstantNamesExport (handle : UInt64) (filterStr : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let filter := filterStr.trim
+  let filter := filterStr.trimAscii.toString
   let names := env.constants.fold (init := #[]) fun acc name _ci =>
     let nameStr := name.toString
     if filter == "" || (nameStr.splitOn filter).length > 1 then
@@ -124,7 +124,7 @@ def listConstantNamesExport (handle : UInt64) (filterStr : @& String) : IO ByteA
 def listConstantKindsExport (handle : UInt64) (filterStr : @& String) : IO ByteArray := do
   let store ← envStore.get
   let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
-  let filter := filterStr.trim
+  let filter := filterStr.trimAscii.toString
   let entries := env.constants.fold (init := #[]) fun acc name ci =>
     let nameStr := name.toString
     if filter == "" || (nameStr.splitOn filter).length > 1 then
@@ -255,7 +255,7 @@ def ppExprInEnv (env : Environment) (e : Expr) (opens : List Name := []) : IO St
 /-- Comma-separated namespaces (as sent from WL) to the list `ppExprInEnv` opens. -/
 def parseOpens (opens : String) : List Name :=
   (opens.splitOn ",").filterMap fun ns =>
-    let ns := ns.trim
+    let ns := ns.trimAscii.toString
     if ns.isEmpty then none else some ns.toName
 
 /-- Get pretty-printed type string. Optionally unfolds N levels first. -/
@@ -611,7 +611,7 @@ def applyTacticExport (stateId : UInt64) (tacticStr : @& String) : IO ByteArray 
   }
   -- Direct MetaM-based tactic dispatch (bypasses parser extensions which aren't
   -- available in olean-loaded environments)
-  let tacticParts := tacticStr.trim.splitOn " " |>.filter (· ≠ "")
+  let tacticParts := tacticStr.trimAscii.toString.splitOn " " |>.filter (· ≠ "")
   let tacticName := tacticParts.head!
   -- Strip parentheses from args (tacticSource may wrap apps in parens)
   let stripParens (s : String) : String :=

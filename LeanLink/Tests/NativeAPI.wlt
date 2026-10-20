@@ -252,7 +252,7 @@ VerificationTest[
         Export[FileNameJoin[{dep, "Dep.lean"}], "theorem Dep.two : 1 + 1 = 2 := rfl\n", "Text"];
         Export[FileNameJoin[{main, "lakefile.toml"}], "name = \"main\"\ndefaultTargets = [\"Main\"]\n[[require]]\nname = \"dep\"\npath = \"../dep\"\n[[lean_lib]]\nname = \"Main\"\n", "Text"];
         Export[FileNameJoin[{main, "Main.lean"}], "import Dep\ntheorem Main.two : 1 + 1 = 2 := Dep.two\n", "Text"];
-        Scan[Export[FileNameJoin[{#, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"] &, {dep, main}];
+        Scan[Export[FileNameJoin[{#, "lean-toolchain"}], "leanprover/lean4:v4.35.0", "Text"] &, {dep, main}];
         LeanBuild[main];
         {LeanImport["Main", "ProjectDir" -> main]["Main.two"]["TypeForm"], LeanImportString["import Dep\ntheorem t : 1 + 1 = 2 := Dep.two", "ProjectDir" -> main]["t"]["TypeForm"]}
     ]
@@ -263,7 +263,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    With[{r = LeanBuild[$lbProject["leanprover/lean4:v4.30.0", "theorem bad : 1 = 2 := rfl\n"], {"Probe"}]},
+    With[{r = LeanBuild[$lbProject["leanprover/lean4:v4.35.0", "theorem bad : 1 = 2 := rfl\n"], {"Probe"}]},
         {r["Tag"], StringContainsQ[r["Output"], "error"]}
     ]
     ,

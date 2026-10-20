@@ -153,7 +153,7 @@ $ShimLib := $ShimLib = Block[
    small but requires the toolchain the shim was built against to be installed
    via elan. *)
 
-$LeanToolchainVersion = "v4.30.0";(* must match Native/lean-toolchain *)
+$LeanToolchainVersion = "v4.35.0";(* must match Native/lean-toolchain *)
 
 (* elan's root: ELAN_HOME when set, else ~/.elan. Containers commonly relocate
    it (ELAN_HOME=/opt/elan with no ~/.elan at all), so every path built from the

@@ -16,7 +16,7 @@ Needs["Wolfram`LeanLink`"]
 LeanLink loads the Lean runtime from the toolchain it is built against, installed with [elan](https://github.com/leanprover/elan):
 
 ```bash
-elan toolchain install leanprover/lean4:v4.30.0
+elan toolchain install leanprover/lean4:v4.35.0
 ```
 
 The TypeTheory bridge (`LeanToTypeTheory`, `TypeTheoryToLean`) also needs the paclet [WolframInstitute/TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), which it loads on first use:

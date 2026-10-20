@@ -81,7 +81,7 @@ A small project, built with [LeanBuild]():
 ```wl
 dir = CreateDirectory[];
 Export[FileNameJoin[{dir, "lakefile.toml"}], {"name = \"demo\"", "[[lean_lib]]", "name = \"Demo\""}, "Lines"];
-Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.30.0", "Text"];
+Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.35.0", "Text"];
 Export[FileNameJoin[{dir, "Demo.lean"}], {"namespace Demo", "def triangle (n : Nat) : Nat := n * (n + 1) / 2", "end Demo"}, "Lines"];
 LeanBuild[dir, {"Demo"}]
 ```

@@ -23,7 +23,7 @@ RelatedGuides: [LeanLink]
 Load the core `Init` module from the Lean toolchain and immediately free it:
 
 ```wl
-toolchainLib = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", "leanprover--lean4---v4.30.0", "lib", "lean"}];
+toolchainLib = FileNameJoin[{$HomeDirectory, ".elan", "toolchains", "leanprover--lean4---v4.35.0", "lib", "lean"}];
 If[ DirectoryQ[toolchainLib],
     handle = LeanLoadEnvironment[{"Init"}, toolchainLib];
     LeanFreeEnvironment[handle],
