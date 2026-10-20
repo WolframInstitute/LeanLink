@@ -878,7 +878,11 @@ SetAttributes[leanText, HoldFirst]
 
 leanText[ForAll[{binders___}, body_], scope_Association] := binderChain[HoldComplete /@ Unevaluated[{binders}], HoldComplete[body], scope, " -> ", "", "->"]
 
-leanText[Function[{binders___}, body_], scope_Association] := binderChain[HoldComplete /@ Unevaluated[{binders}], HoldComplete[body], scope, " ", "fun ", "=>"]
+(* @fun, so that Lean does not put implicit lambdas in front of it: a recursor Lean makes for an inductive
+   type written here takes the binders of its constructors, implicit ones included, where TypeTheory's takes
+   them explicit, and the two differ only in what Lean's elaborator, not its kernel, reads *)
+
+leanText[Function[{binders___}, body_], scope_Association] := binderChain[HoldComplete /@ Unevaluated[{binders}], HoldComplete[body], scope, " ", "@fun ", "=>"]
 
 leanText[Implies[domain_, codomain_], scope_Association] := "(" <> leanText[domain, scope] <> " -> " <> leanText[codomain, scope] <> ")"
 

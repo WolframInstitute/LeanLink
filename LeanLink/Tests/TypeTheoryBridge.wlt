@@ -230,4 +230,13 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-refuses-rules-Lean-does-not-have"
 ]
 
+(* the recursor Lean makes for an inductive type written here takes its constructors' implicit binders, so a
+   minor premise written as a plain fun would get implicit lambdas from Lean's elaborator *)
+
+VerificationTest[
+    Head[LeanImportString[TypeTheoryToLean[$prelude, Keys[$prelude]]]],
+    LeanEnvironment,
+    TestID -> "TypeTheoryToLean-the-whole-prelude-compiles"
+]
+
 EndTestSection[]
