@@ -32,7 +32,7 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 ]
 ```
 
-<!-- => LeanForall[...] rendering as ∀ {a : Prop} {b : Prop}, a ∧ b ⇔ b ∧ a -->
+<!-- => LeanForall[...] rendering as ∀ {a : Prop} {b : Prop}, Iff (And #1 #0) (And #0 #1), each #i a bound variable -->
 
 ## Properties and Relations
 

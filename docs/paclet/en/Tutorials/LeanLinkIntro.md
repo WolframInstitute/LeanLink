@@ -308,7 +308,7 @@ Tactics can also be built structurally, with Lean-native names and Wolfram-value
 LeanTactic["exact", LeanConst["h"]]
 ```
 
-<!-- => LeanTactic["exact", LeanConst["h", {}]] -->
+<!-- => exact h -->
 
 Applied the same way as string tactics, here to the identity's goal again:
 

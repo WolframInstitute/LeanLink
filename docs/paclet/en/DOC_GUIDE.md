@@ -183,7 +183,7 @@ the build degrades to an explanatory string instead of an error:
   uses. Never hardcode an absolute home path in a way that errors when it is
   missing.
 - **Slow scans** (the [Import Graph](Tutorials/ImportGraph.md) tutorial walks
-  ~5000 files) are fine in a tutorial but keep them out of `## Basic Examples`
+  ~8000 files) are fine in a tutorial but keep them out of `## Basic Examples`
   on a Symbol page.
 
 ## The compiler-backed pages

@@ -123,7 +123,7 @@ The structured form names the tactic and passes arguments as Wolfram values:
 LeanTactic["exact", LeanConst["h"]]
 ```
 
-<!-- => LeanTactic["exact", LeanConst["h", {}]] -->
+<!-- => exact h -->
 
 It applies to a state as a string tactic does. After two structured `intro` steps, it closes the identity's goal:
 

@@ -39,7 +39,7 @@ leanFiles = If[mathlibReady, FileNames["*.lean", mathlibSrc, Infinity], {}];
 Length[leanFiles]
 ```
 
-<!-- => 7791 -->
+<!-- => 8094 -->
 
 A module's top-level namespace is the component just after `Mathlib` (so `Mathlib.Algebra.Group.Basic` is in `Algebra`). These helpers map a module name, and a file path, to that namespace:
 
@@ -51,7 +51,7 @@ fileNamespace[file_String] := namespaceOf @ StringRiffle[
     FileNameSplit[StringReplace[FileNameDrop[file, FileNameDepth[mathlibDir]], ".lean" -> ""]], "."];
 ```
 
-Imports live at the top of a file, so reading only the first 60 lines keeps the scan fast (a couple of seconds for all 7791 files). We keep just the `Mathlib.*` imports and map each to its namespace:
+Imports live at the top of a file, so reading only the first 60 lines keeps the scan fast (a couple of seconds for all of Mathlib's eight thousand files). We keep just the `Mathlib.*` imports and map each to its namespace:
 
 ```wl
 readImportNamespaces[file_String] := Module[{stream = OpenRead[file], lines},
@@ -78,7 +78,7 @@ nsEdges = If[ mathlibReady,
 Length[nsEdges]
 ```
 
-<!-- => 72 -->
+<!-- => 84 -->
 
 Count the files in each namespace - this both sizes the nodes and orders the legend:
 
@@ -87,7 +87,7 @@ nsCounts = If[mathlibReady, Reverse @ Sort @ Counts[fileNamespace /@ leanFiles],
 Take[Normal[nsCounts], UpTo[5]]
 ```
 
-<!-- => {"Algebra" -> 1284, "CategoryTheory" -> 1031, "Analysis" -> 779, "RingTheory" -> 657, "Data" -> 639} -->
+<!-- => {"Algebra" -> 1319, "CategoryTheory" -> 1084, "Analysis" -> 795, "RingTheory" -> 689, "Topology" -> 665} -->
 
 Color each namespace from the standard scheme, size each node by its file count, and lay the graph out. No background is pinned, so it reads on both light and dark themes:
 
@@ -118,7 +118,7 @@ If[ mathlibReady,
     "Mathlib source not found"]
 ```
 
-<!-- => Dataset: Algebra 1284, CategoryTheory 1031, Analysis 779, ... -->
+<!-- => Dataset: Algebra 1319, CategoryTheory 1084, Analysis 795, ... -->
 
 ## Declaration-Level Dependencies
 

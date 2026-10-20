@@ -155,6 +155,7 @@ LeanLink/
 ├── release.wls                # Documentation site and paclet resource (PacletPage)
 ├── pacletpage.wl              # Settings shared by build_docs.wls and release.wls
 ├── submit.wls                 # Paclet Repository submission
+├── typetheory_coverage.wls    # How much of a Lean library TypeTheory checks
 └── run_tests.wls              # Test runner
 ```
 
