@@ -18,6 +18,7 @@ RelatedGuides: [LeanLink]
 - *proof* is a [ProofObject]() such as the result of [FindEquationalProof](). Each premise becomes an `axiom`, each derived step a `theorem` with a tactic proof, and the goal the `"FinalGoal"` theorem.
 - Types are carried as [LeanTerm]() expression trees; step proofs are emitted as Lean tactic blocks (`have`, `conv`, `simp only`, `exact`). The result therefore round-trips through [LeanExportString]() into compilable Lean source.
 - Because the transpiled environment is real Lean, you can re-check it - opening the `"FinalGoal"` with [LeanState]() and confirming it auto-completes verifies the transpilation.
+- A step of the proof with no translation to Lean yet, such as a substitution rule an axiom gives, leaves the theorem it proves with the proof `sorry`, and [ProofToLean]() says which theorems those are.
 
 ## Basic Examples
 
@@ -98,3 +99,13 @@ LeanState[leanEnv["FinalGoal"]]["Complete"]
 <!-- => True -->
 
 [ProofToLean]() is the Lean counterpart to [MetamathImport]() and similar bridges: it takes a proof produced in the Wolfram Language and renders it as an independently checkable artifact in an external prover.
+
+## Possible Issues
+
+A proof that uses commutativity, as a substitution rule, transpiled to Lean:
+
+```wl
+ProofToLean[FindEquationalProof[g[x, y] == g[y, x], ForAll[{p, q}, g[p, q] == g[q, p]]]]
+```
+
+<!-- => ProofToLean::sorry message for {FinalGoal}, then LeanEnvironment summary box: 3 constants -->

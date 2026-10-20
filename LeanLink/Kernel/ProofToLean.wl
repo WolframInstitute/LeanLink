@@ -582,6 +582,8 @@ ptlProcessStep[x_HoldComplete, _] := Nothing
 
 (* ====== MAIN PUBLIC FUNCTION ====== *)
 
+ProofToLean::sorry = "The proofs of `1` are sorry: the steps of the proof object that give them have no translation to Lean yet."
+
 ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstants, finalGoalType, envData, src, env},
     pf = proof["ProofFunction"];
     (* State -- bare symbol with DownValues for mutation *)
@@ -725,6 +727,10 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
             ]
         ]
     |>;
+    (* a step that has no translation yet leaves its theorem proved by sorry, which the user must hear of *)
+    With[{unproved = Select[st["decls"], ! FreeQ[st["term", #]["_Tactic"], "sorry"]&]},
+        If[unproved =!= {}, Message[ProofToLean::sorry, unproved]]
+    ];
     (* Build LeanEnvironment with expression tree types *)
     envData = <||>;
     Do[envData[name] = LeanTerm[st["term", name]];, {name, st["decls"]}];

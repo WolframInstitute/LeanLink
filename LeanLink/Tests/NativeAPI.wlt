@@ -593,6 +593,8 @@ VerificationTest[
     ,
     {True, True}
     ,
+    {ProofToLean::sorry}
+    ,
     TestID -> "ProofToLean-declares-a-function-named-by-one-letter"
 ]
 
@@ -876,7 +878,8 @@ VerificationTest[
 VerificationTest[
     Module[{proof, env, src, rt},
         proof = FindEquationalProof["Absorption", "BooleanAxioms"];
-        env = ProofToLean[proof];
+        (* a step with no translation yet, which this test allows, is proved by sorry, and ProofToLean says so *)
+        env = Quiet[ProofToLean[proof], ProofToLean::sorry];
         src = LeanExportString[env];
         rt = Quiet @ LeanImportString[src];
 (* Allow at most 2 errors — 1 known: commutative Ax3 loop in SL8 
