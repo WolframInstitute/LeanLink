@@ -56,7 +56,7 @@ target_include_directories(LeanLinkShim PRIVATE
 
 target_link_directories(LeanLinkShim PRIVATE ${LEAN_HOME}/lib/lean)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(DEFAULT_LIBS ${CMAKE_SOURCE_DIR}/libgnu_lean_thunks.a ${LEAN_HOME}/bin/libleanshared.dll ${LEAN_HOME}/bin/libleanshared_1.dll ${LEAN_HOME}/bin/libleanshared_2.dll)
+    set(DEFAULT_LIBS ${CMAKE_SOURCE_DIR}/libgnu_lean_thunks.a ${LEAN_HOME}/bin/libleanshared.dll ${LEAN_HOME}/bin/libleanshared_1.dll ${LEAN_HOME}/bin/libleanshared_2.dll ${LEAN_HOME}/bin/libInit_shared.dll)
     target_link_libraries(LeanLinkShim PRIVATE -Wl,--enable-auto-import ${DEFAULT_LIBS})
     # Link the MinGW runtime statically. The shim's _Thread_local needs libgcc's
     # emulated-TLS helper (__emutls_get_address), which in turn needs winpthread;

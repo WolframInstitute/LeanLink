@@ -36,11 +36,13 @@ private initialize searchPathStore : IO.Ref (Std.HashMap UInt64 SearchPath) ← 
 /-- Load an environment from module imports with a given search path. -/
 def loadEnv (imports : Array String) (searchPath : String) : IO Environment := do
   -- Build search path from user-provided paths
-  let userPaths : List System.FilePath := (searchPath.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
+  -- the separator of the platform: ";" on Windows, whose paths hold ":" after the drive letter
+  let separator := System.SearchPath.separator.toString
+  let userPaths : List System.FilePath := (searchPath.splitOn separator).filter (· ≠ "") |>.map (⟨·⟩)
   -- Also check environment variables for additional paths
   let leanPath ← IO.getEnv "LEAN_PATH"
   let libPaths : List System.FilePath := match leanPath with
-    | some lp => (lp.splitOn ":").filter (· ≠ "") |>.map (⟨·⟩)
+    | some lp => (lp.splitOn separator).filter (· ≠ "") |>.map (⟨·⟩)
     | none => []
   Lean.searchPathRef.set (userPaths ++ libPaths)
   -- Import modules

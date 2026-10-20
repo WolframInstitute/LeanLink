@@ -787,6 +787,19 @@ VerificationTest[
     TestID -> "LeanImportString-SimpleDef"
 ]
 
+(* A source with CRLF line ends, as a Windows editor or checkout gives it,
+   compiles as with LF, and the source kept for "Source" has no CR *)
+
+VerificationTest[
+    With[{env = LeanImportString["def crlfOne : Nat := 1\r\ndef crlfTwo : Nat := crlfOne + 1\r\n"]},
+        {env["crlfTwo"]["TypeForm"], StringFreeQ[env["crlfTwo"]["Source"], "\r"]}
+    ]
+    ,
+    {"Nat", True}
+    ,
+    TestID -> "LeanImportString-CRLF"
+]
+
 (* Compile theorem and verify type *)
 
 VerificationTest[

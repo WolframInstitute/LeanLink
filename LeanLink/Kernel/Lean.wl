@@ -125,7 +125,7 @@ $ShimLib := $ShimLib = Block[
             "libLeanLinkShim.dylib"
         ,
         "Windows-x86-64",
-            "LeanLinkShim.dll"
+            "libLeanLinkShim.dll"
         ,
         _,
             "libLeanLinkShim.so"
@@ -161,6 +161,11 @@ $LeanToolchainVersion = "v4.30.0";(* must match Native/lean-toolchain *)
 
 elanHome[] := Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]]
 
+(* Lean separates the directories of a search path (LEAN_PATH) with ";" on
+   Windows, whose paths have ":" after the drive letter, and with ":" elsewhere. *)
+
+$searchPathSeparator = If[$OperatingSystem === "Windows", ";", ":"]
+
 leanToolchainDir[] := With[
     {
         dir = FileNameJoin[
@@ -178,7 +183,7 @@ leanToolchainDir[] := With[
 
 leanRuntimeLibs[] := Switch[ $SystemID,
     "Windows-x86-64",
-        {{"libleanshared.dll", "libleanshared_1.dll", "libleanshared_2.dll"}, {"bin"}}
+        {{"libleanshared.dll", "libleanshared_1.dll", "libleanshared_2.dll", "libInit_shared.dll", "libLake_shared.dll"}, {"bin"}}
     ,
     "MacOSX-ARM64" | "MacOSX-x86-64",
         {{"libleanshared.dylib", "libleanshared_1.dylib", "libleanshared_2.dylib", "libInit_shared.dylib", "libLake_shared.dylib"}, {"lib", "lean"}}
@@ -192,6 +197,11 @@ provisionLeanRuntime[shimPath_String] := Module[
     ,
     {libs, sub} = leanRuntimeLibs[];
     primary = FileNameJoin[{libDir, First[libs]}];
+(* On Windows the runtime's own DLLs need more of the toolchain (libc++.dll),
+   so its bin directory goes on PATH as well. *)
+    If[ $OperatingSystem === "Windows" && leanToolchainDir[] =!= $Failed,
+        addRuntimeSearchPath[FileNameJoin[Prepend[sub, leanToolchainDir[]]]]
+    ];
 (* Already provisioned (or a self-contained build): just expose the directory. *)
     If[ FileExistsQ[primary],
         addRuntimeSearchPath[libDir];
@@ -369,7 +379,7 @@ resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".
         ];
         Nothing
     ];
-    StringRiffle[Select[Join[{lakeBuildLib[projDir]}, lakeBuildLib /@ If[DirectoryQ[pkgsRoot], FileNames["*", pkgsRoot], {}], lakeBuildLib /@ lakePathDependencies[projDir], {leanLib}], StringQ[#] && DirectoryQ[#] &], ":"]
+    StringRiffle[Select[Join[{lakeBuildLib[projDir]}, lakeBuildLib /@ If[DirectoryQ[pkgsRoot], FileNames["*", pkgsRoot], {}], lakeBuildLib /@ lakePathDependencies[projDir], {leanLib}], StringQ[#] && DirectoryQ[#] &], $searchPathSeparator]
 ]
 
 $envCache = <||>
@@ -378,7 +388,7 @@ $envCache = <||>
    for which no directory of the search path has an .olean file *)
 
 loadFailureText[imports_List, searchPath_String] := Replace[
-    Select[imports, Function[module, NoneTrue[StringSplit[searchPath, ":"], Function[dir, FileExistsQ[FileNameJoin[Prepend[StringSplit[module, "."], dir]] <> ".olean"]]]]],
+    Select[imports, Function[module, NoneTrue[StringSplit[searchPath, $searchPathSeparator], Function[dir, FileExistsQ[FileNameJoin[Prepend[StringSplit[module, "."], dir]] <> ".olean"]]]]],
     {
         {} -> "Failed to load environment",
         missing_ :> "Failed to load environment: no directory of the search path has the module " <> StringRiffle[missing, ", "]
@@ -541,7 +551,7 @@ moduleSourceFile[h_Integer, module_String] := With[
     {parts = StringSplit[module, "."]},
     SelectFirst[
         Flatten[sourceCandidates[#, parts, FileNameJoin[parts] <> ".lean"]& /@
-            StringSplit[Lookup[Lookup[$handleSource, h, <||>], "SearchPath", ""], ":"]],
+            StringSplit[Lookup[Lookup[$handleSource, h, <||>], "SearchPath", ""], $searchPathSeparator]],
         FileExistsQ,
         Missing["NotAvailable"]
     ]
@@ -603,7 +613,7 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
     projDir = OptionValue["ProjectDir"];
     searchPath = StringRiffle[
         DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], FileNameJoin[{tc, "lib", "lean"}]}, ""],
-        ":"
+        $searchPathSeparator
     ];
     opens = Select[Flatten[{OptionValue["Open"]}], StringQ];
 (* "Source": declarations the expression uses (definitions, opens), placed
@@ -2434,6 +2444,12 @@ levelAtomSource[level_] := With[{source = levelSource[level]}, If[StringContains
 
 (* ============================================================================ *)
 
+(* The source's lines end with LF: a Windows editor or checkout gives them
+   CRLF, which would reach the stored text and the "Source" of declarations *)
+
+LeanImportString[src_String, opts : OptionsPattern[LeanImport]] /; StringContainsQ[src, "\r"] :=
+    LeanImportString[StringReplace[src, {"\r\n" -> "\n", "\r" -> "\n"}], opts]
+
 LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFile, modName, result},
     modName = "LeanLinkTmp" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^6]];
     tmpFile = FileNameJoin[{$TemporaryDirectory, modName <> ".lean"}];
@@ -2967,7 +2983,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             {leanBin, "-o", oleanFile, "-R", rootDir, absFile},
             ProcessEnvironment -> Association[
                 GetEnvironment[],
-                "LEAN_PATH" -> StringRiffle[DeleteCases[{projSearch, leanLibDir}, ""], ":"]
+                "LEAN_PATH" -> StringRiffle[DeleteCases[{projSearch, leanLibDir}, ""], $searchPathSeparator]
             ]
         ]
     ];
@@ -2987,7 +3003,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         Return[$Failed, Block]
     ];
     (* Load via lazy pattern *)
-    searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], ":"];
+    searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
     Block[{handle, kinds, res},
         handle = $loadEnvFn[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
