@@ -3672,6 +3672,22 @@ collectFunctionSignature[type_] := Block[{params, body = type, name, dom, bi, do
 
 (* ---- Expression translation: Lean term -> WL expression ---- *)
 
+(* a fresh symbol named after a Lean variable, or x for a name that is no symbol name, such as _ *)
+
+freshSymbol[name_] := Unique[Replace[cleanName[name], other : Except[_String ? symbolNameQ] :> "x"]]
+
+symbolNameQ[name_String] := StringMatchQ[name, (LetterCharacter | "$") ~~ (LetterCharacter | DigitCharacter | "$") ...]
+
+(* the last n arguments of an application, translated, or $Failed *)
+
+lastArguments[e_LeanApp, n_Integer, ctx_List] := With[{args = flattenApp[e][[2]]},
+    If[ Length[args] >= n,
+        Replace[leanExprToWL[#, ctx]& /@ Take[args, -n], translated_ /; AnyTrue[translated, FailureQ] -> $Failed]
+        ,
+        $Failed
+    ]
+]
+
 (* ctx is a List of variable names, index 0 = last element *)
 
 (* de Bruijn variable lookup -- ctx contains actual symbols *)
@@ -3701,6 +3717,36 @@ leanExprToWL[LeanApp[LeanConst["Nat.succ", _], arg_], ctx_List] := With[{a = lea
 (* OfNat.ofNat -- extract the literal *)
 
 leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "OfNat.ofNat" && Length[flattenApp[e][[2]]] >= 2 := leanExprToWL[flattenApp[e][[2, 2]], ctx]
+
+(* a decimal literal, mantissa * 10 ^ -exponent or mantissa * 10 ^ exponent: the nearest Float, 0 when it is too
+   small for one *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Float.ofScientific" || (appHeadName[e] === "OfScientific.ofScientific" && arithmeticType[e] === "Float") :=
+    Replace[lastArguments[e, 3, ctx], {
+        {mantissa_Integer, negative : True | False, exponent_Integer} :> Quiet[N[mantissa * 10 ^ If[negative, -exponent, exponent]], General::munfl],
+        _ -> $Failed
+    }]
+
+(* conversions that keep the number: from Nat to Int, and to Float *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Nat.cast" | "NatCast.natCast" | "Int.cast" | "IntCast.intCast"] && MatchQ[arithmeticType[e], "Nat" | "Int"] :=
+    Replace[lastArguments[e, 1, ctx], {a_} :> a]
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Int.ofNat" := Replace[lastArguments[e, 1, ctx], {a_} :> a]
+
+(* 1. * a, not N[a], which leaves a variable an integer *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Nat.toFloat" | "Float.ofNat" | "Float.ofInt"] := Replace[lastArguments[e, 1, ctx], {a_} :> 1. * a]
+
+(* Int.negSucc n is -(n + 1); natAbs and toNat give a Nat, toNat 0 for a negative number; pred 0 is 0 *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Int.negSucc" := Replace[lastArguments[e, 1, ctx], {a_} :> -a - 1]
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Int.natAbs" := Replace[lastArguments[e, 1, ctx], {a_} :> Abs[a]]
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Int.toNat" := Replace[lastArguments[e, 1, ctx], {a_} :> Max[a, 0]]
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Nat.pred" := Replace[lastArguments[e, 1, ctx], {a_} :> Max[a - 1, 0]]
 
 (* Arithmetic: HAdd.hAdd _ _ _ _ a b -> a + b (last 2 args) *)
 
@@ -3789,6 +3835,20 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HMod.hMod" | "instH
     ]
 ]
 
+(* Powers: x ^ 0 is 1, 0 ^ 0 included, as in Lean *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HPow.hPow" | "instHPow.hPow"] := Replace[lastArguments[e, 2, ctx], {
+    {a_, b_} :> Replace[arithmeticType[e], {
+        "Nat" | "Int" :> If[b == 0, 1, a ^ b],
+        "Float" :> If[b == 0, 1., a ^ b],
+        _ -> $Failed
+    }]
+}]
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Max.max" := Replace[lastArguments[e, 2, ctx], {a_, b_} :> Max[a, b]]
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Min.min" := Replace[lastArguments[e, 2, ctx], {a_, b_} :> Min[a, b]]
+
 (* Negation *)
 
 leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Neg.neg" | "HNeg.hNeg" | "instHNeg.hNeg"] := With[{args = flattenApp[e][[2]]},
@@ -3812,6 +3872,28 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "BEq.beq" | "instBEq
         $Failed
     ]
 ]
+
+(* a != b, and the proposition a \[NotEqual] b *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "bne" | "Ne"] := Replace[lastArguments[e, 2, ctx], {a_, b_} :> Unequal[a, b]]
+
+(* the proposition a = b, as the condition of an if: c = true is c *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Eq" := Replace[lastArguments[e, 2, ctx], {
+    {a_, True} :> a,
+    {a_, False} :> ! a,
+    {a_, b_} :> Equal[a, b]
+}]
+
+(* the connectives of Bool, and of decidable propositions *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Bool.and" | "and" | "And"] := Replace[lastArguments[e, 2, ctx], {a_, b_} :> a && b]
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Bool.or" | "or" | "Or"] := Replace[lastArguments[e, 2, ctx], {a_, b_} :> a || b]
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Bool.xor" | "xor"] := Replace[lastArguments[e, 2, ctx], {a_, b_} :> Xor[a, b]]
+
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Bool.not" | "not" | "Not"] := Replace[lastArguments[e, 1, ctx], {a_} :> ! a]
 
 leanExprToWL[e_LeanApp, ctx_List] /; StringEndsQ[Replace[appHeadName[e], None -> ""], ".le" | ".ble"] := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 2,
@@ -3841,7 +3923,7 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "decide" | "Decidabl
 
 (* GT.gt -- a > b: last 2 args *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "GT.gt" | "instGT.gt" | "Nat.blt"] := With[{args = flattenApp[e][[2]]},
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "GT.gt" | "instGT.gt"] := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 2,
         With[{a = leanExprToWL[args[[-2]], ctx], b = leanExprToWL[args[[-1]], ctx]},
             If[FailureQ[a] || FailureQ[b], $Failed, Greater[a, b]]
@@ -3863,7 +3945,7 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "GE.ge" | "instGE.ge
 
 (* if-then-else: ite _ cond _ thenBranch elseBranch *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "ite" | "instDecidableIte" | "Bool.bne"] := With[
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "ite" | "instDecidableIte"] := With[
     {args = flattenApp[e][[2]]}
     ,
 (* ite has args: type, cond, decidableInst, thenBranch, elseBranch 
@@ -3877,20 +3959,19 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "ite" | "instDecidab
             If[FailureQ[c] || FailureQ[t] || FailureQ[f], $Failed, If[c, t, f]]
         ]
         ,
-        (* Bool if -- 4 args *)
-        If[ Length[args] >= 4,
-            With[{
-                c = leanExprToWL[args[[1]], ctx],
-                t = leanExprToWL[args[[3]], ctx],
-                f = leanExprToWL[args[[4]], ctx]
-            },
-                If[FailureQ[c] || FailureQ[t] || FailureQ[f], $Failed, If[c, t, f]]
-            ]
-            ,
-            $Failed
-        ]
+        $Failed
     ]
 ]
+
+(* bif c then t else e: cond _ c t e *)
+
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "cond" := Replace[flattenApp[e][[2]], {
+    {_, c_, t_, f_} :> Replace[leanExprToWL[#, ctx]& /@ {c, t, f}, {
+        translated_ /; AnyTrue[translated, FailureQ] -> $Failed,
+        {cWL_, tWL_, fWL_} :> If[cWL, tWL, fWL]
+    }],
+    _ -> $Failed
+}]
 
 (* dite -- decidable if-then-else (dependent): dite type cond inst thenLam elseLam *)
 
@@ -3922,7 +4003,7 @@ leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "dite" := With[{args = f
 
 (* Let binding *)
 
-leanExprToWL[LeanLet[name_String, _, val_, body_], ctx_List] := Block[{sym = Unique[cleanName[name]], v, b},
+leanExprToWL[LeanLet[name_String, _, val_, body_], ctx_List] := Block[{sym = freshSymbol[name], v, b},
     v = leanExprToWL[val, ctx];
     b = leanExprToWL[body, Append[ctx, sym]];
     If[ FailureQ[v] || FailureQ[b],
@@ -3937,7 +4018,7 @@ leanExprToWL[LeanLet[name_String, _, val_, body_], ctx_List] := Block[{sym = Uni
 
 (* Lambda in body -- nested function *)
 
-leanExprToWL[LeanLam[name_, type_, body_, _], ctx_List] := Block[{sym = Unique[cleanName[name]], tyWL, b},
+leanExprToWL[LeanLam[name_, type_, body_, _], ctx_List] := Block[{sym = freshSymbol[name], tyWL, b},
     tyWL = leanTypeToWL[type];
     b = leanExprToWL[body, Append[ctx, sym]];
     If[FailureQ[tyWL] || FailureQ[b], $Failed, Function @@ {Typed[sym, tyWL], b}]
@@ -3956,10 +4037,11 @@ leanExprToWL[e_LeanApp, ctx_List] := Block[{head, args, headWL, argsWL},
     If[FailureQ[headWL] || AnyTrue[argsWL, FailureQ], $Failed, headWL @@ argsWL]
 ]
 
-(* Named constant fallback -- return as-is; won't be compilable but captures structure *)
+(* Named constant fallback -- a name that is a symbol name becomes that symbol, any other stays the Lean
+   constant; neither compiles, but the structure is kept *)
 
-leanExprToWL[LeanConst[name_String, _], _List] := With[{sn = shortName[name]},
-    Symbol[sn]
+leanExprToWL[constant : LeanConst[name_String, _], _List] := With[{sn = shortName[name]},
+    If[symbolNameQ[sn], Symbol[sn], constant]
 ]
 
 (* Fallbacks *)
@@ -3983,7 +4065,7 @@ peelLambdas[term_, paramTypes_List] := Block[{params, body = term, name, type, b
                     ,
                     {name, type, body, bi} = {body[[1]], body[[2]], body[[3]], body[[4]]};
                     If[ bi === "default",
-                        sym = Unique[cleanName[name]];
+                        sym = freshSymbol[name];
                         Sow[{sym, First[remaining][[2]]}];
                         remaining = Rest[remaining]
                         ,

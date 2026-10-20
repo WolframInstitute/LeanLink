@@ -1053,6 +1053,55 @@ VerificationTest[
     TestID -> "LeanCompile-arithmetic-computes-as-Lean-does"
 ]
 
+VerificationTest[
+    Module[{env, compiled},
+        env = LeanImportString[{
+            "def differ (a b : Nat) : Bool := a != b", "def pick (c : Bool) (a b : Nat) : Nat := bif c then a else b",
+            "def same (a b : Nat) : Nat := if a = b then 1 else 0", "def mixed (a b : Nat) : Bool := a == b && a < 3 || !(b ≤ a)",
+            "def other (a b : Int) : Bool := decide (a ≠ b ∧ ¬ a < 0)", "def either (a b : Bool) : Bool := xor a b",
+            "def spread (a b : Nat) : Nat := max a b - min a b", "def power (a b : Nat) : Nat := a ^ b"
+        }];
+        compiled = AssociationMap[LeanCompile[env[#]]&, {"differ", "pick", "same", "mixed", "other", "either", "spread", "power"}];
+        {
+            compiled["differ"][3, 4], compiled["pick"][False, 3, 4], compiled["same"][3, 3], compiled["mixed"][3, 4],
+            compiled["other"][-1, 2], compiled["either"][True, True], compiled["spread"][3, 7], compiled["power"][0, 0], compiled["power"][2, 10]
+        }
+    ]
+    ,
+    {True, 4, 1, True, False, False, 4, 1, 1024}
+    ,
+    TestID -> "LeanCompile-Boolean-connectives-comparisons-and-powers"
+]
+
+VerificationTest[
+    Module[{env, compiled},
+        env = LeanImportString[{
+            "def half (n : Nat) : Float := n.toFloat / 2", "def scale (x : Float) : Float := x * 2.5 - 1.25e-1",
+            "def widen (n : Nat) (k : Int) : Int := n - k", "def back (a : Int) : Nat := a.toNat + a.natAbs + Nat.pred 0"
+        }];
+        compiled = AssociationMap[LeanCompile[env[#]]&, {"half", "scale", "widen", "back"}];
+        {compiled["half"][3], compiled["scale"][2.], compiled["widen"][3, 5], compiled["back"][-4]}
+    ]
+    ,
+    {1.5, 4.875, -2, 4}
+    ,
+    TestID -> "LeanCompile-decimal-literals-and-number-conversions"
+]
+
+VerificationTest[
+    Module[{env, function},
+        env = LeanImportString["def withLog (n : Nat) : Nat := Nat.log2 n + 1"];
+        function = LeanToFunction[env["withLog"]];
+        FreeQ[function, _Symbol ? (StringContainsQ[SymbolName[#], "."]&)] && ! FreeQ[function, LeanConst["Nat.log2", _]]
+    ]
+    ,
+    True
+    ,
+    {}
+    ,
+    TestID -> "LeanToFunction-keeps-a-constant-it-cannot-translate"
+]
+
 (* LeanCompile on environment *)
 
 VerificationTest[
