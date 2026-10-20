@@ -570,6 +570,21 @@ VerificationTest[
     TestID -> "ProofToLean-Roundtrip-Succeeds"
 ]
 
+VerificationTest[
+    Module[{export},
+        export[context_] := Block[{$Context = context, $ContextPath = {"System`", context}},
+            LeanExportString[ProofToLean[ToExpression["FindEquationalProof[p == r, {p == q, q == r}]"]]]
+        ];
+        With[{source = export["ProofToLeanGlobal`"]},
+            {source === export["ProofToLeanNotebook`"], MatchQ[LeanImportString[source], _LeanEnvironment]}
+        ]
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "ProofToLean-gives-the-same-Lean-in-any-context"
+]
+
 (* ================================================================ *)
 
 (* LeanExportString for ProofToLean                                    *)

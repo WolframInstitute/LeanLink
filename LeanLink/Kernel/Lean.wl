@@ -2082,7 +2082,7 @@ LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] := B
     preambleLines = First[
         Last[
             Reap[
-                If[ KeyExistsQ[preamble, "Imports"],
+                If[ Lookup[preamble, "Imports", {}] =!= {},
                     Do[Sow["import " <> imp], {imp, preamble["Imports"]}];
                     Sow[""]
                 ];
@@ -2158,7 +2158,8 @@ LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] := B
         ,
         {}
     ];
-    StringRiffle[Join[preambleLines, If[Length[preambleLines] > 0, {""}, {}], declLines], "\n"]
+    (* one blank line between the preamble and the declarations *)
+    StringRiffle[Join[preambleLines, If[MatchQ[preambleLines, {___, Except[""]}], {""}, {}], declLines], "\n"]
 ]
 
 (* Environment with stashed source *)

@@ -65,16 +65,18 @@ LeanExportString[leanEnv]
 <!-- =>
 axiom U : Type
 
-axiom Ax1 : b = a
-axiom Ax2 : b = c
-axiom Hyp1 : a = c
-theorem SL1 : a = c := by
-  have h := Ax2
+axiom Ax1 : ∀ (b : U) (a : U), b = a
+axiom Ax2 : ∀ (b : U) (c : U), b = c
+axiom Hyp1 : ∀ (a : U) (c : U), a = c
+theorem SL1 : ∀ (a : U) (c : U), a = c := by
+  intro a c
+  have h := Ax2 a c
   conv at h => lhs; simp only [Ax1]
   exact h
 
-theorem FinalGoal : a = c := by
-  exact SL1
+theorem FinalGoal : ∀ (a : U) (c : U), a = c := by
+  intro a c
+  exact SL1 a c
 -->
 
 ## Properties and Relations

@@ -69,8 +69,10 @@ ptlEqToStr[eq : Inactive[Equal][_, _]] := Block[{c = ptlCleanExpr[eq]},
     StringTemplate["`1` = `2`"][ptlToStr[c[[1]]], ptlToStr[c[[2]]]]
 ]
 
+(* a variable is any symbol of the user's, whatever context the proof was found in, as a notebook's own *)
+
 ptlGetVarsFromEq[eq_, sharedConstants_] := Block[{c = ptlCleanExpr[eq], allVars},
-    allVars = DeleteDuplicates @ Cases[c, s_Symbol /; Context[s] === "Global`" :> ToString[s], Infinity];
+    allVars = DeleteDuplicates @ Cases[c, s_Symbol /; Context[s] =!= "System`" :> ToString[s], Infinity];
     Select[allVars, ! MemberQ[sharedConstants, #]&]
 ]
 
