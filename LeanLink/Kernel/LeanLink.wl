@@ -229,14 +229,14 @@ End[];
 
 EndPackage[];
 
-(* Load Utilities (ImportDOT) and native WXF-based Lean integration *)
+(* Load the native WXF-based Lean integration, from beside this file, as Utilities.wl was:
+   a path the file gives itself loads the files of the same copy of the paclet, and a
+   compiler can follow it *)
 
-Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Utilities.wl"}]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "Lean.wl"}]];
 
-Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "Lean.wl"}]];
-
-Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "ProofToLean.wl"}]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "ProofToLean.wl"}]];
 
 (* The bridge to WolframInstitute/TypeTheory: its entry points only; the rest loads on the first call *)
 
-Get[FileNameJoin[{PacletObject["Wolfram/LeanLink"]["Location"], "Kernel", "TypeTheoryBridge.wl"}]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "TypeTheoryBridge.wl"}]];
