@@ -1785,31 +1785,9 @@ leanPP[e_, 0] := Switch[ Head[e],
 
 leanPP[LeanConst[name_String, _List], _Integer] := shortName[name]
 
-leanPP[LeanSort[LeanLevelZero[]], _] := "Prop"
+(* sorts and levels read as in Lean, as the source printer writes them: Type (u + 1), Sort (max u v) *)
 
-leanPP[LeanSort[LeanLevelSucc[LeanLevelZero[]]], _] := "Type"
-
-leanPP[LeanSort[LeanLevelSucc[l_]], _] := "Type " <> leanPPLevel[l]
-
-leanPP[LeanSort[l_], _] := "Sort " <> leanPPLevel[l]
-
-leanPPLevel[LeanLevelZero[]] := "0"
-
-leanPPLevel[LeanLevelSucc[l_]] := ToString[levelToNat[l] + 1]
-
-leanPPLevel[LeanLevelParam[name_String]] := name
-
-leanPPLevel[LeanLevelMax[a_, b_]] := "max " <> leanPPLevel[a] <> " " <> leanPPLevel[b]
-
-leanPPLevel[LeanLevelIMax[a_, b_]] := "imax " <> leanPPLevel[a] <> " " <> leanPPLevel[b]
-
-leanPPLevel[_] := "?"
-
-levelToNat[LeanLevelZero[]] := 0
-
-levelToNat[LeanLevelSucc[l_]] := levelToNat[l] + 1
-
-levelToNat[_] := 0
+leanPP[LeanSort[level_], _] := sortSource[level]
 
 leanPP[LeanBVar[n_Integer], _] := "#" <> ToString[n]
 
@@ -2051,7 +2029,9 @@ leanPP[e_LeanApp, d_Integer] := Block[{fn = e, args, a},
     leanPP[fn, d - 1] <> " " <> StringRiffle[args, " "]
 ]
 
-leanPP[LeanProj[struct_String, idx_Integer, expr_], d_Integer] := leanPP[expr, d - 1] <> "." <> ToString[idx]
+(* Lean numbers the fields of a structure from 1 *)
+
+leanPP[LeanProj[struct_String, idx_Integer, expr_], d_Integer] := leanPP[expr, d - 1] <> "." <> ToString[idx + 1]
 
 leanPP[LeanMData[_, expr_], d_Integer] := leanPP[expr, d]
 
