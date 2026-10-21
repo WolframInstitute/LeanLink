@@ -161,6 +161,10 @@ $LeanToolchainVersion = "v4.35.0";(* must match Native/lean-toolchain *)
 
 elanHome[] := Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]]
 
+(* A toolchain's programs, such as bin/lean and bin/lake, are lean.exe and lake.exe on Windows *)
+
+leanProgram[dir_String, name_String] := FileNameJoin[{dir, name <> If[$OperatingSystem === "Windows", ".exe", ""]}]
+
 (* Lean separates the directories of a search path (LEAN_PATH) with ";" on
    Windows, whose paths have ":" after the drive letter, and with ":" elsewhere. *)
 
@@ -654,7 +658,7 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
     file = FileNameJoin[{$TemporaryDirectory, "LeanLinkEval" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
     res = runLeanProcess[
-        {FileNameJoin[{tc, "bin", "lean"}], file},
+        {leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file},
         Association[GetEnvironment[], "LEAN_PATH" -> searchPath],
         OptionValue["TimeLimit"]
     ];
@@ -710,7 +714,7 @@ LeanBuild[dir_String, modules : {___String} : {}] := Module[
         Return[Failure["NoProject", <|"MessageTemplate" -> "No such directory: `1`", "MessageParameters" -> {root}|>], Module]
     ];
     tc = projectToolchain[root];
-    lake = FileNameJoin[{tc["Dir"], "bin", "lake"}];
+    lake = leanProgram[FileNameJoin[{tc["Dir"], "bin"}], "lake"];
     If[ ! FileExistsQ[lake],
         Return[
             Failure["ToolchainNotInstalled", <|
@@ -757,6 +761,22 @@ LeanBuild[dir_String, modules : {___String} : {}] := Module[
 $handleSource = <||>;
 
 $typeFormCache = <||>;
+
+(* A file inside a folder: /a/kit/A.lean is inside /a/kit, /a/kit2/A.lean is not.
+   Windows paths compare without case. *)
+
+insideDirectoryQ[file_String, dir_String] := With[
+    {parts = FileNameSplit[file], dirParts = FileNameSplit[dir], fold = If[$OperatingSystem === "Windows", ToLowerCase, Identity]},
+    Length[parts] > Length[dirParts] && fold[Take[parts, Length[dirParts]]] === fold[dirParts]
+]
+
+(* The module an olean under a build directory holds: Mathlib/Logic/Basic.olean is
+   Mathlib.Logic.Basic, whichever separator the paths use *)
+
+oleanModule[olean_String, buildLib_String] := StringRiffle[
+    FileNameSplit[StringDrop[FileNameDrop[olean, FileNameDepth[buildLib]], -StringLength[".olean"]]],
+    "."
+]
 
 (* What a handle was loaded from, so a lean process can import the same thing. *)
 
@@ -805,7 +825,7 @@ frontendTypeForms[h_Integer, names_List, opens_String] := Module[
     file = FileNameJoin[{$TemporaryDirectory, "LeanLinkPP" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
     res = RunProcess[
-        {FileNameJoin[{tc, "bin", "lean"}], file},
+        {leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file},
         ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> info["SearchPath"]]
     ];
     Quiet[DeleteFile[{file, namesFile}]];
@@ -2842,7 +2862,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
     DirectoryQ[FileNameJoin[{buildLib, module}]],
         (* Auto-discover sub-modules from .olean files *)
         oleans = FileNames["*.olean", FileNameJoin[{buildLib, module}], Infinity];
-        subModules = StringReplace[FileNameDrop[#, FileNameDepth[buildLib]]& /@ oleans, {".olean" -> "", "/" -> "."}];
+        subModules = oleanModule[#, buildLib]& /@ oleans;
         If[ subModules =!= {},
 (* Load ALL discovered sub-modules so the full environment is available.
     
@@ -2914,7 +2934,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     projDir = OptionValue["ProjectDir"];
 (* If within a lake project, delegate to module-based import 
     *)
-    If[ projDir =!= Automatic && StringStartsQ[absFile, ExpandFileName[projDir]],
+    If[ projDir =!= Automatic && insideDirectoryQ[absFile, ExpandFileName[projDir]],
         modName = StringReplace[
             StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"],
             {".lean" -> "", "/" -> ".", "\\" -> "."}
@@ -2948,7 +2968,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
    toolchain, which need not be the pinned one ("incompatible header"). *)
     With[{tc = leanToolchainDir[]},
         If[ tc =!= $Failed,
-            leanBin = FileNameJoin[{tc, "bin", "lean"}];
+            leanBin = leanProgram[FileNameJoin[{tc, "bin"}], "lean"];
             leanLibDir = FileNameJoin[{tc, "lib", "lean"}]
             ,
         tcFile = None;
@@ -2963,12 +2983,12 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         If[ FileExistsQ[tcFile],
             tcName = StringTrim[Import[tcFile, "Text"]];
             tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
-            leanBin = FileNameJoin[{elanHome[], "toolchains", tcName, "bin", "lean"}];
+            leanBin = leanProgram[FileNameJoin[{elanHome[], "toolchains", tcName, "bin"}], "lean"];
             leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
             ,
     (* No toolchain file at all: try elan default, then bare lean 
         *)
-            leanBin = FileNameJoin[{elanHome[], "bin", "lean"}];
+            leanBin = leanProgram[FileNameJoin[{elanHome[], "bin"}], "lean"];
             If[! FileExistsQ[leanBin], leanBin = "lean"];
             leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
             If[ ! StringQ[leanLibDir] || ! DirectoryQ[leanLibDir],
@@ -2991,7 +3011,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             While[
                 dir =!= DirectoryName[dir]
                 ,
-                If[FileExistsQ[FileNameJoin[{dir, "lakefile.lean"}]], Return[dir, Block]];
+                If[AnyTrue[{"lakefile.lean", "lakefile.toml"}, FileExistsQ[FileNameJoin[{dir, #}]]&], Return[dir, Block]];
                 dir = DirectoryName[dir]
             ];
             DirectoryName[absFile]
@@ -3101,7 +3121,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             ];
             If[ DirectoryQ[buildLib],
                 oleans = FileNames["*.olean", buildLib, Infinity];
-                subModules = StringReplace[FileNameDrop[#, FileNameDepth[buildLib]]& /@ oleans, {".olean" -> "", "/" -> "."}];
+                subModules = oleanModule[#, buildLib]& /@ oleans;
                 If[subModules =!= {}, imports = subModules]
             ]
         ]

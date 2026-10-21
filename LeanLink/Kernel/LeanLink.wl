@@ -29,9 +29,9 @@ Begin["`Private`"];
 
 $ElanBin = FileNameJoin[{Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]], "bin"}]
 
-$LakeBin = FileNameJoin[{$ElanBin, "lake"}]
+$LakeBin = FileNameJoin[{$ElanBin, If[$OperatingSystem === "Windows", "lake.exe", "lake"]}]
 
-$LeanBin = FileNameJoin[{$ElanBin, "lean"}]
+$LeanBin = FileNameJoin[{$ElanBin, If[$OperatingSystem === "Windows", "lean.exe", "lean"]}]
 
 $CodeLean = PacletObject["Wolfram/LeanLink"]["AssetLocation", "CodeLean"]
 

@@ -1288,4 +1288,19 @@ VerificationTest[
     TestID -> "FreeEnvironment-Deletes-Temporary-Folder"
 ]
 
+(* A project folder holds a file by whole path components, and an olean's module
+   is its path's components *)
+
+VerificationTest[
+    {
+        Wolfram`LeanLink`Private`insideDirectoryQ["/a/kit/A.lean", "/a/kit"],
+        Wolfram`LeanLink`Private`insideDirectoryQ["/a/kit2/A.lean", "/a/kit"],
+        Wolfram`LeanLink`Private`oleanModule[FileNameJoin[{"/b", "Mathlib", "Logic", "Basic.olean"}], "/b"]
+    }
+    ,
+    {True, False, "Mathlib.Logic.Basic"}
+    ,
+    TestID -> "Project-Paths-By-Components"
+]
+
 EndTestSection[]
