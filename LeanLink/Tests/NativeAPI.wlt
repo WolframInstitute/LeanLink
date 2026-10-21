@@ -1303,6 +1303,17 @@ VerificationTest[
     TestID -> "Project-Paths-By-Components"
 ]
 
+(* The paclet's lean-toolchain names the toolchain the shims are built against: a
+   LeanImport of a file falls back on it when that toolchain's folder is missing *)
+
+VerificationTest[
+    StringTrim[Import[FileNameJoin[{Wolfram`LeanLink`Private`$PacletRoot, "lean-toolchain"}], "Text"]]
+    ,
+    "leanprover/lean4:" <> Wolfram`LeanLink`Private`$LeanToolchainVersion
+    ,
+    TestID -> "Paclet-Toolchain-Pin"
+]
+
 (* A source's own imports with .lean files next to it compile first, in import
    order: "import B" finds B.lean, and Sub.C finds Sub/C.lean *)
 
