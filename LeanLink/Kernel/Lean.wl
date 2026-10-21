@@ -2505,6 +2505,92 @@ LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFil
 
 LeanImportString[sources : {___String}, opts : OptionsPattern[LeanImport]] := LeanImportString[StringRiffle[sources, "\n"], opts]
 
+(* --- Local imports of a source file --- *)
+
+(* The folder that a URL import downloads a repository's files into, the root of
+   their module names, while it imports one of them *)
+
+$leanImportRoot = None
+
+(* The root of a source file's module name: the nearest folder above it with a
+   lakefile, or else its own folder *)
+
+leanFileRoot[absFile_String] := Block[{dir = DirectoryName[absFile]},
+    While[
+        dir =!= DirectoryName[dir]
+        ,
+        If[AnyTrue[{"lakefile.lean", "lakefile.toml"}, FileExistsQ[FileNameJoin[{dir, #}]]&], Return[dir, Block]];
+        dir = DirectoryName[dir]
+    ];
+    DirectoryName[absFile]
+]
+
+(* A source compiled to an olean, with module names relative to the root and the
+   search path pinned. A lean that cannot run fails as a compile does. *)
+
+leanCompile[leanBin_String, olean_String, rootDir_String, source_String, leanPath_String] := Replace[
+    RunProcess[{leanBin, "-o", olean, "-R", rootDir, source}, ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> leanPath]],
+    Except[_Association] :> <|"ExitCode" -> -1, "StandardOutput" -> "", "StandardError" -> "lean could not be run: " <> leanBin|>
+]
+
+(* The modules a source imports, as Lean's own parser reads its header, public
+   and meta imports included *)
+
+sourceImports[leanBin_String, file_String] := Replace[
+    Quiet[ImportString[RunProcess[{leanBin, "--deps-json", file}, "StandardOutput"], "RawJSON"]],
+    {
+        KeyValuePattern["imports" -> {KeyValuePattern["result" -> KeyValuePattern["imports" -> imports_List]], ___}] :> DeleteDuplicates[Lookup[imports, "module"]],
+        _ -> {}
+    }
+]
+
+(* The .lean file of a module under a root: Foo.Bar is root/Foo/Bar.lean *)
+
+moduleSource[rootDir_String, module_String] := FileNameJoin[Join[{rootDir}, StringSplit[module, "."]]] <> ".lean"
+
+(* The modules with .lean files under the root that a source imports, and those
+   they import in turn, each after the ones it imports: {{module, file}, ...}.
+   The state is {files seen, modules in order}. *)
+
+localImports[leanBin_String, rootDir_String, file_String] := Last[localImportsFrom[leanBin, rootDir, file, {{file}, {}}]]
+
+localImportsFrom[leanBin_String, rootDir_String, file_String, state_List] := Fold[
+    Function[{seen, module},
+        With[{source = moduleSource[rootDir, module]},
+            If[ ! FileExistsQ[source] || MemberQ[First[seen], source],
+                seen
+                ,
+                With[{after = localImportsFrom[leanBin, rootDir, source, {Append[First[seen], source], Last[seen]}]},
+                    {First[after], Append[Last[after], {module, source}]}
+                ]
+            ]
+        ]
+    ],
+    state,
+    sourceImports[leanBin, file]
+]
+
+(* Each module of the root that the source imports compiles, after the ones it
+   imports, into the folder of the import, so that "import B" finds B.lean next
+   to the source. Gives the result of the first compile that fails, with its file,
+   or None. *)
+
+failedLocalCompile[leanBin_String, rootDir_String, absFile_String, tmpDir_String, leanPath_String] := Catch[
+    Scan[
+        Function[{pair},
+            With[{olean = FileNameJoin[Join[{tmpDir}, StringSplit[First[pair], "."]]] <> ".olean"},
+                If[! DirectoryQ[DirectoryName[olean]], CreateDirectory[DirectoryName[olean]]];
+                With[{res = leanCompile[leanBin, olean, rootDir, Last[pair], leanPath]},
+                    If[res["ExitCode"] =!= 0, Throw[Append[res, "File" -> Last[pair]], failedLocalCompile]]
+                ]
+            ]
+        ],
+        localImports[leanBin, rootDir, absFile]
+    ];
+    None,
+    failedLocalCompile
+]
+
 (* --- LeanImport URL support --- *)
 
 (* Convert GitHub blob URL to raw URL *)
@@ -2523,7 +2609,10 @@ githubParts[url_String] := Block[{parts},
 
 (* Parse import statements from Lean source, return module names *)
 
-parseImports[src_String] := StringCases[src, RegularExpression["(?m)^import\\s+([A-Za-z_][A-Za-z0-9_.]+)"] :> "$1"]
+parseImports[src_String] := Flatten @ StringCases[
+    src,
+    RegularExpression["(?m)^\\s*(?:public\\s+)?(?:meta\\s+)?import\\s+(?:all\\s+)?([^\\n]*?)\\s*(?:--.*)?$"] :> StringCases["$1", RegularExpression["[A-Za-z_][A-Za-z0-9_.']*"]]
+]
 
 (* LeanImport[url] -- import from a GitHub URL pointing to a .lean file *)
 
@@ -2597,13 +2686,8 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
         Message[LeanImport::err, "Failed to download: " <> url];
         Return[$Failed, Block]
     ];
-    (* Also fetch lakefile.lean for Lake root detection *)
-    With[{lf = Quiet[Import[baseRaw <> "lakefile.lean", "Text"]]},
-        If[ StringQ[lf],
-            Export[FileNameJoin[{tmpDir, "lakefile.lean"}], lf, "Text", CharacterEncoding -> "UTF-8"]
-        ]
-    ];
-    LeanImport[targetFile]
+    (* the download folder is the root of the module names; the files the target imports compile first *)
+    Block[{$leanImportRoot = tmpDir}, LeanImport[targetFile]]
 ]
 
 (* ============================================================================ *)
@@ -2928,7 +3012,9 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     leanLibDir,
     content,
     names,
-    projSearch
+    projSearch,
+    rootDir,
+    leanPath
 },
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
@@ -3002,38 +3088,25 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* a folder of its own: an environment loaded earlier from the same file may still read its olean *)
     tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory, "leanlink_" <> modName <> "_" <> ToString[$SessionID] <> "_" <> CreateUUID[]}]];
     oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
-(* Auto-detect Lake project root by scanning upward for lakefile.lean 
-    
-    
-    *)
-    With[{
-        rootDir = Block[{dir = DirectoryName[absFile]},
-            While[
-                dir =!= DirectoryName[dir]
-                ,
-                If[AnyTrue[{"lakefile.lean", "lakefile.toml"}, FileExistsQ[FileNameJoin[{dir, #}]]&], Return[dir, Block]];
-                dir = DirectoryName[dir]
-            ];
-            DirectoryName[absFile]
-        ]
-    },
+(* Module names are relative to the root: the Lake project around the file, the
+   folder a URL import downloads into, or else the file's own folder. *)
+    rootDir = If[StringQ[$leanImportRoot], $leanImportRoot, leanFileRoot[absFile]];
 (* Pin LEAN_PATH for the compile. The shim sets it process-wide on every
    environment load, so inheriting it would make what this source can import
-   depend on whichever environment happened to be loaded last. *)
-        result = RunProcess[
-            {leanBin, "-o", oleanFile, "-R", rootDir, absFile},
-            ProcessEnvironment -> Association[
-                GetEnvironment[],
-                "LEAN_PATH" -> StringRiffle[DeleteCases[{projSearch, leanLibDir}, ""], $searchPathSeparator]
-            ]
-        ]
+   depend on whichever environment happened to be loaded last. The folder of the
+   import comes first: the .lean files of the root that the source imports compile
+   into it before the source does. *)
+    leanPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
+    result = Replace[
+        failedLocalCompile[leanBin, rootDir, absFile, tmpDir, leanPath],
+        None :> leanCompile[leanBin, oleanFile, rootDir, absFile, leanPath]
     ];
     If[ result["ExitCode"] =!= 0,
 (* lean writes diagnostics to stdout, not stderr; RunProcess decodes them as
    Latin-1, so re-decode as UTF-8 to keep the goal/type text readable. *)
         Message[
             LeanImport::err,
-            "lean compilation failed: " <> StringTrim[
+            "lean compilation failed" <> If[KeyExistsQ[result, "File"], " for " <> result["File"], ""] <> ": " <> StringTrim[
                 Quiet @ Check[
                     FromCharacterCode[ToCharacterCode[result["StandardOutput"] <> "\n" <> result["StandardError"], "ISO8859-1"], "UTF-8"],
                     result["StandardOutput"] <> "\n" <> result["StandardError"]

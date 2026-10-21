@@ -1303,4 +1303,22 @@ VerificationTest[
     TestID -> "Project-Paths-By-Components"
 ]
 
+(* A source's own imports with .lean files next to it compile first, in import
+   order: "import B" finds B.lean, and Sub.C finds Sub/C.lean *)
+
+VerificationTest[
+    Block[{dir = CreateDirectory[], env},
+        Export[FileNameJoin[{dir, "LocalB.lean"}], "def localB : Nat := 1", "Text"];
+        CreateDirectory[FileNameJoin[{dir, "Sub"}]];
+        Export[FileNameJoin[{dir, "Sub", "LocalC.lean"}], "import LocalB\ndef localC : Nat := localB + 1", "Text"];
+        Export[FileNameJoin[{dir, "LocalA.lean"}], "import LocalB\nimport Sub.LocalC\ntheorem localA : localB + localC = 3 := rfl", "Text"];
+        env = LeanImport[FileNameJoin[{dir, "LocalA.lean"}]];
+        {Keys[KeyDrop[First[env], "_Handle"]], MatchQ[env["localA"]["KernelCheck"], _Success]}
+    ]
+    ,
+    {{"localA"}, True}
+    ,
+    TestID -> "Import-File-With-Local-Imports"
+]
+
 EndTestSection[]

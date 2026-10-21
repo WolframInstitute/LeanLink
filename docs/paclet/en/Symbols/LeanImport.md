@@ -29,6 +29,7 @@ RelatedGuides: [LeanLink]
 | `"IncludeInternal"` | `False` | include compiler-internal / private declarations |
 
 - Importing a module requires that project to be **built** (`lake build`). A module with no compiled `.olean` file in the project's search path fails: [LeanImport]() returns [$Failed]() with a message that names it.
+- A *file* can `import` other `.lean` files of its folder, or of the Lake project around it: they are compiled first, in import order, so `import B` finds `B.lean` next to the file and `import Sub.C` finds `Sub/C.lean`. A GitHub URL import does the same with the files it downloads.
 
 ## Basic Examples
 
