@@ -1332,4 +1332,15 @@ VerificationTest[
     TestID -> "Import-File-With-Local-Imports"
 ]
 
+(* Outside any Lake project, a module of Lean's own library imports from the
+   toolchain the shim is built against *)
+
+VerificationTest[
+    Length[LeanImport["Init.Prelude", "ProjectDir" -> CreateDirectory[]]] > 1000
+    ,
+    True
+    ,
+    TestID -> "Import-Module-Outside-Projects"
+]
+
 EndTestSection[]

@@ -416,7 +416,8 @@ resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".
             ];
             dir = DirectoryName[dir]
         ];
-        Nothing
+        (* no lean-toolchain above it: Lean's own library of the toolchain the shim is built against *)
+        Replace[leanToolchainDir[], {tc_String :> FileNameJoin[{tc, "lib", "lean"}], _ -> Nothing}]
     ];
     StringRiffle[Select[Join[{lakeBuildLib[projDir]}, lakeBuildLib /@ If[DirectoryQ[pkgsRoot], FileNames["*", pkgsRoot], {}], lakeBuildLib /@ lakePathDependencies[projDir], {leanLib}], StringQ[#] && DirectoryQ[#] &], $searchPathSeparator]
 ]
