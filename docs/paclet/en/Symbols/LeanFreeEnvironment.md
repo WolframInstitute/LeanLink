@@ -16,6 +16,7 @@ RelatedGuides: [LeanLink]
 ## Details & Options
 
 - *handle* is the integer returned by [LeanLoadEnvironment](). After freeing, the handle is no longer valid for queries.
+- Freeing the handle of an environment that [LeanImport]() or [LeanImportString]() compiled from a source also deletes the temporary folder that holds its compiled `.olean`.
 - Returns [Null]().
 
 ## Basic Examples
