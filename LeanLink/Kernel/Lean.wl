@@ -135,7 +135,7 @@ $ShimLib := $ShimLib = Block[
     pacletDir = Quiet[PacletObject["Wolfram/LeanLink"]["Location"]];
     If[ StringQ[pacletDir],
         loc = FileNameJoin[{pacletDir, "LibraryResources", sysDir, libName}];
-        If[FileExistsQ[loc] && provisionLeanRuntime[loc], Return[loc, Block]]
+        If[FileExistsQ[loc], Return[runnableShim[loc], Block]]
     ];
 (* Dev fallback: Native/ is sibling of the LeanLink/ paclet dir
     *)
@@ -149,9 +149,9 @@ $ShimLib := $ShimLib = Block[
 (* The shim references libleanshared via @loader_path (macOS), its soname
    (Linux), or by name (Windows), so the ~190 MB Lean runtime is NOT bundled in
    the paclet. At load we link (or copy, on Windows) the runtime libraries from
-   the user's installed Lean toolchain next to the shim. This keeps the paclet
-   small but requires the toolchain the shim was built against to be installed
-   via elan. *)
+   the user's installed Lean toolchain next to the shim: a copy of the shim in the
+   user's cache, not the paclet's own folder. This keeps the paclet small but
+   requires the toolchain the shim was built against to be installed via elan. *)
 
 $LeanToolchainVersion = "v4.35.0";(* must match Native/lean-toolchain *)
 
@@ -196,6 +196,41 @@ leanRuntimeLibs[] := Switch[ $SystemID,
         {{"libleanshared.so", "libleanshared_1.so", "libleanshared_2.so", "libInit_shared.so", "libLake_shared.so"}, {"lib", "lean"}}
 ]
 
+(* Why the shim could not be loaded, for the ::nolib message *)
+
+$shimFailure = "install the Lean toolchain it was built against (leanprover/lean4:" <> $LeanToolchainVersion <> ") with elan, or run 'lake build' in the Native/ directory for a development build."
+
+(* The shim runs where the Lean runtime is next to it: in place when the runtime
+   is there already, as in a development build, else from a copy in the user's
+   cache, a folder for each build of the shim, next to links to the runtime of the
+   installed toolchain. The paclet's own folder may be read-only, shared by other
+   users, or in a container image, so nothing is written into it. *)
+
+runnableShim[shim_String] := Block[{dir, copy},
+    If[ FileExistsQ[FileNameJoin[{DirectoryName[shim], First[First[leanRuntimeLibs[]]]}]],
+        Return[If[provisionLeanRuntime[shim], shim, $Failed], Block]
+    ];
+    dir = FileNameJoin[{cacheBase[], "LeanLink", $LeanToolchainVersion, $SystemID, StringTake[IntegerString[FileHash[shim, "SHA256"], 16, 64], 16]}];
+    copy = FileNameJoin[{dir, FileNameTake[shim]}];
+    If[ ! FileExistsQ[copy],
+        If[! DirectoryQ[dir], Quiet[CreateDirectory[dir, CreateIntermediateDirectories -> True]]];
+        (* copied under a name of its own, then renamed: a kernel loading at the same time never reads half a file *)
+        With[{part = copy <> "." <> CreateUUID[]},
+            Quiet[CopyFile[shim, part]];
+            Quiet[RenameFile[part, copy, OverwriteTarget -> True]]
+        ]
+    ];
+    If[ ! FileExistsQ[copy],
+        $shimFailure = "the shim could not be copied into " <> dir <> ".";
+        Return[$Failed, Block]
+    ];
+    If[provisionLeanRuntime[copy], copy, $Failed]
+]
+
+(* The user's cache, for files LeanLink makes and can make again *)
+
+cacheBase[] := If[StringQ[$CacheBaseDirectory], $CacheBaseDirectory, $UserBaseDirectory]
+
 provisionLeanRuntime[shimPath_String] := Module[
     {libDir = DirectoryName[shimPath], libs, sub, tc, srcDir, primary}
     ,
@@ -228,6 +263,7 @@ provisionLeanRuntime[shimPath_String] := Module[
         libs
     ];
     addRuntimeSearchPath[libDir];
+    If[! FileExistsQ[primary], $shimFailure = "the Lean runtime of " <> tc <> " could not be linked into " <> libDir <> "."];
     FileExistsQ[primary]
 ]
 
@@ -268,7 +304,7 @@ $PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
 
 Scan[
     Function[sym,
-        sym::nolib = "Lean shim could not be loaded. Install the Lean toolchain it was built against (leanprover/lean4:" <> $LeanToolchainVersion <> ") with elan, or run 'lake build' in the Native/ directory for a development build.";
+        sym::nolib = "Lean shim could not be loaded: `1`";
         sym::err = "Lean error: `1`";
         sym::abort = "Native call aborted: `1`"
     ]
@@ -431,7 +467,7 @@ getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, se
 
 callNative[fn_, args_List, projDir_, imports_, head_ : LeanImport] := Block[{handle, result},
     If[ $ShimLib === $Failed,
-        Message[head::nolib];
+        Message[head::nolib, $shimFailure];
         Return[$Failed]
     ];
     handle = getOrLoadEnv[projDir, imports, head];
@@ -3177,7 +3213,7 @@ LeanImport[file_String, OptionsPattern[]] /; StringEndsQ[file, ".lean"] && ! Str
 
 LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
     If[ $ShimLib === $Failed,
-        Message[LeanImport::nolib];
+        Message[LeanImport::nolib, $shimFailure];
         Return[$Failed]
     ];
     imports = OptionValue["Imports"];
