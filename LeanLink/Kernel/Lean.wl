@@ -227,16 +227,15 @@ provisionLeanRuntime[shimPath_String] := Module[
     FileExistsQ[primary]
 ]
 
-(* macOS resolves the runtime via @loader_path; Linux and Windows need its
-   directory on the dynamic loader's search path. *)
+(* macOS resolves the runtime via @loader_path and Linux via the shim's RPATH
+   $ORIGIN, both next to the shim. Windows needs its directory on PATH. Linux's
+   loader reads LD_LIBRARY_PATH only when a process starts, so setting it here
+   would not reach the shim, only the processes the kernel starts later. *)
 
 addRuntimeSearchPath[libDir_String] := Module[{var, sep, cur},
     {var, sep} = Switch[ $OperatingSystem,
         "Windows",
             {"PATH", ";"}
-        ,
-        "Unix",
-            {"LD_LIBRARY_PATH", ":"}
         ,
         _,
             {None, None}
@@ -395,11 +394,28 @@ loadFailureText[imports_List, searchPath_String] := Replace[
     }
 ]
 
+(* Lean reads LEAN_PATH while it imports modules, so the shim sets it for the whole
+   kernel process when it loads an environment, and KernelCheck, which imports the
+   module's imports again, needs it too. The kernel's own value is put back after
+   each: processes the kernel starts later would otherwise inherit the search path
+   of whichever environment was loaded last. *)
+
+SetAttributes[withLeanPath, HoldRest]
+withLeanPath[searchPath_, body_] := With[{saved = Environment["LEAN_PATH"]},
+    If[StringQ[searchPath], SetEnvironment["LEAN_PATH" -> searchPath]];
+    With[{result = body},
+        SetEnvironment["LEAN_PATH" -> If[StringQ[saved], saved, None]];
+        result
+    ]
+]
+
+loadEnvironment[imports_String, searchPath_String] := withLeanPath[searchPath, $loadEnvFn[imports, searchPath]]
+
 getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, searchPath, handle},
     key = {projDir, imports};
     If[KeyExistsQ[$envCache, key], Return[$envCache[key]]];
     searchPath = resolveSearchPath[projDir];
-    handle = $loadEnvFn[StringRiffle[imports, ","], searchPath];
+    handle = loadEnvironment[StringRiffle[imports, ","], searchPath];
     If[ handle === 0 || ! IntegerQ[handle],
         Message[head::err, loadFailureText[imports, searchPath]];
         Return[$Failed]
@@ -748,6 +764,8 @@ registerHandle[h_Integer, imports_List, searchPath_String] := If[ h > 0,
     $handleSource[h] = <|"Imports" -> imports, "SearchPath" -> searchPath,
         "Names" -> Lookup[Lookup[$handleSource, h, <||>], "Names", {}]|>
 ]
+
+handleInfo[h_Integer, key_String] := Lookup[Lookup[$handleSource, h, <||>], key, None]
 
 registerHandleNames[h_Integer, names_List] := If[ KeyExistsQ[$handleSource, h],
     $handleSource[h, "Names"] = Union[$handleSource[h, "Names"], names]
@@ -1185,7 +1203,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
    rejection is a result, a Failure, not an error. *)
             "KernelCheck",
                 If[ IntegerQ[handle],
-                    With[{r = Quiet[decodeWXF[$kernelCheckFn[handle, name]]]},
+                    With[{r = Quiet[decodeWXF[withLeanPath[handleInfo[handle, "SearchPath"], $kernelCheckFn[handle, name]]]]},
                         Which[
                             AssociationQ[r], Success["KernelChecked", <|"MessageTemplate" -> "The kernel accepts all `1` declarations of `2`.", "MessageParameters" -> {r["Declarations"], r["Module"]}, "Module" -> r["Module"], "Declarations" -> r["Declarations"]|>],
                             StringQ[r] && StringStartsQ[r, "REJECTED: "], Failure["KernelRejected", <|"MessageTemplate" -> "`1`", "MessageParameters" -> {StringDelete[r, StartOfString ~~ "REJECTED: "]}|>],
@@ -2773,17 +2791,21 @@ LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] := iBox[
 
 (* ============================================================================ *)
 
-LeanLoadEnvironment[imports_List, searchPath_String] := With[{h = $loadEnvFn[StringRiffle[imports, ","], searchPath]},
+LeanLoadEnvironment[imports_List, searchPath_String] := With[{h = loadEnvironment[StringRiffle[imports, ","], searchPath]},
     If[IntegerQ[h], registerHandle[h, imports, searchPath]];
     h
 ]
 
-LeanFreeEnvironment[handle_Integer] := (
+(* The olean that an import of a file compiled, in a temporary folder, is deleted
+   with its environment *)
+
+LeanFreeEnvironment[handle_Integer] := With[{tmpDir = handleInfo[handle, "TemporaryDirectory"]},
     $freeEnvFn[handle];
     KeyDropFrom[$handleSource, handle];
     $typeFormCache = KeySelect[$typeFormCache, First[#] =!= handle&];
+    If[StringQ[tmpDir] && DirectoryQ[tmpDir], Quiet[DeleteDirectory[tmpDir, DeleteContents -> True]]];
     Null
-)
+]
 
 (* --- LeanImport --- *)
 
@@ -2957,9 +2979,8 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     ];
     (* Standalone file: compile via lean CLI subprocess *)
     modName = FileBaseName[absFile];
-    tmpDir = FileNameJoin[{$TemporaryDirectory, "leanlink_" <> modName <> "_" <> ToString[$SessionID]}];
-    If[DirectoryQ[tmpDir], DeleteDirectory[tmpDir, DeleteContents -> True]];
-    tmpDir = CreateDirectory[tmpDir];
+    (* a folder of its own: an environment loaded earlier from the same file may still read its olean *)
+    tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory, "leanlink_" <> modName <> "_" <> ToString[$SessionID] <> "_" <> CreateUUID[]}]];
     oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
 (* Auto-detect Lake project root by scanning upward for lakefile.lean 
     
@@ -3005,7 +3026,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* Load via lazy pattern *)
     searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
     Block[{handle, kinds, res},
-        handle = $loadEnvFn[modName, searchPath];
+        handle = loadEnvironment[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
             Message[LeanImport::err, "Failed to load compiled file"];
             DeleteDirectory[tmpDir, DeleteContents -> True];
@@ -3026,6 +3047,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         ];
         registerHandle[handle, {modName}, searchPath];
         $handleSource[handle, "Files"] = <|modName -> absFile|>;
+        $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         registerHandleNames[handle, Keys[kinds]];
         (* Build lazy LeanTerms *)
         res = LeanEnvironment[

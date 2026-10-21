@@ -1248,4 +1248,44 @@ VerificationTest[
     TestID -> "LeanExportString-levels-strings-projections"
 ]
 
+(* The shim sets LEAN_PATH for the whole kernel process while it loads an
+   environment; the kernel's own value comes back afterwards, so processes the
+   kernel starts later do not inherit the search path of the last import *)
+
+VerificationTest[
+    Block[{before = Environment["LEAN_PATH"]},
+        LeanImportString["theorem leanPathKept : 2 + 2 = 4 := rfl"];
+        Environment["LEAN_PATH"] === before
+    ]
+    ,
+    True
+    ,
+    TestID -> "ImportString-Leaves-LEAN_PATH"
+]
+
+(* KernelCheck imports the module's imports again, with the search path of its
+   environment, after the kernel's LEAN_PATH came back *)
+
+VerificationTest[
+    MatchQ[LeanImportString["theorem kernelCheckedAfter : 3 = 3 := rfl"]["kernelCheckedAfter"]["KernelCheck"], _Success]
+    ,
+    True
+    ,
+    TestID -> "KernelCheck-After-LEAN_PATH-Restored"
+]
+
+(* The olean an import compiled lives in a folder of its own, deleted with its environment *)
+
+VerificationTest[
+    Block[{handle, dir},
+        handle = First[LeanImportString["theorem temporaryFolderFreed : 1 = 1 := rfl"]]["_Handle"];
+        dir = Wolfram`LeanLink`Private`handleInfo[handle, "TemporaryDirectory"];
+        {DirectoryQ[dir], LeanFreeEnvironment[handle]; DirectoryQ[dir]}
+    ]
+    ,
+    {True, False}
+    ,
+    TestID -> "FreeEnvironment-Deletes-Temporary-Folder"
+]
+
 EndTestSection[]

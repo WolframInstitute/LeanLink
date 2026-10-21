@@ -61,7 +61,9 @@ runLean[projDir_String, args_List] := Block[{cmd, res},
             <|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "Binary not found: " <> First[cmd]|>
         ]
     ];
-    res = RunProcess[cmd, ProcessDirectory -> projDir];
+(* Not the LEAN_PATH of the kernel's process: lake env sets the project's, and a
+   lean of its own finds its library itself. *)
+    res = RunProcess[cmd, ProcessDirectory -> projDir, ProcessEnvironment -> KeyDrop[GetEnvironment[], "LEAN_PATH"]];
     If[ ! AssociationQ[res],
         <|
             "ExitCode" -> 1,
