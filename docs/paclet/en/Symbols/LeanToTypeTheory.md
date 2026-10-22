@@ -29,7 +29,7 @@ RelatedTutorials: [CheckingMathlib]
 - A block of mutually inductive types is imported as one declaration of all its types, and a type nested in a container, as Lean's syntax trees are in `Array`, as itself: TypeTheory checks the nesting as Lean's kernel does. Every recursor of the block, `X.rec_k` on a container included as <code>[InductiveRecursor](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory#ref/InductiveRecursor)["X", k]</code>, is compared with Lean's.
 - A string literal is written as Lean's kernel reads it: `String.ofList` applied to the list of its characters, each `Char.ofNat` of its code point.
 - The operations Lean's kernel computes on literals with GMP, `Nat.add`, `Nat.mul`, `Nat.pow`, `Nat.div`, `Nat.ble` and the others, are registered with TypeTheory as they are imported, so it computes them on literals with integers too, and a proof about numbers near 2^64 checks at once.
-- Lean's kernel has the computation rule of its quotient types built in. The import adds it as the TypeTheory rewrite rules `"Quot.lift computes"` and `"Quot.ind computes"`, so a cone with quotients, such as that of `funext`, is imported under the rules of the calculus of inductive constructions with rewrite rules allowed, unless the option `"Environment"` gives an environment of other rules.
+- Lean's quotient types, `Quot`, `Quot.mk`, `Quot.lift` and `Quot.ind`, are TypeTheory's own: the import declares them at once with <code>[TypeTheoryQuotients](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory#ref/TypeTheoryQuotients)["Eq", {"Quot", "Quot.mk", "Quot.lift", "Quot.ind"}]</code>, and TypeTheory's kernel computes a lift on a class as Lean's does. Under rules without quotients, given with the option `"Environment"`, and with a TypeTheory before 0.13, they are axioms, and the import adds their computation as the rewrite rules `"Quot.lift computes"` and `"Quot.ind computes"` where the rules allow rewrite rules.
 - The first call loads the paclet `WolframInstitute/TypeTheory`, which must be installed.
 
 ## Basic Examples
@@ -136,21 +136,21 @@ lean = LeanImportString["theorem probe (n : Nat) : 0 + n = n := Nat.zero_add n"]
 
 <!-- => LeanEnvironment summary box: 1 constant -->
 
-`funext` is proved with Lean's quotient types, and checks with their computation rule:
+`funext` is proved with Lean's quotient types, which are TypeTheory's own:
 
 ```wl
 funext = LeanToTypeTheory[lean, "funext"]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 13 constants -->
+<!-- => TypeTheoryEnvironment summary box: 12 constants -->
 
-Its rewrite rules:
+They are declared at once, with Lean's names:
 
 ```wl
-Information[funext, "RewriteRules"]
+funext["Quot.lift"]
 ```
 
-<!-- => {"Quot.lift computes"} -->
+<!-- => TypeTheoryQuotients["Eq", {"Quot", "Quot.mk", "Quot.lift", "Quot.ind"}] -->
 
 ---
 

@@ -119,29 +119,29 @@ TypeTheoryCheck[checked]
 
 ## Quotients
 
-Lean's kernel has the computation rule of its quotient types built in: lifting a function to a quotient and applying it to a class gives the function's value. `funext` is proved with it. The import adds the rule as a TypeTheory rewrite rule, under the rules of the calculus of inductive constructions with rewrite rules allowed:
+Lean's kernel has quotient types built in: lifting a function to a quotient and applying it to a class gives the function's value. `funext` is proved with them. TypeTheory's kernel has the same quotient types, and the import declares Lean's as TypeTheory's own:
 
 ```wl
 funext = LeanToTypeTheory[lean, "funext"]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 13 constants -->
+<!-- => TypeTheoryEnvironment summary box: 12 constants -->
 
-Its rewrite rules:
+The four constants come from one declaration, with Lean's names and Lean's equality:
+
+```wl
+funext["Quot.lift"]
+```
+
+<!-- => TypeTheoryQuotients["Eq", {"Quot", "Quot.mk", "Quot.lift", "Quot.ind"}] -->
+
+The kernel computes with them, so the cone needs no rewrite rule:
 
 ```wl
 Information[funext, "RewriteRules"]
 ```
 
-<!-- => {"Quot.lift computes"} -->
-
-The rule, as declared:
-
-```wl
-funext["Quot.lift computes"]
-```
-
-<!-- => rewrite Quot.lift computes : ∀_α∶Sort u ∀_r∶α → α → Prop ∀_β∶Sort v ∀_f∶α → β ∀_h∶∀_a∶α ∀_b∶α r[a, b] ⇒ f[a] == f[b] ∀_a∶α Quot.lift[f, h, Quot.mk[r, a]] ⟶ f[a] -->
+<!-- => {} -->
 
 ## Lean's Prelude
 

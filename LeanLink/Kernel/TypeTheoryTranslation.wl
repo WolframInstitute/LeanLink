@@ -62,13 +62,15 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
 ]
 
 (* The cone in dependency order, each constant as TypeTheory declarations, checked in one batch. When the
-   batch fails, the declarations are added one at a time to name the constant TypeTheory rejects. A cone
-   with Lean's quotient types is imported, by default, under rules that allow their computation rule. *)
+   batch fails, the declarations are added one at a time to name the constant TypeTheory rejects. Lean's
+   quotient types are TypeTheory's own, under the calculus of inductive constructions that has them since
+   TypeTheory 0.13; before, a cone with them is imported, by default, under rules that allow their
+   computation as rewrite rules. *)
 
 importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ Block[
     {$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
     cone = coneOrder[roots];
-    baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
+    baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
     order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
     declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
     environment = TypeTheoryEnvironment[baseEnvironment, declarations];
@@ -77,14 +79,18 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ Block
     environment
 ]
 
-importedDeclarations[environment_, name_String] := Join[leanDeclarations[name], quotientComputation[environment, name]]
+(* Lean's quotient types are declared at once, as the kernel's own where the rules have them, and
+   otherwise as axioms, their computation rewrite rules where the rules allow those *)
+importedDeclarations[environment_, "Quot"] /; quotientsQ[environment] := With[{names = $quotientConstants}, {TypeTheoryQuotients["Eq", names]}]
+importedDeclarations[environment_, "Quot"] := Join[Catenate[leanDeclarations /@ $quotientConstants], quotientComputation[environment, "Quot.lift"], quotientComputation[environment, "Quot.ind"]]
+importedDeclarations[environment_, name_String] := leanDeclarations[name]
 
 (* TypeTheory's own failure, introduced by the Lean constant it rejects *)
 
 rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure["RejectedByTypeTheory", Join[data, <|
     "MessageTemplate" -> StringJoin[
         "TypeTheory rejects the Lean constant ", name, ": ", Lookup[data, "MessageTemplate", tag],
-        If[quotientsQ, " It depends on Lean's quotient types, whose computation rule needs an environment whose rules allow rewrite rules.", ""]
+        If[quotientsQ, " It depends on Lean's quotient types, whose computation needs an environment whose rules have quotients.", ""]
     ],
     "Constant" -> name,
     "TypeTheoryFailure" -> tag
@@ -95,7 +101,7 @@ locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = ba
         Function[name,
             environment = TypeTheoryEnvironment[environment, importedDeclarations[environment, name]];
             If[ FailureQ[environment],
-                Throw[rejection[name, environment, AnyTrue[order, quotientConstantQ] && ! rewriteRulesAllowedQ[baseEnvironment]], $bridgeTag]
+                Throw[rejection[name, environment, AnyTrue[order, quotientConstantQ] && ! quotientsQ[baseEnvironment] && ! rewriteRulesAllowedQ[baseEnvironment]], $bridgeTag]
             ]
         ],
         order
@@ -105,15 +111,22 @@ locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = ba
 
 (* === Quotients === *)
 
-(* Lean's kernel reduces Quot.lift and Quot.ind applied to Quot.mk, a computation rule it has built in. Under
-   rules that allow rewrite rules, TypeTheory has the same rule as two rewrite rules, added after the
-   constants they compute with; the names are not Lean names, so they cannot clash with a constant. *)
+(* Lean's kernel reduces Quot.lift and Quot.ind applied to Quot.mk, a computation rule it has built in, and so
+   does TypeTheory's under rules with quotients. Under rules without them that allow rewrite rules, the
+   same rule is two rewrite rules, added after the constants they compute with; the names are not Lean
+   names, so they cannot clash with a constant. *)
+
+$quotientConstants = {"Quot", "Quot.mk", "Quot.lift", "Quot.ind"}
 
 $quotientRuleNames = {"Quot.lift computes", "Quot.ind computes"}
 
-quotientRules[] := TypeTheoryRules["CalculusOfInductiveConstructions", "RewriteRules" -> True]
-
 quotientConstantQ[name_String] := constantKind[name] === "quot"
+
+quotientsQ[environment_] := TrueQ[Information[environment, "Rules"]["Quotients"]]
+
+nativeQuotientsQ[] := TrueQ[TypeTheoryRules["CalculusOfInductiveConstructions"]["Quotients"]]
+
+quotientRules[] := TypeTheoryRules["CalculusOfInductiveConstructions", "RewriteRules" -> True]
 
 rewriteRulesAllowedQ[environment_] := TrueQ[Information[environment, "Rules"]["RewriteRules"]]
 
@@ -167,22 +180,22 @@ primaryName[name_String] := Switch[constantKind[name],
     "constructor", First[inductiveInformation[constructorInductive[name]]["Block"]],
     "recursor", First[inductiveInformation[recursorInductive[name]]["Block"]],
     "inductive", First[inductiveInformation[name]["Block"]],
+    "quot", "Quot",
     _, name
 ]
 
 (* X.rec, and X.rec_k on the k-th type nested in X's block *)
 recursorInductive[name_String] := StringReplace[name, RegularExpression["\\.rec(_\\d+)?$"] -> ""]
 
-(* an inductive type mentions what its constructors mention; Quot.lift and Quot.ind compute on Quot.mk, so
-   they come after it, with their computation rule; a string literal is written with the constants that
-   Lean's kernel reads it as *)
+(* an inductive type mentions what its constructors mention, and the quotient types what any of the four
+   mentions; a string literal is written with the constants that Lean's kernel reads it as *)
 
 constantDependencies[name_String] := DeleteDuplicates @ Join[
-    If[ constantKind[name] === "inductive",
-        Catenate[usedConstants /@ blockMembers[name]],
-        usedConstants[name]
+    Switch[constantKind[name],
+        "inductive", Catenate[usedConstants /@ blockMembers[name]],
+        "quot", Catenate[usedConstants /@ $quotientConstants],
+        _, usedConstants[name]
     ],
-    If[MemberQ[{"Quot.lift", "Quot.ind"}, name], {"Quot.mk"}, {}],
     If[stringLiteralQ[name], $stringLiteralConstants, {}]
 ]
 
@@ -204,9 +217,10 @@ stringLiteralReadQ[name_String] := ! FreeQ[
     _LeanLitStr
 ]
 
-ownNames[name_String] := If[ constantKind[name] === "inductive",
-    Join[blockMembers[name], blockRecursors[name]],
-    {name}
+ownNames[name_String] := Switch[constantKind[name],
+    "inductive", Join[blockMembers[name], blockRecursors[name]],
+    "quot", $quotientConstants,
+    _, {name}
 ]
 
 (* the types declared with an inductive type, and all their constructors *)
@@ -364,7 +378,7 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
             With[{statement = declarationTerm[leanExpression[name, "Type"]], proof = declarationTerm[leanExpression[name, "Term"]], levels = universes},
                 {TypeTheoryTheorem[name, statement, proof, "UniverseParameters" -> levels]}
             ],
-        (* an opaque constant's value never unfolds, and a quotient's computation rule is not in TypeTheory yet *)
+        (* an opaque constant's value never unfolds; the quotient types are axioms only under rules without them *)
         "axiom" | "opaque" | "quot",
             With[{type = declarationTerm[leanExpression[name, "Type"]], levels = universes}, {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}],
         _,
@@ -618,8 +632,8 @@ cleanBinderName[binderName_String] := Replace[First[StringSplit[binderName, "._@
 
 (* TypeTheory's prelude constants that Lean has in Init, with the same definitions, except Plus, which
    becomes Nat.add: they compute the same on constructors, so a proof that does not depend on how Plus
-   is defined checks in Lean too. The prelude's axioms are Lean's, with the same types; Lean proves
-   funext from quotients. *)
+   is defined checks in Lean too. The prelude's axioms are Lean's three, with the same types, and its
+   quotient types are Lean's; FunctionExtensionality is proved from them, as Lean proves funext. *)
 
 $preludeLeanNames = <|
     HoldComplete[True] -> "True",
@@ -668,6 +682,11 @@ $preludeLeanNames = <|
     HoldComplete[Subtype] -> "Subtype",
     HoldComplete[SubtypeIntroduction] -> "Subtype.mk",
     HoldComplete[InductiveRecursor[Subtype]] -> "Subtype.rec",
+    HoldComplete[QuotientType] -> "Quot",
+    HoldComplete[QuotientIntroduction] -> "Quot.mk",
+    HoldComplete[QuotientLift] -> "Quot.lift",
+    HoldComplete[QuotientInduction] -> "Quot.ind",
+    HoldComplete[QuotientSoundness] -> "Quot.sound",
     HoldComplete[PropositionalExtensionality] -> "propext",
     HoldComplete[FunctionExtensionality] -> "funext",
     HoldComplete[Choice] -> "Classical.choice"
@@ -731,6 +750,8 @@ declarationKey[declaration_] := Replace[declaration, {
 }]
 
 declarationKey[declaration_TypeTheoryNaturalNumbers] := None
+
+declarationKey[declaration_TypeTheoryQuotients] := None
 
 constructorOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, {constructors___}, ___]] := With[
     {names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},

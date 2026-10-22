@@ -135,19 +135,35 @@ VerificationTest[
 
 $funext = LeanToTypeTheory[$lean, "funext"]
 
-VerificationTest[
-    {Information[$funext, "Rules"]["RewriteRules"], Information[$funext, "RewriteRules"], MatchQ[TypeTheoryCheck[$funext], True | _Success]},
-    {True, {"Quot.lift computes"}, True},
-    TestID -> "LeanToTypeTheory-quotients-compute-by-a-rewrite-rule"
-]
+(* Lean's quotient types are TypeTheory's own, declared at once with Lean's names, since TypeTheory 0.13;
+   before, they compute by rewrite rules *)
+$nativeQuotients = TrueQ[TypeTheoryRules["CalculusOfInductiveConstructions"]["Quotients"]]
 
 VerificationTest[
     {
-        StringQ[TypeTheoryToLean[$funext, "funext"]],
-        StringContainsQ[LeanToTypeTheory[$lean, "funext", "Environment" -> TypeTheoryEnvironment[]]["Message"], "whose rules allow rewrite rules"]
+        Information[$funext, "RewriteRules"],
+        Lookup[Information[$funext, "Kinds"], "Quotient", 0],
+        MatchQ[TypeTheoryCheck[$funext], True | _Success],
+        StringQ[TypeTheoryToLean[$funext, "funext"]]
     },
-    {True, True},
-    TestID -> "LeanToTypeTheory-quotients-need-rules-that-allow-rewrite-rules"
+    If[$nativeQuotients, {{}, 4, True, True}, {{"Quot.lift computes", "Quot.ind computes"}, 0, True, True}],
+    TestID -> "LeanToTypeTheory-quotients-are-TypeTheory's-own"
+]
+
+(* under rules without quotients they are axioms, computing by rewrite rules where the rules allow those *)
+VerificationTest[
+    With[
+        {
+            withoutQuotients = If[$nativeQuotients, TypeTheoryRules["CalculusOfInductiveConstructions", "Quotients" -> False], TypeTheoryRules["CalculusOfInductiveConstructions"]],
+            rewriting = If[$nativeQuotients, TypeTheoryRules["CalculusOfInductiveConstructions", "Quotients" -> False, "RewriteRules" -> True], TypeTheoryRules["CalculusOfInductiveConstructions", "RewriteRules" -> True]]
+        },
+        {
+            Information[LeanToTypeTheory[$lean, "funext", "Environment" -> TypeTheoryEnvironment[rewriting]], "RewriteRules"],
+            StringContainsQ[LeanToTypeTheory[$lean, "funext", "Environment" -> TypeTheoryEnvironment[withoutQuotients]]["Message"], "whose rules have quotients"]
+        }
+    ],
+    {{"Quot.lift computes", "Quot.ind computes"}, True},
+    TestID -> "LeanToTypeTheory-quotients-without-the-rules-for-them"
 ]
 
 (* ================================================================ *)
@@ -264,20 +280,24 @@ VerificationTest[
 ]
 
 (* the prelude names its internal constants by strings, as "equal", which are its own and not Lean's; a type
-   with instances is a class, and an instance-implicit binder of a type Lean has as no class is implicit *)
+   with instances is a class, and an instance-implicit binder of a type Lean has as no class is implicit;
+   the prelude has instances since TypeTheory 0.13 *)
 
 VerificationTest[
-    With[{source = TypeTheoryToLean[$prelude, {DecideSoundness, NaturalNumberEqualityDecidable}]},
-        {
-            StringContainsQ[source, "class inductive TypeTheory.Decidable"],
-            StringContainsQ[source, "@[instance] noncomputable def TypeTheory.NaturalNumberEqualityDecidable"],
-            StringContainsQ[source, "noncomputable def TypeTheory.equal :"],
-            StringContainsQ[source, "[d : (@TypeTheory.Decidable p)]"],
-            StringContainsQ[
-                TypeTheoryToLean[TypeTheoryEnvironment[$prelude, {TypeTheoryAxiom[Reflexive, ForAll[{TypedImplicit[n, NonNegativeIntegers], Annotation[Typed[h, n == n], "InstanceImplicit"]}, True]]}], Reflexive],
-                "{h : (@Eq.{1} @Nat n n)}"
-            ]
-        }
+    If[ KeyExistsQ[$prelude, "trueDecidable"],
+        With[{source = TypeTheoryToLean[$prelude, {DecideSoundness, NaturalNumberEqualityDecidable}]},
+            {
+                StringContainsQ[source, "class inductive TypeTheory.Decidable"],
+                StringContainsQ[source, "@[instance] noncomputable def TypeTheory.NaturalNumberEqualityDecidable"],
+                StringContainsQ[source, "noncomputable def TypeTheory.equal :"],
+                StringContainsQ[source, "[d : (@TypeTheory.Decidable p)]"],
+                StringContainsQ[
+                    TypeTheoryToLean[TypeTheoryEnvironment[$prelude, {TypeTheoryAxiom[Reflexive, ForAll[{TypedImplicit[n, NonNegativeIntegers], Annotation[Typed[h, n == n], "InstanceImplicit"]}, True]]}], Reflexive],
+                    "{h : (@Eq.{1} @Nat n n)}"
+                ]
+            }
+        ],
+        {True, True, True, True, True}
     ],
     {True, True, True, True, True},
     TestID -> "TypeTheoryToLean-writes-the-prelude's-string-names-classes-and-instances"
