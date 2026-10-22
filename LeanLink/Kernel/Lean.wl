@@ -479,10 +479,18 @@ withLeanPath[searchPath_, body_] := With[{saved = Environment["LEAN_PATH"]},
 
 loadEnvironment[imports_String, searchPath_String] := withLeanPath[searchPath, $loadEnvFn[imports, searchPath]]
 
+(* A shim that exists but that the operating system cannot load, as on Windows one that imports a symbol
+   from a DLL that does not export it, would otherwise be reported as a failed environment load *)
+shimLoadableQ[head_] := MatchQ[$loadEnvFn, _LibraryFunction] || (
+    Message[head::nolib, "the operating system could not load " <> ToString[$ShimLib] <> "."];
+    False
+)
+
 getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, searchPath, handle},
     key = {projDir, imports};
     If[KeyExistsQ[$envCache, key], Return[$envCache[key]]];
     searchPath = resolveSearchPath[projDir];
+    If[! shimLoadableQ[head], Return[$Failed]];
     handle = loadEnvironment[StringRiffle[imports, ","], searchPath];
     If[ handle === 0 || ! IntegerQ[handle],
         Message[head::err, loadFailureText[imports, searchPath]];
@@ -2959,9 +2967,12 @@ LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] := iBox[
 
 (* ============================================================================ *)
 
-LeanLoadEnvironment[imports_List, searchPath_String] := With[{h = loadEnvironment[StringRiffle[imports, ","], searchPath]},
-    If[IntegerQ[h], registerHandle[h, imports, searchPath]];
-    h
+LeanLoadEnvironment[imports_List, searchPath_String] := If[ shimLoadableQ[LeanImport],
+    With[{h = loadEnvironment[StringRiffle[imports, ","], searchPath]},
+        If[IntegerQ[h], registerHandle[h, imports, searchPath]];
+        h
+    ],
+    $Failed
 ]
 
 (* The olean that an import of a file compiled, in a temporary folder, is deleted
@@ -3183,6 +3194,10 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* Load via lazy pattern *)
     searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
     Block[{handle, kinds, res},
+        If[ ! shimLoadableQ[LeanImport],
+            DeleteDirectory[tmpDir, DeleteContents -> True];
+            Return[$Failed, Block]
+        ];
         handle = loadEnvironment[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
             Message[LeanImport::err, "Failed to load compiled file"];

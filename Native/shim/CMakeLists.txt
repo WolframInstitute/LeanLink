@@ -56,7 +56,12 @@ target_include_directories(LeanLinkShim PRIVATE
 
 target_link_directories(LeanLinkShim PRIVATE ${LEAN_HOME}/lib/lean)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(DEFAULT_LIBS ${CMAKE_SOURCE_DIR}/libgnu_lean_thunks.a ${LEAN_HOME}/bin/libleanshared.dll ${LEAN_HOME}/bin/libleanshared_1.dll ${LEAN_HOME}/bin/libleanshared_2.dll ${LEAN_HOME}/bin/libInit_shared.dll)
+    # Link against the toolchain's import libraries, which name the DLL that exports each symbol. Linked
+    # straight to the DLLs, with an import library naming libleanshared.dll for the symbols ld did not find
+    # there, the shim imported initialize_Init, l_Array_range and the rest of Init's symbols from
+    # libleanshared.dll, which does not export them (they are libInit_shared.dll's since Lean 4.30), so
+    # Windows refused to load it (error 127).
+    set(DEFAULT_LIBS ${LEAN_HOME}/lib/lean/libleanshared.dll.a ${LEAN_HOME}/lib/lean/libleanshared_1.dll.a ${LEAN_HOME}/lib/lean/libleanshared_2.dll.a ${LEAN_HOME}/lib/lean/libInit_shared.dll.a)
     target_link_libraries(LeanLinkShim PRIVATE -Wl,--enable-auto-import ${DEFAULT_LIBS})
     # Link the MinGW runtime statically. The shim's _Thread_local needs libgcc's
     # emulated-TLS helper (__emutls_get_address), which in turn needs winpthread;
