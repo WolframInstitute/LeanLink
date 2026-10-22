@@ -694,7 +694,7 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
     (* Process steps *)
     Do[
         step = Quiet @ Extract[pf, {2, 1, 2, i}, HoldComplete];
-        If[Head[step] =!= HoldComplete, Break[]];
+        If[! MatchQ[step, _HoldComplete], Break[]];
         ptlProcessStep[step, st];
         ,
         {i, 500}

@@ -2559,7 +2559,7 @@ LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFil
     result = LeanImport[tmpFile, opts];
     (* Cleanup the .lean source -- olean kept for lazy queries; its text stays for "Source" *)
     If[FileExistsQ[tmpFile], DeleteFile[tmpFile]];
-    With[{handle = If[Head[result] === LeanEnvironment, Lookup[result[[1]], "_Handle", None], None]},
+    With[{handle = If[MatchQ[result, _LeanEnvironment], Lookup[result[[1]], "_Handle", None], None]},
         If[IntegerQ[handle] && KeyExistsQ[$handleSource, handle], $handleSource[handle, "Texts"] = <|modName -> src|>]
     ];
     result
@@ -3509,7 +3509,7 @@ LeanState[env_LeanEnvironment, name_String] := Block[{data = env[[1]], handle, c
         src = Lookup[data, "_Source", None];
         If[! StringQ[src], src = LeanExportString[env]];
         compiled = Quiet[LeanImportString[src]];
-        If[Head[compiled] =!= LeanEnvironment, Return[$Failed]];
+        If[! MatchQ[compiled, _LeanEnvironment], Return[$Failed]];
         handle = compiled[[1]]["_Handle"]
     ];
     term = <|"_Handle" -> handle, "Name" -> name|>;
