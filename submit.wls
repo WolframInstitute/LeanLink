@@ -32,8 +32,15 @@ shimSource = FileNameJoin[{repoDir, "Native", "shim", "leanlink_shim.c"}]
 
 libs = FileNames["libLeanLinkShim.*", FileNameJoin[{repoDir, "LeanLink", "LibraryResources"}], 2]
 
-If[ libs === {},
-    Print["FATAL: no LibraryResources/*/libLeanLinkShim.* found; run ./build.sh first."];
+(* every platform the paclet supports: build.sh skips a cross target whose compiler is missing, and a paclet
+   without its shim fails on that platform only when LeanLink loads *)
+missing = Select[
+    {"MacOSX-ARM64", "MacOSX-x86-64", "Linux-x86-64", "Linux-ARM64", "Windows-x86-64"},
+    Function[systemID, FileNames["libLeanLinkShim.*", FileNameJoin[{repoDir, "LeanLink", "LibraryResources", systemID}]] === {}]
+]
+
+If[ missing =!= {},
+    Print["FATAL: no LibraryResources/", #, "/libLeanLinkShim.* found; run ./build.sh with that platform's compiler first."]& /@ missing;
     Exit[1]
 ]
 

@@ -94,7 +94,7 @@ A standalone notebook, not part of the documentation: [TuringMachineSuccessor](h
 ./build.sh
 ```
 
-This runs `lake build` for the Lean library, then cross-compiles the C shim with CMake for macOS (ARM64, x86-64), Linux (x86-64, ARM64) and Windows (x86-64), into `LeanLink/LibraryResources/<platform>/`.
+This runs `lake build` for the Lean library, then compiles the C shim with CMake into `LeanLink/LibraryResources/<platform>/`: for the machine's own platform with its compiler (clang on macOS, `cc` or `$CC` on Linux), and for each other platform whose cross compiler is on `PATH` (`x86_64-linux-gnu-gcc`, `aarch64-linux-gnu-gcc`, `x86_64-w64-mingw32-gcc`). The macOS shims build only on macOS. The script fails if the machine's own shim does not build; a release needs all five (macOS ARM64 and x86-64, Linux x86-64 and ARM64, Windows x86-64), which `submit.wls` checks.
 
 ### Tests
 

@@ -52,6 +52,31 @@ fi
 echo "=== Compiling Targets ==="
 cd "$ROOT/Native/shim"
 
+HOST_OS="$(uname -s)"
+HOST_ARCH="$(uname -m)"
+BUILT=" "
+
+# The target of the machine the script runs on, which must build; a cross target is skipped without its compiler
+case "${HOST_OS}-${HOST_ARCH}" in
+    Darwin-arm64) NATIVE_SYSID="MacOSX-ARM64" ;;
+    Darwin-x86_64) NATIVE_SYSID="MacOSX-x86-64" ;;
+    Linux-x86_64) NATIVE_SYSID="Linux-x86-64" ;;
+    Linux-aarch64 | Linux-arm64) NATIVE_SYSID="Linux-ARM64" ;;
+    *) NATIVE_SYSID="" ;;
+esac
+
+# The compiler for a Linux target: its cross compiler, or on a Linux host of that architecture the host's own,
+# since only Debian's family installs the native gcc as x86_64-linux-gnu-gcc or aarch64-linux-gnu-gcc
+linux_cc() {
+    local triplet=$1
+    local sysid=$2
+    if ! command -v "${triplet}-gcc" &> /dev/null && [ "$sysid" = "$NATIVE_SYSID" ]; then
+        echo "${CC:-cc}"
+    else
+        echo "${triplet}-gcc"
+    fi
+}
+
 build_target() {
     local sysid=$1
     local lean_home=$2
@@ -90,22 +115,35 @@ build_target() {
     "${CMAKE_CMD[@]}" ..
     cmake --build . --config Release --target LeanLinkShim
     cd "$ROOT/Native/shim"
+    BUILT="${BUILT}${sysid} "
 }
 
-# 1. MacOS ARM64
-build_target "MacOSX-ARM64" "$DARWIN_ARM_SYSROOT" "clang" "arm64"
-
-# 2. MacOS x86_64
-build_target "MacOSX-x86-64" "$DARWIN_X86_SYSROOT" "clang" "x86_64"
+# 1, 2. macOS ARM64 and x86_64, which need Apple's SDK and linker: elsewhere a clang on PATH would link them
+# against the darwin sysroot's .dylib files, fail, and stop the script before the other targets
+if [ "$HOST_OS" = "Darwin" ]; then
+    build_target "MacOSX-ARM64" "$DARWIN_ARM_SYSROOT" "clang" "arm64"
+    build_target "MacOSX-x86-64" "$DARWIN_X86_SYSROOT" "clang" "x86_64"
+else
+    echo "Skipping MacOSX-ARM64 and MacOSX-x86-64 - they build only on macOS"
+fi
 
 # 3. Linux x86_64
-build_target "Linux-x86-64" "$LINUX_SYSROOT" "x86_64-linux-gnu-gcc" ""
+build_target "Linux-x86-64" "$LINUX_SYSROOT" "$(linux_cc x86_64-linux-gnu Linux-x86-64)" ""
 
 # 4. Linux ARM64
-build_target "Linux-ARM64" "$LINUX_ARM_SYSROOT" "aarch64-linux-gnu-gcc" ""
+build_target "Linux-ARM64" "$LINUX_ARM_SYSROOT" "$(linux_cc aarch64-linux-gnu Linux-ARM64)" ""
 
 # 5. Windows x86_64
 build_target "Windows-x86-64" "$WINDOWS_SYSROOT" "x86_64-w64-mingw32-gcc" ""
 
 echo "=== Done ==="
+echo "Built:${BUILT}"
 ls -lh "$ROOT/LeanLink/LibraryResources/"*/*.dylib "$ROOT/LeanLink/LibraryResources/"*/*.so "$ROOT/LeanLink/LibraryResources/"*/*.dll 2>/dev/null || true
+
+if [ -z "$NATIVE_SYSID" ]; then
+    echo "WARNING: no target for this machine (${HOST_OS} ${HOST_ARCH}); only cross targets were tried."
+elif [[ "$BUILT" != *" ${NATIVE_SYSID} "* ]]; then
+    echo "ERROR: ${NATIVE_SYSID}, this machine's own target, did not build: install a C compiler (clang on macOS; elsewhere cc, or set CC)."
+    exit 1
+fi
+echo "A release needs all five platforms' shims; submit.wls refuses one without them."
