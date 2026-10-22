@@ -456,6 +456,12 @@ getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, se
     key = {projDir, imports};
     If[KeyExistsQ[$envCache, key], Return[$envCache[key]]];
     searchPath = resolveSearchPath[projDir];
+    (* A shim that exists but cannot be loaded (on Windows, a missing DLL or a missing
+       export) would otherwise be reported as a failed environment load *)
+    If[ Head[$loadEnvFn] =!= LibraryFunction,
+        Message[head::nolib, "the operating system could not load " <> ToString[$ShimLib] <> "."];
+        Return[$Failed]
+    ];
     handle = loadEnvironment[StringRiffle[imports, ","], searchPath];
     If[ handle === 0 || ! IntegerQ[handle],
         Message[head::err, loadFailureText[imports, searchPath]];
