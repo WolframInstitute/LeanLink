@@ -160,7 +160,7 @@ A Lean definition of a string, imported into TypeTheory:
 greeting = LeanToTypeTheory[LeanImportString["def greeting : String := \"hi\""], "greeting"]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 374 constants -->
+<!-- => TypeTheoryEnvironment summary box: 378 constants -->
 
 A string literal is written as Lean's kernel reads it:
 

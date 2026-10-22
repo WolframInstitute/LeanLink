@@ -48,7 +48,7 @@ A theorem with that proof, added to the prelude:
 proved = TypeTheoryEnvironment[{TypeTheoryTheorem[ZeroLeftIdentity, proof]}]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 110 constants -->
+<!-- => TypeTheoryEnvironment summary box: 170 constants -->
 
 Write the theorem as Lean source:
 
