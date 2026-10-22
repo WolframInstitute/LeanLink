@@ -33,7 +33,7 @@ module = "Mathlib.Basic.Nonempty";
 lean = If[mathlibReady, LeanImport[module, "ProjectDir" -> mathlibDir], <||>]
 ```
 
-<!-- => LeanEnvironment summary box: 106304 constants -->
+<!-- => LeanEnvironment summary box: 97866 constants -->
 
 The module's own constants are those whose `"Module"` it is:
 
@@ -145,7 +145,7 @@ Information[funext, "RewriteRules"]
 
 ## Lean's Prelude
 
-Lean's first file, `Init.Prelude`, depends on 1,381 constants, and TypeTheory checks them all. Three things in it go beyond an inductive family of one type and a sum of literals, and the import follows Lean's kernel in each.
+Lean's first file, `Init.Prelude`, depends on 1,404 constants, and TypeTheory checks them all. Three things in it go beyond an inductive family of one type and a sum of literals, and the import follows Lean's kernel in each.
 
 Lean's syntax trees are a nested inductive type: a node holds an array of trees. TypeTheory checks the nesting as Lean's kernel does, and generates a recursor on each container the trees are nested in, the array and the list inside it, which the import compares with Lean's `Lean.Syntax.rec_1` and `Lean.Syntax.rec_2`:
 
@@ -153,7 +153,7 @@ Lean's syntax trees are a nested inductive type: a node holds an array of trees.
 syntax = LeanToTypeTheory[lean, "Lean.Syntax"]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 375 constants -->
+<!-- => TypeTheoryEnvironment summary box: 378 constants -->
 
 The recursors of `Lean.Syntax`, one for the type and one for each container:
 
@@ -169,7 +169,7 @@ A string literal is the list of its characters, as Lean's kernel reads it, so th
 kinds = LeanToTypeTheory[lean, "Lean.nullKind"]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 381 constants -->
+<!-- => TypeTheoryEnvironment summary box: 385 constants -->
 
 The name of the null kind, a list of characters:
 
@@ -185,7 +185,7 @@ And Lean's kernel computes `Nat.add`, `Nat.mul`, `Nat.ble` and the other operati
 words = LeanToTypeTheory[lean, "USize.size_eq"]
 ```
 
-<!-- => TypeTheoryEnvironment summary box: 113 constants -->
+<!-- => TypeTheoryEnvironment summary box: 117 constants -->
 
 The statement, checked:
 
