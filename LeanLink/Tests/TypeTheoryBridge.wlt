@@ -110,6 +110,29 @@ VerificationTest[
     TestID -> "LeanToTypeTheory-Lean-arithmetic-computes-on-literals"
 ]
 
+(* an opaque constant is an opaque definition since TypeTheory 0.14, whose value its kernel checks; before,
+   it is an axiom *)
+$opaqueDefinitions = KeyExistsQ[Association[Options[TypeTheoryDefinition]], "Opaque"]
+
+VerificationTest[
+    With[
+        {
+            environment = LeanToTypeTheory[
+                LeanImportString[{"opaque secret : Nat := 42", "opaque hidden : Nat", "theorem secretSelf : secret = secret := rfl"}],
+                {"secretSelf", "hidden"}
+            ]
+        },
+        {
+            Lookup[Information[environment, "Kinds"], "Opaque", 0],
+            Sort[Information[environment, "Axioms"]],
+            DefinitionallyEqualQ[TypeTheoryTerm["secret", environment], TypeTheoryTerm[42, environment]],
+            MatchQ[TypeTheoryCheck[environment], _Success]
+        }
+    ],
+    If[$opaqueDefinitions, {2, {}, False, True}, {0, {"hidden", "secret"}, False, True}],
+    TestID -> "LeanToTypeTheory-an-opaque-is-checked-and-never-unfolds"
+]
+
 VerificationTest[
     With[
         {
@@ -260,6 +283,26 @@ VerificationTest[
     ],
     {True, "\[ForAll] (b : Bool), (!!b) = b"},
     TestID -> "TypeTheoryToLean-the-Booleans-are-Lean-Bool"
+]
+
+VerificationTest[
+    If[ $opaqueDefinitions,
+        With[
+            {
+                source = TypeTheoryToLean[
+                    TypeTheoryEnvironment[$prelude, {
+                        TypeTheoryDefinition[Secret, Typed[42, NonNegativeIntegers], "Opaque" -> True],
+                        TypeTheoryTheorem[SecretSelf, Secret == Secret, EqualityReflexivity[Secret]]
+                    }],
+                    SecretSelf
+                ]
+            },
+            {StringContainsQ[source, "noncomputable opaque TypeTheory.Secret : @Nat"], LeanImportString[source]["TypeTheory.Secret"]["Kind"]}
+        ],
+        {True, "opaque"}
+    ],
+    {True, "opaque"},
+    TestID -> "TypeTheoryToLean-an-opaque-definition-is-Lean's-opaque"
 ]
 
 VerificationTest[

@@ -211,7 +211,7 @@ stringLiteralQ[name_String] := AnyTrue[
 
 stringLiteralReadQ[name_String] := ! FreeQ[
     Switch[constantKind[name],
-        "def" | "theorem", {leanExpression[name, "Type"], leanExpression[name, "Term"]},
+        "def" | "theorem" | "opaque", {leanExpression[name, "Type"], leanExpression[name, "Term"]},
         _, {leanExpression[name, "Type"]}
     ],
     _LeanLitStr
@@ -381,7 +381,12 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
             With[{statement = declarationTerm[leanExpression[name, "Type"]], proof = declarationTerm[leanExpression[name, "Term"]], levels = universes},
                 {TypeTheoryTheorem[name, statement, proof, "UniverseParameters" -> levels]}
             ],
-        (* an opaque constant's value never unfolds; the quotient types are axioms only under rules without them *)
+        (* an opaque constant's value is checked, as Lean's kernel checks it, and never unfolds *)
+        "opaque" /; opaqueDefinitionsQ[],
+            With[{value = declarationTerm[leanExpression[name, "Term"]], type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
+                {TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels, "Opaque" -> True]}
+            ],
+        (* with a TypeTheory before 0.14 an opaque constant is an axiom; the quotient types are axioms only under rules without them *)
         "axiom" | "opaque" | "quot",
             With[{type = declarationTerm[leanExpression[name, "Type"]], levels = universes}, {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}],
         _,
@@ -436,6 +441,9 @@ natOperationRegistration[name_String] := If[ KeyExistsQ[$leanNatOperations, name
 ]
 
 natOperationsQ[] := natOperationsQ[] = MatchQ[Information[TypeTheoryEnvironment["Prelude"], "NaturalNumbers"], KeyValuePattern["Operations" -> _Association]]
+
+(* TypeTheory 0.14 has opaque definitions, checked as any other and never unfolded *)
+opaqueDefinitionsQ[] := opaqueDefinitionsQ[] = KeyExistsQ[Association[Options[TypeTheoryDefinition]], "Opaque"]
 
 (* the recursor TypeTheory generated must have Lean's type, compared at the same placeholder levels *)
 
@@ -878,11 +886,12 @@ declarationText[TypeTheoryAxiom[name_, type_, options___]] := Block[{$universeNa
     "axiom " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>]
 ]
 
-(* an instance of a class is Lean's instance too *)
+(* an instance of a class is Lean's instance too, and an opaque definition Lean's opaque *)
 
 declarationText[TypeTheoryDefinition[name_, Typed[value_, type_], options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
     If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Instance", True]] && leanClassQ[resultHead[HoldComplete[type]]], "@[instance] ", ""] <>
-        "noncomputable def " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " :=\n  " <> leanText[value, <||>]
+        If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Opaque", True]], "noncomputable opaque ", "noncomputable def "] <>
+        leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " :=\n  " <> leanText[value, <||>]
 ]
 
 declarationText[TypeTheoryTheorem[name_, statement_, proof_, options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
