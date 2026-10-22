@@ -39,7 +39,7 @@ leanFiles = If[mathlibReady, FileNames["*.lean", mathlibSrc, Infinity], {}];
 Length[leanFiles]
 ```
 
-<!-- => 8094 -->
+<!-- => 8624 -->
 
 A module's top-level namespace is the component just after `Mathlib` (so `Mathlib.Algebra.Group.Basic` is in `Algebra`). These helpers map a module name, and a file path, to that namespace:
 
@@ -78,7 +78,7 @@ nsEdges = If[ mathlibReady,
 Length[nsEdges]
 ```
 
-<!-- => 84 -->
+<!-- => 233 -->
 
 Count the files in each namespace - this both sizes the nodes and orders the legend:
 
@@ -87,7 +87,7 @@ nsCounts = If[mathlibReady, Reverse @ Sort @ Counts[fileNamespace /@ leanFiles],
 Take[Normal[nsCounts], UpTo[5]]
 ```
 
-<!-- => {"Algebra" -> 1319, "CategoryTheory" -> 1084, "Analysis" -> 795, "RingTheory" -> 689, "Topology" -> 665} -->
+<!-- => {"Algebra" -> 1380, "CategoryTheory" -> 1131, "Analysis" -> 812, "RingTheory" -> 729, "Topology" -> 703} -->
 
 Color each namespace from the standard scheme, size each node by its file count, and lay the graph out. No background is pinned, so it reads on both light and dark themes:
 
@@ -118,7 +118,7 @@ If[ mathlibReady,
     "Mathlib source not found"]
 ```
 
-<!-- => Dataset: Algebra 1319, CategoryTheory 1084, Analysis 795, ... -->
+<!-- => Dataset: Algebra 1380, CategoryTheory 1131, Analysis 812, ... -->
 
 ## Declaration-Level Dependencies
 

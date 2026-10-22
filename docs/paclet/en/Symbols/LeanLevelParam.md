@@ -33,4 +33,4 @@ A universe-polymorphic constant carrying it:
 LeanConst["List", {LeanLevelParam["u"]}]
 ```
 
-<!-- => renders as: List.{u} -->
+<!-- => renders as: List, with its level {u} in the tooltip -->

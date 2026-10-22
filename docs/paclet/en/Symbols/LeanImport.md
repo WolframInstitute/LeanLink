@@ -110,7 +110,7 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 ]
 ```
 
-<!-- => 476 (or "Mathlib not built") -->
+<!-- => 463 (or "Mathlib not built") -->
 
 ---
 
