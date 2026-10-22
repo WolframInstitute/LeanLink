@@ -5,9 +5,7 @@
 BeginPackage["Wolfram`LeanLink`"];
 
 (* ============================================================================ *)
-
 (* Expression heads                                                             *)
-
 (* ============================================================================ *)
 
 LeanApp::usage = "LeanApp[fn, arg] represents Lean function application (fn arg)."
@@ -111,9 +109,7 @@ LeanCompile::usage = "LeanCompile[term] compiles a LeanTerm to native code via F
 Begin["`Private`"];
 
 (* ============================================================================ *)
-
 (* Shim library                                                                 *)
-
 (* ============================================================================ *)
 
 $ShimLib := $ShimLib = Block[
@@ -137,8 +133,7 @@ $ShimLib := $ShimLib = Block[
         loc = FileNameJoin[{pacletDir, "LibraryResources", sysDir, libName}];
         If[FileExistsQ[loc], Return[runnableShim[loc], Block]]
     ];
-(* Dev fallback: Native/ is sibling of the LeanLink/ paclet dir
-    *)
+    (* Dev fallback: Native/ is sibling of the LeanLink/ paclet dir *)
     devDir = DirectoryName[DirectoryName[$InputFileName]];
     loc = FileNameJoin[{DirectoryName[devDir], "Native", ".lake", "build", "lib", libName}];
     If[FileExistsQ[loc] && provisionLeanRuntime[loc], loc, $Failed]
@@ -170,16 +165,7 @@ leanProgram[dir_String, name_String] := FileNameJoin[{dir, name <> If[$Operating
 
 $searchPathSeparator = If[$OperatingSystem === "Windows", ";", ":"]
 
-leanToolchainDir[] := With[
-    {
-        dir = FileNameJoin[
-            {
-                elanHome[],
-                "toolchains",
-                "leanprover--lean4---" <> $LeanToolchainVersion
-            }
-        ]
-    },
+leanToolchainDir[] := With[{dir = FileNameJoin[{elanHome[], "toolchains", "leanprover--lean4---" <> $LeanToolchainVersion}]},
     If[DirectoryQ[dir], dir, $Failed]
 ]
 
@@ -207,9 +193,7 @@ $shimFailure = "install the Lean toolchain it was built against (leanprover/lean
    users, or in a container image, so nothing is written into it. *)
 
 runnableShim[shim_String] := Block[{dir, copy},
-    If[ FileExistsQ[FileNameJoin[{DirectoryName[shim], First[First[leanRuntimeLibs[]]]}]],
-        Return[If[provisionLeanRuntime[shim], shim, $Failed], Block]
-    ];
+    If[FileExistsQ[FileNameJoin[{DirectoryName[shim], First[First[leanRuntimeLibs[]]]}]], Return[If[provisionLeanRuntime[shim], shim, $Failed], Block]];
     dir = FileNameJoin[{cacheBase[], "LeanLink", $LeanToolchainVersion, $SystemID, StringTake[IntegerString[FileHash[shim, "SHA256"], 16, 64], 16]}];
     copy = FileNameJoin[{dir, FileNameTake[shim]}];
     If[ ! FileExistsQ[copy],
@@ -231,17 +215,13 @@ runnableShim[shim_String] := Block[{dir, copy},
 
 cacheBase[] := If[StringQ[$CacheBaseDirectory], $CacheBaseDirectory, $UserBaseDirectory]
 
-provisionLeanRuntime[shimPath_String] := Module[
-    {libDir = DirectoryName[shimPath], libs, sub, tc, srcDir, primary}
-    ,
+provisionLeanRuntime[shimPath_String] := Module[{libDir = DirectoryName[shimPath], libs, sub, tc, srcDir, primary},
     {libs, sub} = leanRuntimeLibs[];
     primary = FileNameJoin[{libDir, First[libs]}];
-(* On Windows the runtime's own DLLs need more of the toolchain (libc++.dll),
-   so its bin directory goes on PATH as well. *)
-    If[ $OperatingSystem === "Windows" && leanToolchainDir[] =!= $Failed,
-        addRuntimeSearchPath[FileNameJoin[Prepend[sub, leanToolchainDir[]]]]
-    ];
-(* Already provisioned (or a self-contained build): just expose the directory. *)
+    (* On Windows the runtime's own DLLs need more of the toolchain (libc++.dll),
+       so its bin directory goes on PATH as well. *)
+    If[$OperatingSystem === "Windows" && leanToolchainDir[] =!= $Failed, addRuntimeSearchPath[FileNameJoin[Prepend[sub, leanToolchainDir[]]]]];
+    (* Already provisioned (or a self-contained build): just expose the directory. *)
     If[ FileExistsQ[primary],
         addRuntimeSearchPath[libDir];
         Return[True]
@@ -251,13 +231,7 @@ provisionLeanRuntime[shimPath_String] := Module[
     srcDir = FileNameJoin[Prepend[sub, tc]];
     Scan[
         With[{src = FileNameJoin[{srcDir, #}], dst = FileNameJoin[{libDir, #}]},
-            If[ FileExistsQ[src] && ! FileExistsQ[dst],
-                If[ $OperatingSystem === "Windows",
-                    Quiet[CopyFile[src, dst]]
-                    ,
-                    Quiet[RunProcess[{"ln", "-sf", src, dst}]]
-                ]
-            ]
+            If[FileExistsQ[src] && ! FileExistsQ[dst], If[$OperatingSystem === "Windows", Quiet[CopyFile[src, dst]], Quiet[RunProcess[{"ln", "-sf", src, dst}]]]]
         ]&
         ,
         libs
@@ -282,9 +256,7 @@ addRuntimeSearchPath[libDir_String] := Module[{var, sep, cur},
     ];
     If[var === None, Return[]];
     cur = Environment[var];
-    If[ ! StringQ[cur] || ! StringContainsQ[cur, libDir],
-        SetEnvironment[var -> libDir <> If[StringQ[cur] && cur =!= "", sep <> cur, ""]]
-    ]
+    If[! StringQ[cur] || ! StringContainsQ[cur, libDir], SetEnvironment[var -> libDir <> If[StringQ[cur] && cur =!= "", sep <> cur, ""]]]
 ]
 
 (* Dev project root: set only when Native/ exists as sibling (dev mode) *)
@@ -371,13 +343,18 @@ decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]]
    subterms millions of times over, as omega's do, stays the size of its distinct subterms. *)
 sharedExpression[LeanShared[nodes_List]] := Module[{built = ConstantArray[Null, Length[nodes]]},
     Do[
-        built[[position]] = Replace[nodes[[position]], {
-            LeanSharedApp[function_Integer, argument_Integer] :> LeanApp[built[[function]], built[[argument]]],
-            LeanSharedLam[name_, type_Integer, body_Integer, binder_] :> LeanLam[name, built[[type]], built[[body]], binder],
-            LeanSharedForall[name_, type_Integer, body_Integer, binder_] :> LeanForall[name, built[[type]], built[[body]], binder],
-            LeanSharedLet[name_, type_Integer, value_Integer, body_Integer] :> LeanLet[name, built[[type]], built[[value]], built[[body]]],
-            LeanSharedProj[structure_, index_Integer, term_Integer] :> LeanProj[structure, index, built[[term]]]
-        }],
+        built[[position]] = Replace[
+            nodes[[position]]
+            ,
+            {
+                LeanSharedApp[function_Integer, argument_Integer] :> LeanApp[built[[function]], built[[argument]]],
+                LeanSharedLam[name_, type_Integer, body_Integer, binder_] :> LeanLam[name, built[[type]], built[[body]], binder],
+                LeanSharedForall[name_, type_Integer, body_Integer, binder_] :> LeanForall[name, built[[type]], built[[body]], binder],
+                LeanSharedLet[name_, type_Integer, value_Integer, body_Integer] :> LeanLet[name, built[[type]], built[[value]], built[[body]]],
+                LeanSharedProj[structure_, index_Integer, term_Integer] :> LeanProj[structure, index, built[[term]]]
+            }
+        ]
+        ,
         {position, Length[nodes]}
     ];
     Last[built]
@@ -388,9 +365,7 @@ sharedExpression[other_] := other
 sharedFetchQ[] := MatchQ[{$getTypeSharedFn, $getValueSharedFn}, {_LibraryFunction, _LibraryFunction}]
 
 (* ============================================================================ *)
-
 (* Utilities                                                                    *)
-
 (* ============================================================================ *)
 
 cleanName[s_String] := StringReplace[s, RegularExpression["\\._@\\..*"] -> ""]
@@ -402,39 +377,34 @@ cleanName[other_] := other
 shortName[s_String] := StringReplace[s, {RegularExpression["\\._@\\..*"] -> "", RegularExpression["\\._hyg\\..*"] -> ""}]
 
 (* ============================================================================ *)
-
 (* Environment management                                                       *)
-
 (* ============================================================================ *)
 
 (* A package's build directory: Lake v5 puts oleans under .lake/build/lib/lean/, v4 under
    .lake/build/lib/. *)
 
-lakeBuildLib[dir_String] := With[{v5 = FileNameJoin[{dir, ".lake", "build", "lib", "lean"}]}, If[DirectoryQ[v5], v5, FileNameJoin[{dir, ".lake", "build", "lib"}]]]
+lakeBuildLib[dir_String] := With[{v5 = FileNameJoin[{dir, ".lake", "build", "lib", "lean"}]},
+    If[DirectoryQ[v5], v5, FileNameJoin[{dir, ".lake", "build", "lib"}]]
+]
 
 (* Lake builds a path dependency (`path = "../x"` in the lakefile) where it lives, not under
    .lake/packages. A package's lake-manifest.json lists each one as "type": "path", with its
    "dir" relative to that package, and each one's own manifest lists its path dependencies. *)
 
 manifestPathDependencies[dir_String] := With[{manifest = Quiet[Import[FileNameJoin[{dir, "lake-manifest.json"}], "RawJSON"]]},
-    If[ AssociationQ[manifest],
-        Select[Cases[Lookup[manifest, "packages", {}], KeyValuePattern[{"type" -> "path", "dir" -> d_String}] :> ExpandFileName[FileNameJoin[{dir, d}]]], DirectoryQ],
-        {}
-    ]
+    If[AssociationQ[manifest], Select[Cases[Lookup[manifest, "packages", {}], KeyValuePattern[{"type" -> "path", "dir" -> d_String}] :> ExpandFileName[FileNameJoin[{dir, d}]]], DirectoryQ], {}]
 ]
 
 (* every path dependency of a project, direct or through other path dependencies, each once *)
 
-lakePathDependencies[projDir_String] := Rest @ FixedPoint[DeleteDuplicates[Join[#, Flatten[manifestPathDependencies /@ #]]] &, {ExpandFileName[projDir]}]
+lakePathDependencies[projDir_String] := Rest @ FixedPoint[DeleteDuplicates[Join[#, Flatten[manifestPathDependencies /@ #]]]&, {ExpandFileName[projDir]}]
 
 (* The search path for a project: its own build, its packages under .lake/packages (git
    dependencies), its path dependencies wherever they live, then its toolchain's library. *)
 
 resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".lake", "packages"}], leanLib},
     leanLib = Block[{dir = projDir, tc, version, toolchainDir},
-        While[
-            StringLength[dir] > 1
-            ,
+        While[StringLength[dir] > 1,
             tc = FileNameJoin[{dir, "lean-toolchain"}];
             If[ FileExistsQ[tc],
                 version = StringTrim[Import[tc, "Text"]];
@@ -446,7 +416,13 @@ resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".
         (* no lean-toolchain above it: Lean's own library of the toolchain the shim is built against *)
         Replace[leanToolchainDir[], {tc_String :> FileNameJoin[{tc, "lib", "lean"}], _ -> Nothing}]
     ];
-    StringRiffle[Select[Join[{lakeBuildLib[projDir]}, lakeBuildLib /@ If[DirectoryQ[pkgsRoot], FileNames["*", pkgsRoot], {}], lakeBuildLib /@ lakePathDependencies[projDir], {leanLib}], StringQ[#] && DirectoryQ[#] &], $searchPathSeparator]
+    StringRiffle[
+        Select[
+            Join[{lakeBuildLib[projDir]}, lakeBuildLib /@ If[DirectoryQ[pkgsRoot], FileNames["*", pkgsRoot], {}], lakeBuildLib /@ lakePathDependencies[projDir], {leanLib}],
+            StringQ[#] && DirectoryQ[#]&
+        ],
+        $searchPathSeparator
+    ]
 ]
 
 $envCache = <||>
@@ -456,10 +432,7 @@ $envCache = <||>
 
 loadFailureText[imports_List, searchPath_String] := Replace[
     Select[imports, Function[module, NoneTrue[StringSplit[searchPath, $searchPathSeparator], Function[dir, FileExistsQ[FileNameJoin[Prepend[StringSplit[module, "."], dir]] <> ".olean"]]]]],
-    {
-        {} -> "Failed to load environment",
-        missing_ :> "Failed to load environment: no directory of the search path has the module " <> StringRiffle[missing, ", "]
-    }
+    {{} -> "Failed to load environment", missing_ :> "Failed to load environment: no directory of the search path has the module " <> StringRiffle[missing, ", "]}
 ]
 
 (* Lean reads LEAN_PATH while it imports modules, so the shim sets it for the whole
@@ -469,6 +442,7 @@ loadFailureText[imports_List, searchPath_String] := Replace[
    of whichever environment was loaded last. *)
 
 SetAttributes[withLeanPath, HoldRest]
+
 withLeanPath[searchPath_, body_] := With[{saved = Environment["LEAN_PATH"]},
     If[StringQ[searchPath], SetEnvironment["LEAN_PATH" -> searchPath]];
     With[{result = body},
@@ -512,19 +486,10 @@ callNative[fn_, args_List, projDir_, imports_, head_ : LeanImport] := Block[{han
     decodeWXF[result]
 ]
 
-resolveProjDir[pd_] := Replace[
-    pd
-    ,
-    {
-        Automatic -> Directory[],
-        s_String /; StringStartsQ[s, "~/"] :> FileNameJoin[{$HomeDirectory, StringDrop[s, 2]}]
-    }
-]
+resolveProjDir[pd_] := Replace[pd, {Automatic -> Directory[], s_String /; StringStartsQ[s, "~/"] :> FileNameJoin[{$HomeDirectory, StringDrop[s, 2]}]}]
 
 (* ============================================================================ *)
-
 (* LeanTerm                                                                     *)
-
 (* ============================================================================ *)
 
 (* Canonical metamathematics palette, from
@@ -581,12 +546,7 @@ $callNodeColor = <|
     "quot" -> GrayLevel[0.92]
 |>
 
-$callEdgeColor = <|
-    "term" -> GrayLevel[0.25],
-    "type" -> GrayLevel[0.6],
-    "term+type" -> mmFg[$mmTheorem],
-    "ref" -> GrayLevel[0.45]
-|>
+$callEdgeColor = <|"term" -> GrayLevel[0.25], "type" -> GrayLevel[0.6], "term+type" -> mmFg[$mmTheorem], "ref" -> GrayLevel[0.45]|>
 
 (* --- Lazy fetch cache: keyed by {handle, name, field} --- *)
 
@@ -609,15 +569,14 @@ openNamespaces[opts_List] := StringRiffle[Select[Flatten[{Lookup[opts, "Open", {
 $lakeBuildSuffixes = {FileNameJoin[{".lake", "build", "lib", "lean"}], FileNameJoin[{".lake", "build", "lib"}]};
 
 traceSource[traceFile_String] := If[ FileExistsQ[traceFile],
-    Flatten @ StringCases[
-        Cases[Quiet[ImportString[ReadString[traceFile], "RawJSON"]], KeyValuePattern["message" -> m_String] :> m, Infinity],
-        RegularExpression["[/\\\\]bin[/\\\\]lean(?:\\.exe)? (.+?\\.lean) -o "] :> "$1"
-    ],
+    With[{messages = Cases[Quiet[ImportString[ReadString[traceFile], "RawJSON"]], KeyValuePattern["message" -> m_String] :> m, Infinity]},
+        Flatten[StringCases[messages, RegularExpression["[/\\\\]bin[/\\\\]lean(?:\\.exe)? (.+?\\.lean) -o "] :> "$1"]]
+    ]
+    ,
     {}
 ]
 
-sourceCandidates[dir_String, parts_List, rel_String] := With[
-    {suffix = SelectFirst[$lakeBuildSuffixes, StringEndsQ[dir, #]&, None]},
+sourceCandidates[dir_String, parts_List, rel_String] := With[{suffix = SelectFirst[$lakeBuildSuffixes, StringEndsQ[dir, #]&, None]},
     Which[
         suffix =!= None,
             With[{root = StringDrop[dir, -StringLength[suffix]]},
@@ -626,9 +585,11 @@ sourceCandidates[dir_String, parts_List, rel_String] := With[
                     {FileNameJoin[{root, rel}]},
                     FileNameJoin[{#, rel}]& /@ Select[FileNames["*", root], DirectoryQ[#] && ! StringStartsQ[FileNameTake[#], "."]&]
                 ]
-            ],
+            ]
+        ,
         StringEndsQ[dir, FileNameJoin[{"lib", "lean"}]],
-            {FileNameJoin[{FileNameDrop[dir, -2], "src", "lean", rel}]},
+            {FileNameJoin[{FileNameDrop[dir, -2], "src", "lean", rel}]}
+        ,
         True,
             {}
     ]
@@ -636,14 +597,11 @@ sourceCandidates[dir_String, parts_List, rel_String] := With[
 
 (* a module compiled from a file outside the search path, as LeanImport[file] does, names its file *)
 
-moduleSourceFile[h_Integer, module_String] /; FileExistsQ[Lookup[Lookup[Lookup[$handleSource, h, <||>], "Files", <||>], module, None]] :=
-    $handleSource[h, "Files", module]
+moduleSourceFile[h_Integer, module_String] /; FileExistsQ[Lookup[Lookup[Lookup[$handleSource, h, <||>], "Files", <||>], module, None]] := $handleSource[h, "Files", module]
 
-moduleSourceFile[h_Integer, module_String] := With[
-    {parts = StringSplit[module, "."]},
+moduleSourceFile[h_Integer, module_String] := With[{parts = StringSplit[module, "."]},
     SelectFirst[
-        Flatten[sourceCandidates[#, parts, FileNameJoin[parts] <> ".lean"]& /@
-            StringSplit[Lookup[Lookup[$handleSource, h, <||>], "SearchPath", ""], $searchPathSeparator]],
+        Flatten[sourceCandidates[#, parts, FileNameJoin[parts] <> ".lean"]& /@ StringSplit[Lookup[Lookup[$handleSource, h, <||>], "SearchPath", ""], $searchPathSeparator]],
         FileExistsQ,
         Missing["NotAvailable"]
     ]
@@ -654,16 +612,16 @@ moduleSourceFile[h_Integer, module_String] := With[
 
 declarationSource[h_Integer, name_String] := Module[{range, module, file, lines},
     range = Quiet[decodeWXF[$declRangeFn[h, name]]];
-    If[ ! AssociationQ[range], Return[Missing["NotAvailable"], Module]];
+    If[! AssociationQ[range], Return[Missing["NotAvailable"], Module]];
     module = Quiet[decodeWXF[$constantModuleFn[h, name]]];
-    If[ ! StringQ[module] || StringStartsQ[module, "ERROR: "], Return[Missing["NotAvailable"], Module]];
+    If[! StringQ[module] || StringStartsQ[module, "ERROR: "], Return[Missing["NotAvailable"], Module]];
     (* the text of a module compiled from a string, whose file is gone, is kept *)
     file = Lookup[Lookup[Lookup[$handleSource, h, <||>], "Texts", <||>], module, moduleSourceFile[h, module]];
-    If[ MissingQ[file], Return[file, Module]];
+    If[MissingQ[file], Return[file, Module]];
     lines = StringSplit[If[KeyExistsQ[Lookup[Lookup[$handleSource, h, <||>], "Texts", <||>], module], file, Import[file, "Text", CharacterEncoding -> "UTF-8"]], "\n", All];
-    If[ range["EndLine"] > Length[lines], Return[Missing["NotAvailable"], Module]];
+    If[range["EndLine"] > Length[lines], Return[Missing["NotAvailable"], Module]];
     lines = lines[[range["StartLine"] ;; range["EndLine"]]];
-(* trim the end before the start: on a one-line range they are the same line *)
+    (* trim the end before the start: on a one-line range they are the same line *)
     lines[[-1]] = StringTake[lines[[-1]], UpTo[range["EndColumn"]]];
     lines[[1]] = StringDrop[lines[[1]], Min[range["StartColumn"], StringLength[lines[[1]]]]];
     StringRiffle[lines, "\n"]
@@ -675,15 +633,16 @@ declarationSource[h_Integer, name_String] := Module[{range, module, file, lines}
    its output is read while it runs: a large value would otherwise fill the
    pipe and deadlock the wait. *)
 
-runLeanProcess[cmd_List, env_Association, limit_] := Module[
-    {p, out = "", err = "", t0 = AbsoluteTime[], read}
-    ,
+runLeanProcess[cmd_List, env_Association, limit_] := Module[{p, out = "", err = "", t0 = AbsoluteTime[], read},
     read[stream_] := Replace[ReadString[stream, EndOfBuffer], Except[_String] -> ""];
     p = StartProcess[cmd, ProcessEnvironment -> env];
-    While[ ProcessStatus[p] === "Running",
+    While[ProcessStatus[p] === "Running",
         out = out <> read[ProcessConnection[p, "StandardOutput"]];
         err = err <> read[ProcessConnection[p, "StandardError"]];
-        If[ AbsoluteTime[] - t0 > limit, KillProcess[p]; Return[$TimedOut, Module]];
+        If[ AbsoluteTime[] - t0 > limit,
+            KillProcess[p];
+            Return[$TimedOut, Module]
+        ];
         Pause[0.02]
     ];
     out = out <> Replace[ReadString[ProcessConnection[p, "StandardOutput"]], Except[_String] -> ""];
@@ -693,54 +652,46 @@ runLeanProcess[cmd_List, env_Association, limit_] := Module[
 
 Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "Source" -> "", "TimeLimit" -> 600};
 
-LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
-    {tc, projDir, searchPath, opens, srcLines, srcImports, srcBody, script, file, res, json, diag}
-    ,
+LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searchPath, opens, srcLines, srcImports, srcBody, script, file, res, json, diag},
     tc = leanToolchainDir[];
     If[ tc === $Failed,
-        Return[Failure["ToolchainNotInstalled", <|
-            "MessageTemplate" -> "LeanLink's toolchain leanprover/lean4:`1` is not installed.",
-            "MessageParameters" -> {$LeanToolchainVersion}|>], Module]
+        Return[Failure["ToolchainNotInstalled", <|"MessageTemplate" -> "LeanLink's toolchain leanprover/lean4:`1` is not installed.", "MessageParameters" -> {$LeanToolchainVersion}|>], Module]
     ];
     projDir = OptionValue["ProjectDir"];
-    searchPath = StringRiffle[
-        DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], FileNameJoin[{tc, "lib", "lean"}]}, ""],
-        $searchPathSeparator
-    ];
+    searchPath = StringRiffle[DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], FileNameJoin[{tc, "lib", "lean"}]}, ""], $searchPathSeparator];
     opens = Select[Flatten[{OptionValue["Open"]}], StringQ];
-(* "Source": declarations the expression uses (definitions, opens), placed
-   after the imports. Any import lines in it move to the header, the only
-   place Lean accepts them. *)
+    (* "Source": declarations the expression uses (definitions, opens), placed
+       after the imports. Any import lines in it move to the header, the only
+       place Lean accepts them. *)
     srcLines = StringSplit[Replace[OptionValue["Source"], Except[_String] -> ""], "\n", All];
     srcImports = StringTrim /@ Select[srcLines, StringStartsQ[StringTrim[#], "import "]&];
     srcBody = StringRiffle[Select[srcLines, ! StringStartsQ[StringTrim[#], "import "]&], "\n"];
     script = StringRiffle[
         Join[
-            {"import Lean.Data.Json"},
-            ("import " <> #&) /@ OptionValue["Imports"],
-            srcImports,
+            {"import Lean.Data.Json"}
+            ,
+            ("import " <> #&) /@ OptionValue["Imports"]
+            ,
+            srcImports
+            ,
             (* Lean writes a Float to JSON through its six-digit text; its bits are exact *)
-            {"instance (priority := high) : Lean.ToJson Float where toJson x := Lean.Json.mkObj [(\"LeanLinkFloat\", Lean.toJson x.toBits.toNat)]"},
-            If[StringTrim[srcBody] === "", {}, {srcBody}],
-            If[opens === {}, {}, {"open " <> StringRiffle[opens, " "] <> " in"}],
+            {"instance (priority := high) : Lean.ToJson Float where toJson x := Lean.Json.mkObj [(\"LeanLinkFloat\", Lean.toJson x.toBits.toNat)]"}
+            ,
+            If[StringTrim[srcBody] === "", {}, {srcBody}]
+            ,
+            If[opens === {}, {}, {"open " <> StringRiffle[opens, " "] <> " in"}]
+            ,
             {"#eval IO.println (\"LEANLINK_EVAL_JSON \" ++ (Lean.Json.arr #[Lean.toJson (" <> expr <> ")]).compress)"}
-        ],
+        ]
+        ,
         "\n"
     ];
     file = FileNameJoin[{$TemporaryDirectory, "LeanLinkEval" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
-    res = runLeanProcess[
-        {leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file},
-        Association[GetEnvironment[], "LEAN_PATH" -> searchPath],
-        OptionValue["TimeLimit"]
-    ];
+    res = runLeanProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, Association[GetEnvironment[], "LEAN_PATH" -> searchPath], OptionValue["TimeLimit"]];
     Quiet[DeleteFile[file]];
-    If[ res === $TimedOut,
-        Return[Failure["TimedOut", <|
-            "MessageTemplate" -> "Evaluation exceeded the time limit of `1` s.",
-            "MessageParameters" -> {OptionValue["TimeLimit"]}|>], Module]
-    ];
-(* The JSON is found in the raw output: ImportString decodes the UTF-8 itself. *)
+    If[res === $TimedOut, Return[Failure["TimedOut", <|"MessageTemplate" -> "Evaluation exceeded the time limit of `1` s.", "MessageParameters" -> {OptionValue["TimeLimit"]}|>], Module]];
+    (* The JSON is found in the raw output: ImportString decodes the UTF-8 itself. *)
     json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_EVAL_JSON "]&, None];
     If[ json =!= None,
         With[{v = Quiet[ImportString[StringDrop[json, StringLength["LEANLINK_EVAL_JSON "]], "RawJSON"]]},
@@ -751,11 +702,10 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[
         FromCharacterCode[ToCharacterCode[res["StandardOutput"] <> "\n" <> res["StandardError"], "ISO8859-1"], "UTF-8"],
         res["StandardOutput"] <> "\n" <> res["StandardError"]
     ];
-    Failure["LeanEvaluateFailed", <|
-        "MessageTemplate" -> "Lean could not evaluate the expression: `1`",
-        "MessageParameters" -> {StringTake[diag, UpTo[500]]},
-        "Output" -> diag, "ExitCode" -> res["ExitCode"]
-    |>]
+    Failure[
+        "LeanEvaluateFailed",
+        <|"MessageTemplate" -> "Lean could not evaluate the expression: `1`", "MessageParameters" -> {StringTake[diag, UpTo[500]]}, "Output" -> diag, "ExitCode" -> res["ExitCode"]|>
+    ]
 ]
 
 (* a Float from its IEEE 754 bits: a machine real, Infinity, -Infinity or Indeterminate *)
@@ -779,47 +729,53 @@ projectToolchain[dir_String] := Module[{tcFile = FileNameJoin[{dir, "lean-toolch
 
 LeanBuild[dir_String, module_String] := LeanBuild[dir, {module}]
 
-LeanBuild[dir_String, modules : {___String} : {}] := Module[
-    {root = ExpandFileName[dir], tc, lake, res, out}
-    ,
-    If[ ! DirectoryQ[root],
-        Return[Failure["NoProject", <|"MessageTemplate" -> "No such directory: `1`", "MessageParameters" -> {root}|>], Module]
-    ];
+LeanBuild[dir_String, modules : {___String} : {}] := Module[{root = ExpandFileName[dir], tc, lake, res, out},
+    If[! DirectoryQ[root], Return[Failure["NoProject", <|"MessageTemplate" -> "No such directory: `1`", "MessageParameters" -> {root}|>], Module]];
     tc = projectToolchain[root];
     lake = leanProgram[FileNameJoin[{tc["Dir"], "bin"}], "lake"];
     If[ ! FileExistsQ[lake],
         Return[
-            Failure["ToolchainNotInstalled", <|
-                "MessageTemplate" -> "The project pins `1`, which is not installed. Install it with: elan toolchain install `1`",
-                "MessageParameters" -> {tc["Pin"]},
-                "Toolchain" -> tc["Pin"]
-            |>],
+            Failure[
+                "ToolchainNotInstalled",
+                <|"MessageTemplate" -> "The project pins `1`, which is not installed. Install it with: elan toolchain install `1`", "MessageParameters" -> {tc["Pin"]}, "Toolchain" -> tc["Pin"]|>
+            ]
+            ,
             Module
         ]
     ];
-    If[ StringReplace[tc["Pin"], StartOfString ~~ ___ ~~ ":" -> ""] =!= $LeanToolchainVersion,
-        Message[LeanBuild::version, tc["Pin"], "leanprover/lean4:" <> $LeanToolchainVersion]
-    ];
+    If[StringReplace[tc["Pin"], StartOfString ~~ ___ ~~ ":" -> ""] =!= $LeanToolchainVersion, Message[LeanBuild::version, tc["Pin"], "leanprover/lean4:" <> $LeanToolchainVersion]];
     res = RunProcess[{lake, "build", Sequence @@ ("+" <> #& /@ modules)}, ProcessDirectory -> root];
     out = StringTrim @ Quiet @ Check[
         FromCharacterCode[ToCharacterCode[res["StandardOutput"] <> "\n" <> res["StandardError"], "ISO8859-1"], "UTF-8"],
         res["StandardOutput"] <> "\n" <> res["StandardError"]
     ];
-(* A build replaces the project's oleans: drop its cached environments so the
-   next LeanImport loads the new ones instead of returning stale constants. *)
+    (* A build replaces the project's oleans: drop its cached environments so the
+       next LeanImport loads the new ones instead of returning stale constants. *)
     $envCache = KeySelect[$envCache, ! (StringQ[First[#]] && ExpandFileName[First[#]] === root)&];
     If[ res["ExitCode"] === 0,
-        Success["Built", <|
-            "MessageTemplate" -> "Built `1` in `2`",
-            "MessageParameters" -> {If[modules === {}, "the default targets", StringRiffle[modules, ", "]], root},
-            "ProjectDir" -> root, "Modules" -> modules, "Output" -> out
-        |>]
+        Success[
+            "Built"
+            ,
+            <|
+                "MessageTemplate" -> "Built `1` in `2`",
+                "MessageParameters" -> {If[modules === {}, "the default targets", StringRiffle[modules, ", "]], root},
+                "ProjectDir" -> root,
+                "Modules" -> modules,
+                "Output" -> out
+            |>
+        ]
         ,
-        Failure["LeanBuildFailed", <|
-            "MessageTemplate" -> "lake build failed with exit code `1`",
-            "MessageParameters" -> {res["ExitCode"]},
-            "ExitCode" -> res["ExitCode"], "ProjectDir" -> root, "Modules" -> modules, "Output" -> out
-        |>]
+        Failure[
+            "LeanBuildFailed",
+            <|
+                "MessageTemplate" -> "lake build failed with exit code `1`",
+                "MessageParameters" -> {res["ExitCode"]},
+                "ExitCode" -> res["ExitCode"],
+                "ProjectDir" -> root,
+                "Modules" -> modules,
+                "Output" -> out
+            |>
+        ]
     ]
 ]
 
@@ -837,76 +793,68 @@ $typeFormCache = <||>;
 (* A file inside a folder: /a/kit/A.lean is inside /a/kit, /a/kit2/A.lean is not.
    Windows paths compare without case. *)
 
-insideDirectoryQ[file_String, dir_String] := With[
-    {parts = FileNameSplit[file], dirParts = FileNameSplit[dir], fold = If[$OperatingSystem === "Windows", ToLowerCase, Identity]},
+insideDirectoryQ[file_String, dir_String] := With[{parts = FileNameSplit[file], dirParts = FileNameSplit[dir], fold = If[$OperatingSystem === "Windows", ToLowerCase, Identity]},
     Length[parts] > Length[dirParts] && fold[Take[parts, Length[dirParts]]] === fold[dirParts]
 ]
 
 (* The module an olean under a build directory holds: Mathlib/Logic/Basic.olean is
    Mathlib.Logic.Basic, whichever separator the paths use *)
 
-oleanModule[olean_String, buildLib_String] := StringRiffle[
-    FileNameSplit[StringDrop[FileNameDrop[olean, FileNameDepth[buildLib]], -StringLength[".olean"]]],
-    "."
-]
+oleanModule[olean_String, buildLib_String] := StringRiffle[FileNameSplit[StringDrop[FileNameDrop[olean, FileNameDepth[buildLib]], -StringLength[".olean"]]], "."]
 
 (* What a handle was loaded from, so a lean process can import the same thing. *)
 
-registerHandle[h_Integer, imports_List, searchPath_String] := If[ h > 0,
-    $handleSource[h] = <|"Imports" -> imports, "SearchPath" -> searchPath,
-        "Names" -> Lookup[Lookup[$handleSource, h, <||>], "Names", {}]|>
-]
+registerHandle[h_Integer, imports_List, searchPath_String] := If[h > 0, $handleSource[h] = <|"Imports" -> imports, "SearchPath" -> searchPath, "Names" -> Lookup[Lookup[$handleSource, h, <||>], "Names", {}]|>]
 
 handleInfo[h_Integer, key_String] := Lookup[Lookup[$handleSource, h, <||>], key, None]
 
-registerHandleNames[h_Integer, names_List] := If[ KeyExistsQ[$handleSource, h],
-    $handleSource[h, "Names"] = Union[$handleSource[h, "Names"], names]
-]
+registerHandleNames[h_Integer, names_List] := If[KeyExistsQ[$handleSource, h], $handleSource[h, "Names"] = Union[$handleSource[h, "Names"], names]]
 
 leanStringLiteral[s_String] := "\"" <> StringReplace[s, {"\\" -> "\\\\", "\"" -> "\\\""}] <> "\""
 
-frontendTypeForms[h_Integer, names_List, opens_String] := Module[
-    {info, tc, script, file, namesFile, res, out, json}
-    ,
+frontendTypeForms[h_Integer, names_List, opens_String] := Module[{info, tc, script, file, namesFile, res, out, json},
     info = Lookup[$handleSource, h, None];
     tc = leanToolchainDir[];
-    If[ info === None || tc === $Failed || names === {}, Return[$Failed, Module]];
+    If[info === None || tc === $Failed || names === {}, Return[$Failed, Module]];
     namesFile = FileNameJoin[{$TemporaryDirectory, "LeanLinkPPNames" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".txt"}];
     Export[namesFile, StringRiffle[names, "\n"], "Text", CharacterEncoding -> "UTF-8"];
     script = StringRiffle[
         Join[
-            {"import Lean"},
-            ("import " <> #&) /@ info["Imports"],
-(* Open nothing but the requested namespaces, and fully qualify the script's
-   own names: `open Lean Meta` would bring Lean.Term and Lean.Meta.State into
-   scope, and the delaborator then prints a project's own Term or State in full
-   because the short name is ambiguous - unlike #check in a project file. *)
-            If[opens === "", {}, {"open " <> StringRiffle[StringSplit[opens, ","], " "] <> " in"}],
+            {"import Lean"}
+            ,
+            ("import " <> #&) /@ info["Imports"]
+            ,
+            (* Open nothing but the requested namespaces, and fully qualify the script's
+               own names: `open Lean Meta` would bring Lean.Term and Lean.Meta.State into
+               scope, and the delaborator then prints a project's own Term or State in full
+               because the short name is ambiguous - unlike #check in a project file. *)
+            If[opens === "", {}, {"open " <> StringRiffle[StringSplit[opens, ","], " "] <> " in"}]
+            ,
             {
-                "#eval show Lean.Meta.MetaM Unit from do",
-                "  let mut out : Array (String \[Times] Lean.Json) := #[]",
-(* names come from a file: an array literal of thousands overflows the code generator *)
-                "  for n in (\[LeftArrow] IO.FS.lines " <> leanStringLiteral[namesFile] <> ") do",
-                "    if let some ci := (\[LeftArrow] Lean.getEnv).find? n.toName then",
-                "      try out := out.push (n, Lean.Json.str (toString (\[LeftArrow] Lean.Meta.ppExpr ci.type))) catch _ => pure ()",
+                "#eval show Lean.Meta.MetaM Unit from do"
+                ,
+                "  let mut out : Array (String \[Times] Lean.Json) := #[]"
+                ,
+                (* names come from a file: an array literal of thousands overflows the code generator *)
+                "  for n in (\[LeftArrow] IO.FS.lines " <> leanStringLiteral[namesFile] <> ") do"
+                ,
+                "    if let some ci := (\[LeftArrow] Lean.getEnv).find? n.toName then"
+                ,
+                "      try out := out.push (n, Lean.Json.str (toString (\[LeftArrow] Lean.Meta.ppExpr ci.type))) catch _ => pure ()"
+                ,
                 "  IO.println (\"LEANLINK_PP_JSON \" ++ (Lean.Json.mkObj out.toList).compress)"
             }
-        ],
+        ]
+        ,
         "\n"
     ];
     file = FileNameJoin[{$TemporaryDirectory, "LeanLinkPP" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
-    res = RunProcess[
-        {leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file},
-        ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> info["SearchPath"]]
-    ];
+    res = RunProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> info["SearchPath"]]];
     Quiet[DeleteFile[{file, namesFile}]];
-    out = Quiet @ Check[
-        FromCharacterCode[ToCharacterCode[res["StandardOutput"], "ISO8859-1"], "UTF-8"],
-        res["StandardOutput"]
-    ];
-(* Find the JSON in the raw output: ImportString reads its argument as bytes
-   and decodes the UTF-8 itself, so it must not be pre-decoded. *)
+    out = Quiet @ Check[FromCharacterCode[ToCharacterCode[res["StandardOutput"], "ISO8859-1"], "UTF-8"], res["StandardOutput"]];
+    (* Find the JSON in the raw output: ImportString reads its argument as bytes
+       and decodes the UTF-8 itself, so it must not be pre-decoded. *)
     json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_PP_JSON "]&, None];
     If[ json === None,
         Message[LeanTerm::err, "lean could not pretty-print the type: " <> StringTake[StringTrim[out <> "\n" <> res["StandardError"]], UpTo[2000]]];
@@ -920,19 +868,22 @@ frontendTypeForms[h_Integer, names_List, opens_String] := Module[
    is printed alone.
    A failed batch is cached too, so a missing toolchain costs one attempt. *)
 
-typeFormFor[h_Integer, name_String, opens_String] := Module[
-    {key = {h, opens}, cache, names, res}
-    ,
+typeFormFor[h_Integer, name_String, opens_String] := Module[{key = {h, opens}, cache, names, res},
     cache = Lookup[$typeFormCache, Key[key], Missing[]];
-    If[ cache === $Failed, Return[Missing["NotAvailable"], Module]];
+    If[cache === $Failed, Return[Missing["NotAvailable"], Module]];
     If[ ! AssociationQ[cache] || ! KeyExistsQ[cache, name],
         names = Lookup[Lookup[$handleSource, h, <||>], "Names", {}];
         names = If[MemberQ[names, name] && Length[names] <= 10000 && ! AssociationQ[cache], names, {name}];
         res = frontendTypeForms[h, names, opens];
         $typeFormCache[key] = Which[
-            AssociationQ[res], Join[Replace[cache, Except[_Association] -> <||>], res],
-            AssociationQ[cache], cache,
-            True, $Failed
+            AssociationQ[res],
+                Join[Replace[cache, Except[_Association] -> <||>], res]
+            ,
+            AssociationQ[cache],
+                cache
+            ,
+            True,
+                $Failed
         ]
     ];
     Lookup[Replace[$typeFormCache[key], Except[_Association] -> <||>], name, Missing["NotAvailable"]]
@@ -992,100 +943,23 @@ fetchUnfolded[handle_Integer, name_String, "Term", level_Integer] := With[{r = Q
 ]
 
 (* ============================================================================ *)
-
 (* Constructable LeanTerm -- build from WL expression heads                      *)
-
 (* ============================================================================ *)
 
 (* Wrap a bare expression into a LeanTerm *)
 
-LeanTerm[
-    expr :
-        _LeanApp
-        |
-        _LeanConst
-        |
-        _LeanForall
-        |
-        _LeanLam
-        |
-        _LeanBVar
-        |
-        _LeanSort
-        |
-        _LeanLitNat
-        |
-        _LeanLitStr
-        |
-        _LeanLet
-        |
-        _LeanProj
-] := LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]
+LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar | _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj] := LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]
 
 (* Constructor with env -- binds handle for type-checking *)
 
-LeanTerm[
-    expr :
-        _LeanApp
-        |
-        _LeanConst
-        |
-        _LeanForall
-        |
-        _LeanLam
-        |
-        _LeanBVar
-        |
-        _LeanSort
-        |
-        _LeanLitNat
-        |
-        _LeanLitStr
-        |
-        _LeanLet
-        |
-        _LeanProj
-    ,
-    env_LeanEnvironment
-] := With[{h = extractHandle[env]},
-    If[ IntegerQ[h],
-        LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>]
-        ,
-        LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]
-    ]
+LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar | _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj, env_LeanEnvironment] := With[{h = extractHandle[env]},
+    If[IntegerQ[h], LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>], LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]]
 ]
 
 (* Also accept bare Association for backward compat *)
 
-LeanTerm[
-    expr :
-        _LeanApp
-        |
-        _LeanConst
-        |
-        _LeanForall
-        |
-        _LeanLam
-        |
-        _LeanBVar
-        |
-        _LeanSort
-        |
-        _LeanLitNat
-        |
-        _LeanLitStr
-        |
-        _LeanLet
-        |
-        _LeanProj
-    ,
-    env_Association
-] := With[{h = Lookup[Values[env][[1]][[1]], "_Handle", None]},
-    If[ IntegerQ[h],
-        LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>]
-        ,
-        LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]
-    ]
+LeanTerm[expr : _LeanApp | _LeanConst | _LeanForall | _LeanLam | _LeanBVar | _LeanSort | _LeanLitNat | _LeanLitStr | _LeanLet | _LeanProj, env_Association] := With[{h = Lookup[Values[env][[1]][[1]], "_Handle", None]},
+    If[IntegerQ[h], LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr, "_Handle" -> h|>], LeanTerm[<|"Name" -> "user_expr", "Kind" -> "expr", "_Expr" -> expr|>]]
 ]
 
 (* Extract handle from a LeanEnvironment *)
@@ -1134,16 +1008,9 @@ peelForalls[body_, "Body"] := body
 (* Level 0 = no unfolding (default). Level N = unfold definitions N times. *)
 
 LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
-    {
-        handle = Lookup[data, "_Handle", None],
-        name = Lookup[data, "Name", ""],
-        level = Replace[First[{args}, 0], Except[_Integer] -> 0],
-        opts = Cases[{args}, _Rule],
-        expr = Lookup[data, "_Expr", None]
-    }
+    {handle = Lookup[data, "_Handle", None], name = Lookup[data, "Name", ""], level = Replace[First[{args}, 0], Except[_Integer] -> 0], opts = Cases[{args}, _Rule], expr = Lookup[data, "_Expr", None]}
     ,
-(* For constructed expressions, handle Type/TypeForm specially 
-    *)
+    (* For constructed expressions, handle Type/TypeForm specially *)
     If[ expr =!= None && IntegerQ[handle] && MatchQ[prop, "Type" | "TypeForm"],
         With[{tc = typeCheck[expr, handle]},
             If[AssociationQ[tc], If[prop === "Type", tc["Type"], tc["TypeForm"]], $Failed]
@@ -1152,24 +1019,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
         (* Normal property dispatch for imported terms *)
         Switch[ prop,
             "Properties",
-                {
-                    "Name",
-                    "Kind",
-                    "Type",
-                    "Term",
-                    "TypeForm",
-                    "TermForm",
-                    "TypeRefs",
-                    "TermRefs",
-                    "Axioms",
-                    "KernelCheck",
-                    "Module",
-                    "Source",
-                    "ExprGraph",
-                    "CallGraph",
-                    "Parameters",
-                    "Body"
-                }
+                {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm", "TypeRefs", "TermRefs", "Axioms", "KernelCheck", "Module", "Source", "ExprGraph", "CallGraph", "Parameters", "Body"}
             ,
             "Parameters",
                 peelForalls[LeanTerm[data]["Type"]]
@@ -1190,8 +1040,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     If[ IntegerQ[handle],
                         If[level > 0, fetchUnfolded[handle, name, "Type", level], fetchField[handle, name, "Type"]]
                         ,
-(* Fallback to _TypeExpr for ProofToLean terms 
-    *)
+                        (* Fallback to _TypeExpr for ProofToLean terms *)
                         If[KeyExistsQ[data, "_TypeExpr"], data["_TypeExpr"], Missing["NoHandle"]]
                     ]
                 ]
@@ -1203,16 +1052,15 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     If[ IntegerQ[handle],
                         If[level > 0, fetchUnfolded[handle, name, "Term", level], fetchField[handle, name, "Term"]]
                         ,
-(* Fallback to _Tactic for ProofToLean terms 
-    *)
+                        (* Fallback to _Tactic for ProofToLean terms *)
                         If[KeyExistsQ[data, "_Tactic"], data["_Tactic"], Missing["NoHandle"]]
                     ]
                 ]
             ,
-(* As #check prints it: Lean's own delaborator, run by the lean frontend
-   (typeFormFor), with notation, coercions and field notation; "Open" -> {ns}
-   prints names under those namespaces unqualified. LeanLink's WL printer is
-   the fallback - no handle, an unfolded type, or no toolchain. *)
+            (* As #check prints it: Lean's own delaborator, run by the lean frontend
+               (typeFormFor), with notation, coercions and field notation; "Open" -> {ns}
+               prints names under those namespaces unqualified. LeanLink's WL printer is
+               the fallback - no handle, an unfolded type, or no toolchain. *)
             "TypeForm",
                 With[{r = If[IntegerQ[handle] && level === 0, typeFormFor[handle, name, openNamespaces[opts]], None]},
                     If[ StringQ[r],
@@ -1232,27 +1080,15 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                     ,
                     (* Fallback: use tacticSource for _Tactic *)
                     With[{tactic = If[KeyExistsQ[data, "_Tactic"], data["_Tactic"], LeanTerm[data]["Term", level]]},
-                        If[ MatchQ[tactic, _LeanTactic],
-                            tacticSource[tactic]
-                            ,
-                            If[MatchQ[tactic, _Missing], Missing["NoHandle"], leanPP[tactic]]
-                        ]
+                        If[MatchQ[tactic, _LeanTactic], tacticSource[tactic], If[MatchQ[tactic, _Missing], Missing["NoHandle"], leanPP[tactic]]]
                     ]
                 ]
             ,
             "TypeRefs",
-                If[ KeyExistsQ[data, "TypeRefs"],
-                    data["TypeRefs"]
-                    ,
-                    If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]
-                ]
+                If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"], If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]]
             ,
             "TermRefs",
-                If[ KeyExistsQ[data, "TermRefs"],
-                    data["TermRefs"]
-                    ,
-                    If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]
-                ]
+                If[KeyExistsQ[data, "TermRefs"], data["TermRefs"], If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]]
             ,
             "Source",
                 If[IntegerQ[handle], declarationSource[handle, name], Missing["NoHandle"]]
@@ -1261,46 +1097,74 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[$constantModuleFn[handle, name]]]},
                         Which[
-                            StringQ[r] && ! StringStartsQ[r, "ERROR: "], r,
-                            StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
-                            True, $Failed
+                            StringQ[r] && ! StringStartsQ[r, "ERROR: "],
+                                r
+                            ,
+                            StringQ[r],
+                                Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]];
+                                $Failed
+                            ,
+                            True,
+                                $Failed
                         ]
                     ]
                     ,
                     Missing["NoHandle"]
                 ]
             ,
-(* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
-   Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
-   depth), this follows every dependency. Like #print axioms it trusts that each
-   declaration passed the kernel when its module was built, which a module can
-   skip (debug.skipKernelTC, or a direct addDecl): a forged proof then shows no
-   axioms. Verifying an untrusted proof takes a kernel replay of its module, as
-   leanchecker does. *)
+            (* Exact axiom audit: Lean.collectAxioms, the traversal behind #print axioms.
+               Unlike "CallGraph" (a display graph that filters auxiliary lemmas and caps
+               depth), this follows every dependency. Like #print axioms it trusts that each
+               declaration passed the kernel when its module was built, which a module can
+               skip (debug.skipKernelTC, or a direct addDecl): a forged proof then shows no
+               axioms. Verifying an untrusted proof takes a kernel replay of its module, as
+               leanchecker does. *)
             "Axioms",
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[$collectAxiomsFn[handle, name]]]},
                         Which[
-                            ListQ[r], r,
-                            StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
-                            True, $Failed
+                            ListQ[r],
+                                r
+                            ,
+                            StringQ[r],
+                                Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]];
+                                $Failed
+                            ,
+                            True,
+                                $Failed
                         ]
                     ]
                     ,
                     Missing["NoHandle"]
                 ]
             ,
-(* Kernel replay of the declaring module, as leanchecker does: it catches a
-   declaration that never passed the kernel, which "Axioms" cannot see. A
-   rejection is a result, a Failure, not an error. *)
+            (* Kernel replay of the declaring module, as leanchecker does: it catches a
+               declaration that never passed the kernel, which "Axioms" cannot see. A
+               rejection is a result, a Failure, not an error. *)
             "KernelCheck",
                 If[ IntegerQ[handle],
                     With[{r = Quiet[decodeWXF[withLeanPath[handleInfo[handle, "SearchPath"], $kernelCheckFn[handle, name]]]]},
                         Which[
-                            AssociationQ[r], Success["KernelChecked", <|"MessageTemplate" -> "The kernel accepts all `1` declarations of `2`.", "MessageParameters" -> {r["Declarations"], r["Module"]}, "Module" -> r["Module"], "Declarations" -> r["Declarations"]|>],
-                            StringQ[r] && StringStartsQ[r, "REJECTED: "], Failure["KernelRejected", <|"MessageTemplate" -> "`1`", "MessageParameters" -> {StringDelete[r, StartOfString ~~ "REJECTED: "]}|>],
-                            StringQ[r], Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]]; $Failed,
-                            True, $Failed
+                            AssociationQ[r],
+                                Success[
+                                    "KernelChecked",
+                                    <|
+                                        "MessageTemplate" -> "The kernel accepts all `1` declarations of `2`.",
+                                        "MessageParameters" -> {r["Declarations"], r["Module"]},
+                                        "Module" -> r["Module"],
+                                        "Declarations" -> r["Declarations"]
+                                    |>
+                                ]
+                            ,
+                            StringQ[r] && StringStartsQ[r, "REJECTED: "],
+                                Failure["KernelRejected", <|"MessageTemplate" -> "`1`", "MessageParameters" -> {StringDelete[r, StartOfString ~~ "REJECTED: "]}|>]
+                            ,
+                            StringQ[r],
+                                Message[LeanTerm::err, StringDelete[r, StartOfString ~~ "ERROR: "]];
+                                $Failed
+                            ,
+                            True,
+                                $Failed
                         ]
                     ]
                     ,
@@ -1308,11 +1172,9 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
                 ]
             ,
             "ExprGraph",
-                exprToGraph[
-                    With[{term = LeanTerm[data]["Term"]},
-                        Replace[term, LeanNoValue[] -> LeanTerm[data]["Type"]]
-                    ]
-                ]
+                exprToGraph[With[{term = LeanTerm[data]["Term"]},
+                    Replace[term, LeanNoValue[] -> LeanTerm[data]["Type"]]
+                ]]
             ,
             "CallGraph",
                 callGraph[data, Sequence @@ opts]
@@ -1324,9 +1186,7 @@ LeanTerm /: LeanTerm[data_Association][prop_String, args___] := Block[
 ]
 
 (* ============================================================================ *)
-
 (* Expression Graph                                                             *)
-
 (* ============================================================================ *)
 
 (* Expr graph node backgrounds, by Lean expression head *)
@@ -1346,6 +1206,27 @@ $headColor = <|
     LeanNoValue -> GrayLevel[0.9]
 |>
 
+(* a VertexShapeFunction: the label framed in its color, with a tooltip, legible on light and dark backgrounds *)
+framedVertex[label_, tooltip_, color_] := Function[Inset[
+    Framed[
+        Style[
+            Tooltip[label, tooltip],
+            "Text",
+            FontSize -> 7,
+            LightDarkSwitched[If[ColorDistance[color, White] > 0.4, White, Black], If[ColorDistance[color, Black] > 0.4, White, GrayLevel[0.9]]],
+            Bold
+        ],
+        Background -> LightDarkSwitched[color],
+        RoundingRadius -> 3,
+        FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]],
+        FrameMargins -> {{3, 3}, {1, 1}}
+    ]
+    ,
+    #1
+    ,
+    #3
+]]
+
 exprToGraph[expr_] := Block[{id = 0, verts, edges, lbls = <||>, cols = <||>, kinds = <||>, walk, reaped},
     walk[e_] := Block[{myId, label, col, children, edgeLbls},
         myId = ++id;
@@ -1356,24 +1237,23 @@ exprToGraph[expr_] := Block[{id = 0, verts, edges, lbls = <||>, cols = <||>, kin
         AssociateTo[
             kinds
             ,
-            myId ->
-                Replace[
-                    Head[e]
-                    ,
-                    {
-                        LeanForall -> "forall",
-                        LeanLam -> "lam",
-                        LeanApp -> "app",
-                        LeanConst -> "const",
-                        LeanBVar -> "bvar",
-                        LeanSort -> "sort",
-                        LeanLet -> "let",
-                        LeanLitNat -> "litNat",
-                        LeanLitStr -> "litStr",
-                        LeanProj -> "proj",
-                        _ -> "?"
-                    }
-                ]
+            myId -> Replace[
+                Head[e]
+                ,
+                {
+                    LeanForall -> "forall",
+                    LeanLam -> "lam",
+                    LeanApp -> "app",
+                    LeanConst -> "const",
+                    LeanBVar -> "bvar",
+                    LeanSort -> "sort",
+                    LeanLet -> "let",
+                    LeanLitNat -> "litNat",
+                    LeanLitStr -> "litStr",
+                    LeanProj -> "proj",
+                    _ -> "?"
+                }
+            ]
         ];
         MapThread[
             Function[{child, elbl},
@@ -1391,71 +1271,15 @@ exprToGraph[expr_] := Block[{id = 0, verts, edges, lbls = <||>, cols = <||>, kin
     edges = First[reaped[[2]], {}];
     If[Length[verts] == 0, Return[Graph[{}]]];
     Graph[
-        verts
-        ,
-        edges
-        ,
-        VertexShapeFunction ->
-            Map[
-                With[{bg = cols[#], lbl = lbls[#], kind = kinds[#]},
-                    # ->
-                        Function[
-                            Inset[
-                                Framed[
-                                    Style[
-                                        Tooltip[lbl, kind]
-                                        ,
-                                        "Text"
-                                        ,
-                                        FontSize -> 7
-                                        ,
-                                        LightDarkSwitched[
-                                            If[ColorDistance[bg, White] > 0.4, White, Black],
-                                            If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]
-                                        ]
-                                        ,
-                                        Bold
-                                    ]
-                                    ,
-                                    Background -> LightDarkSwitched[bg]
-                                    ,
-                                    RoundingRadius -> 3
-                                    ,
-                                    FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]]
-                                    ,
-                                    FrameMargins -> {{3, 3}, {1, 1}}
-                                ]
-                                ,
-                                #1
-                                ,
-                                #3
-                            ]
-                        ]
-                ]&
-                ,
-                verts
-            ]
-        ,
-        GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top}
-        ,
-        VertexSize -> If[Length[verts] <= 10, 0.3, 0.05]
-        ,
-        EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]]
-        ,
-        EdgeLabels
-        ->
-        (
-            #
-            ->
-            Style[#[[3]], FontSize -> 5, FontFamily -> "Menlo", LightDarkSwitched[GrayLevel[0.3], GrayLevel[0.7]]]&
-            /@
-            edges
-        )
-        ,
-        ImageSize -> Max[300, Min[1200, 40 * Length[verts]]]
-        ,
-        AspectRatio -> 1/2
-        ,
+        verts,
+        edges,
+        VertexShapeFunction -> Map[# -> framedVertex[lbls[#], kinds[#], cols[#]]&, verts],
+        GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
+        VertexSize -> If[Length[verts] <= 10, 0.3, 0.05],
+        EdgeStyle -> Directive[GrayLevel[0.5], Arrowheads[0.02]],
+        EdgeLabels -> (# -> Style[#[[3]], FontSize -> 5, FontFamily -> "Menlo", LightDarkSwitched[GrayLevel[0.3], GrayLevel[0.7]]]& /@ edges),
+        ImageSize -> Max[300, Min[1200, 40 * Length[verts]]],
+        AspectRatio -> 1/2,
         PerformanceGoal -> "Quality"
     ]
 ]
@@ -1501,9 +1325,7 @@ exprNodeInfo[LeanNoValue[]] := {"\[Dash]", $headColor[LeanNoValue], {}, {}}
 exprNodeInfo[other_] := {ToString[Short[other]], GrayLevel[0.6], {}, {}}
 
 (* ============================================================================ *)
-
 (* Call Graph                                                                   *)
-
 (* ============================================================================ *)
 
 collectConsts[e_] := Union[Cases[e, LeanConst[n_String, _] :> n, Infinity]]
@@ -1541,39 +1363,26 @@ callGraph[data_Association, opts___Rule] := Block[{
     (* Cache for kinds and refs discovered during BFS *)
     kindCache = <|name -> Lookup[data, "Kind", "def"]|>;
     refsCache = <|
-        name ->
-            {
-                If[ KeyExistsQ[data, "TypeRefs"],
-                    data["TypeRefs"]
-                    ,
-                    If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]
-                ]
-                ,
-                If[ KeyExistsQ[data, "TermRefs"],
-                    data["TermRefs"]
-                    ,
-                    If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]
-                ]
-            }
+        name -> {
+            If[KeyExistsQ[data, "TypeRefs"], data["TypeRefs"], If[IntegerQ[handle], fetchField[handle, name, "TypeRefs"], {}]],
+            If[KeyExistsQ[data, "TermRefs"], data["TermRefs"], If[IntegerQ[handle], fetchField[handle, name, "TermRefs"], {}]]
+        }
     |>;
-(* Query FFI for a constant's kind and refs, caching results 
-    *)
+    (* Query FFI for a constant's kind and refs, caching results *)
     getRefsFor[n_String] := If[ KeyExistsQ[refsCache, n],
         refsCache[n]
         ,
         Block[{tRefs = {}, vRefs = {}, kind = "def"},
             If[ IntegerQ[handle] && handle > 0,
-                Quiet @
-                    With[{r = decodeWXF[$getConstantFn[handle, n]]},
-                        If[MatchQ[r, LeanConstant[_, _String, __]], kind = r[[2]]]
-                    ];
-                Quiet @
-                    With[{uc = decodeWXF[$getUsedConstantsFn[handle, n]]},
-                        If[ AssociationQ[uc],
-                            tRefs = Lookup[uc, "type", {}];
-                            vRefs = Lookup[uc, "value", {}]
-                        ]
+                Quiet @ With[{r = decodeWXF[$getConstantFn[handle, n]]},
+                    If[MatchQ[r, LeanConstant[_, _String, __]], kind = r[[2]]]
+                ];
+                Quiet @ With[{uc = decodeWXF[$getUsedConstantsFn[handle, n]]},
+                    If[ AssociationQ[uc],
+                        tRefs = Lookup[uc, "type", {}];
+                        vRefs = Lookup[uc, "value", {}]
                     ]
+                ]
             ];
             AssociateTo[kindCache, n -> kind];
             AssociateTo[refsCache, n -> {tRefs, vRefs}];
@@ -1584,21 +1393,16 @@ callGraph[data_Association, opts___Rule] := Block[{
     nodes = <|name -> True|>;
     edgeList = {};
     frontier = {name};
-    While[
-        frontier =!= {} && depth < maxDepth
-        ,
+    While[frontier =!= {} && depth < maxDepth,
         depth++;
         Block[{newFrontier = {}},
             Do[
                 {typeRefs, termRefs} = getRefsFor[src];
                 allRefs = Union[typeRefs, termRefs];
                 (* Match code.lean isInternalName *)
-                allRefs = Select[
-                    DeleteCases[allRefs, src],
-                    ! StringContainsQ[#, "._" | ".match_" | ".proof_" | "._uniq" | ".brecOn" | ".below" | ".casesOn" | ".noConfusion"]&
-                ];
+                allRefs = Select[DeleteCases[allRefs, src], ! StringContainsQ[#, "._" | ".match_" | ".proof_" | "._uniq" | ".brecOn" | ".below" | ".casesOn" | ".noConfusion"]&];
                 Do[
-                    classifyEdge = Which[ 
+                    classifyEdge = Which[
                         MemberQ[termRefs, ref] && MemberQ[typeRefs, ref],
                             "term+type"
                         ,
@@ -1628,7 +1432,7 @@ callGraph[data_Association, opts___Rule] := Block[{
         If[ k =!= None,
             k
             ,
-            Which[ 
+            Which[
                 StringEndsQ[n, ".rec"] || StringEndsQ[n, ".recOn"] || StringEndsQ[n, ".casesOn"],
                     "recursor"
                 ,
@@ -1672,13 +1476,7 @@ callGraph[data_Association, opts___Rule] := Block[{
                     1.2
             ]
         },
-            e ->
-                Directive[
-                    LightDarkSwitched[col, Lighter[col, 0.4]],
-                    AbsoluteThickness[pw],
-                    Arrowheads[0.01],
-                    If[label === "type", Dashing[{Small, Small}], Sequence @@ {}]
-                ]
+            e -> Directive[LightDarkSwitched[col, Lighter[col, 0.4]], AbsoluteThickness[pw], Arrowheads[0.01], If[label === "type", Dashing[{Small, Small}], Sequence @@ {}]]
         ]
         ,
         {e, edges}
@@ -1696,51 +1494,13 @@ callGraph[data_Association, opts___Rule] := Block[{
         ,
         edges
         ,
-        VertexShapeFunction ->
-            Map[
-                With[{
-                    bg = Lookup[vertColors, #, GrayLevel[0.88]],
-                    lbl = #,
-                    fullName = Lookup[fullNames, #, #],
-                    kind = getKind[Lookup[fullNames, #, #]]
-                },
-                    # ->
-                        Function[
-                            Inset[
-                                Framed[
-                                    Style[
-                                        Tooltip[lbl, fullName <> " (" <> ToString[kind] <> ")"]
-                                        ,
-                                        "Text"
-                                        ,
-                                        FontSize -> 7
-                                        ,
-                                        LightDarkSwitched[
-                                            If[ColorDistance[bg, White] > 0.4, White, Black],
-                                            If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]
-                                        ]
-                                        ,
-                                        Bold
-                                    ]
-                                    ,
-                                    Background -> LightDarkSwitched[bg]
-                                    ,
-                                    RoundingRadius -> 3
-                                    ,
-                                    FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]]
-                                    ,
-                                    FrameMargins -> {{3, 3}, {1, 1}}
-                                ]
-                                ,
-                                #1
-                                ,
-                                #3
-                            ]
-                        ]
-                ]&
-                ,
-                verts
-            ]
+        VertexShapeFunction -> Map[
+            With[{fullName = Lookup[fullNames, #, #]},
+                # -> framedVertex[#, fullName <> " (" <> ToString[getKind[fullName]] <> ")", Lookup[vertColors, #, GrayLevel[0.88]]]
+            ]&
+            ,
+            verts
+        ]
         ,
         GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top}
         ,
@@ -1759,9 +1519,7 @@ callGraph[data_Association, opts___Rule] := Block[{
 ]
 
 (* ============================================================================ *)
-
 (* LeanTerm SummaryBox                                                          *)
-
 (* ============================================================================ *)
 
 LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Block[{name, kind, typePP, termPP, col, icon, sn, nTypeRefs, nTermRefs},
@@ -1782,27 +1540,13 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Block[{
         ,
         icon
         ,
-        {
-            BoxForm`SummaryItem[{"Kind: ", Style[kind, Bold, col]}],
-            BoxForm`SummaryItem[{"Name: ", Style[sn, Bold]}]
-        }
+        {BoxForm`SummaryItem[{"Kind: ", Style[kind, Bold, col]}], BoxForm`SummaryItem[{"Name: ", Style[sn, Bold]}]}
         ,
         {
-            If[name =!= sn, BoxForm`SummaryItem[{"Full name: ", name}], Nothing]
-            ,
-            BoxForm`SummaryItem[{"Type: ", If[StringQ[typePP], Style[typePP, "Input"], "--"]}]
-            ,
-            If[ StringQ[termPP] && termPP =!= "<pp error>",
-                BoxForm`SummaryItem[{"Term: ", Style[Short[termPP, 1], "Input"]}]
-                ,
-                Nothing
-            ]
-            ,
-            If[ nTypeRefs + nTermRefs > 0,
-                BoxForm`SummaryItem[{"Refs: ", ToString[nTypeRefs] <> " type, " <> ToString[nTermRefs] <> " term"}]
-                ,
-                Nothing
-            ]
+            If[name =!= sn, BoxForm`SummaryItem[{"Full name: ", name}], Nothing],
+            BoxForm`SummaryItem[{"Type: ", If[StringQ[typePP], Style[typePP, "Input"], "--"]}],
+            If[StringQ[termPP] && termPP =!= "<pp error>", BoxForm`SummaryItem[{"Term: ", Style[Short[termPP, 1], "Input"]}], Nothing],
+            If[nTypeRefs + nTermRefs > 0, BoxForm`SummaryItem[{"Refs: ", ToString[nTypeRefs] <> " type, " <> ToString[nTermRefs] <> " term"}], Nothing]
         }
         ,
         StandardForm
@@ -1812,9 +1556,7 @@ LeanTerm /: MakeBoxes[obj : LeanTerm[data_Association], StandardForm] := Block[{
 ]
 
 (* ============================================================================ *)
-
 (* InterpretationBox helper                                                     *)
-
 (* ============================================================================ *)
 
 (* iBox evaluates displayBoxes FIRST, then wraps in InterpretationBox.
@@ -1836,7 +1578,7 @@ iBox[expr_, displayBoxes_] := InterpretationBox[displayBoxes, expr]
 
 substBVar[expr_, name_String, cutoff_Integer] := Switch[ Head[expr],
     LeanBVar,
-        Which[ 
+        Which[
             expr[[1]] === cutoff,
                 LeanFreeVar[name]
             ,
@@ -1848,22 +1590,13 @@ substBVar[expr_, name_String, cutoff_Integer] := Switch[ Head[expr],
         ]
     ,
     LeanForall,
-        If[ Length[expr] >= 4,
-            LeanForall[expr[[1]], substBVar[expr[[2]], name, cutoff], substBVar[expr[[3]], name, cutoff + 1], expr[[4]]]
-            ,
-            expr
-        ]
+        If[Length[expr] >= 4, LeanForall[expr[[1]], substBVar[expr[[2]], name, cutoff], substBVar[expr[[3]], name, cutoff + 1], expr[[4]]], expr]
     ,
     LeanLam,
         LeanLam[expr[[1]], substBVar[expr[[2]], name, cutoff], substBVar[expr[[3]], name, cutoff + 1], expr[[4]]]
     ,
     LeanLet,
-        LeanLet[
-            expr[[1]],
-            substBVar[expr[[2]], name, cutoff],
-            substBVar[expr[[3]], name, cutoff],
-            substBVar[expr[[4]], name, cutoff + 1]
-        ]
+        LeanLet[expr[[1]], substBVar[expr[[2]], name, cutoff], substBVar[expr[[3]], name, cutoff], substBVar[expr[[4]], name, cutoff + 1]]
     ,
     LeanApp,
         LeanApp[substBVar[expr[[1]], name, cutoff], substBVar[expr[[2]], name, cutoff]]
@@ -1942,53 +1675,34 @@ leanPP[LeanLitStr[s_String], _] := "\"" <> s <> "\""
 
 leanPP[e : LeanForall[_, _, _, _], d_Integer] := Block[{binders, body = e, name, dom, bi, nm, nBinders = 0},
     binders = First[
-        Last[
-            Reap[
-                While[
-                    MatchQ[body, LeanForall[_, _, _, _]] && d - nBinders > 0
-                    ,
-                    {name, dom, body, bi} = List @@ body;
-                    nm = cleanName[name];
-                    body = substBVar0[body, name];
-                    nBinders++;
-                    Sow[
-                        Switch[ bi,
-                            "implicit",
-                                "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}"
-                            ,
-                            "strictImplicit",
-                                "\[LeftDoubleBracket]" <> nm <> " : " <> leanPP[dom, d - 1] <> "\[RightDoubleBracket]"
-                            ,
-                            "instImplicit",
-                                "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]"
-                            ,
-                            _,
-                                If[ nm === "" || StringMatchQ[nm, "_" ~~ ___],
-                                    leanPP[dom, d - 1]
-                                    ,
-                                    "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"
-                                ]
-                        ]
+        Last[Reap[
+            While[MatchQ[body, LeanForall[_, _, _, _]] && d - nBinders > 0,
+                {name, dom, body, bi} = List @@ body;
+                nm = cleanName[name];
+                body = substBVar0[body, name];
+                nBinders++;
+                Sow[
+                    Switch[ bi,
+                        "implicit",
+                            "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}"
+                        ,
+                        "strictImplicit",
+                            "\[LeftDoubleBracket]" <> nm <> " : " <> leanPP[dom, d - 1] <> "\[RightDoubleBracket]"
+                        ,
+                        "instImplicit",
+                            "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]"
+                        ,
+                        _,
+                            If[nm === "" || StringMatchQ[nm, "_" ~~ ___], leanPP[dom, d - 1], "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"]
                     ]
                 ]
             ]
-        ]
+        ]]
         ,
         {}
     ];
-    If[ AllTrue[
-        binders
-        ,
-        ! StringStartsQ[#, "("]
-        &&
-        ! StringStartsQ[#, "{"]
-        &&
-        ! StringStartsQ[#, "["]
-        &&
-        ! StringStartsQ[#, "\[LeftDoubleBracket]"]&
-    ],
-        StringRiffle[Append[binders, leanPP[body, d - 1]], " \[RightArrow] "]
-        ,
+    If[ AllTrue[binders, ! StringStartsQ[#, "("] && ! StringStartsQ[#, "{"] && ! StringStartsQ[#, "["] && ! StringStartsQ[#, "\[LeftDoubleBracket]"]&],
+        StringRiffle[Append[binders, leanPP[body, d - 1]], " \[RightArrow] "],
         "\[ForAll] " <> StringRiffle[binders, " "] <> ", " <> leanPP[body, d - 1]
     ]
 ]
@@ -1997,30 +1711,26 @@ leanPP[e : LeanForall[_, _, _, _], d_Integer] := Block[{binders, body = e, name,
 
 leanPP[e : LeanLam[_, _, _, _], d_Integer] := Block[{binders, body = e, name, dom, bi, nm, nBinders = 0},
     binders = First[
-        Last[
-            Reap[
-                While[
-                    MatchQ[body, LeanLam[_, _, _, _]] && d - nBinders > 0
-                    ,
-                    {name, dom, body, bi} = List @@ body;
-                    nm = cleanName[name];
-                    body = substBVar0[body, name];
-                    nBinders++;
-                    Sow[
-                        Switch[ bi,
-                            "implicit",
-                                "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}"
-                            ,
-                            "instImplicit",
-                                "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]"
-                            ,
-                            _,
-                                "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"
-                        ]
+        Last[Reap[
+            While[MatchQ[body, LeanLam[_, _, _, _]] && d - nBinders > 0,
+                {name, dom, body, bi} = List @@ body;
+                nm = cleanName[name];
+                body = substBVar0[body, name];
+                nBinders++;
+                Sow[
+                    Switch[ bi,
+                        "implicit",
+                            "{" <> nm <> " : " <> leanPP[dom, d - 1] <> "}"
+                        ,
+                        "instImplicit",
+                            "[" <> nm <> " : " <> leanPP[dom, d - 1] <> "]"
+                        ,
+                        _,
+                            "(" <> nm <> " : " <> leanPP[dom, d - 1] <> ")"
                     ]
                 ]
             ]
-        ]
+        ]]
         ,
         {}
     ];
@@ -2034,21 +1744,16 @@ leanPP[LeanLet[name_String, type_, val_, body_], d_Integer] := "let " <> cleanNa
 (* Flatten app chain: LeanApp[LeanApp[f,a],b] -> {f, a, b} *)
 
 flattenApp[e_LeanApp] := Block[{fn = e, args},
-    args = Reverse @
-        First[
-            Last[
-                Reap[
-                    While[
-                        MatchQ[fn, LeanApp[_, _]]
-                        ,
-                        Sow[fn[[2]]];
-                        fn = fn[[1]]
-                    ]
-                ]
+    args = Reverse @ First[
+        Last[Reap[
+            While[MatchQ[fn, LeanApp[_, _]],
+                Sow[fn[[2]]];
+                fn = fn[[1]]
             ]
-            ,
-            {}
-        ];
+        ]]
+        ,
+        {}
+    ];
     {fn, args}
 ]
 
@@ -2063,11 +1768,7 @@ appHeadName[_] := None
 (* Infix helper -- last 2 args *)
 
 leanPPInfix[e_LeanApp, d_Integer, op_String] := With[{args = flattenApp[e][[2]]},
-    If[ Length[args] >= 2,
-        leanPP[args[[-2]], d - 1] <> " " <> op <> " " <> leanPP[args[[-1]], d - 1]
-        ,
-        leanPP[flattenApp[e][[1]], d - 1] <> " " <> StringRiffle[leanPP[#, d - 1]& /@ args, " "]
-    ]
+    If[Length[args] >= 2, leanPP[args[[-2]], d - 1] <> " " <> op <> " " <> leanPP[args[[-1]], d - 1], leanPP[flattenApp[e][[1]], d - 1] <> " " <> StringRiffle[leanPP[#, d - 1]& /@ args, " "]]
 ]
 
 (* Eq *)
@@ -2120,8 +1821,8 @@ leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Not" && Length[flattenApp[e]
 
 leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Exists" := With[{args = flattenApp[e][[2]]},
     If[ Length[args] >= 1 && MatchQ[Last[args], LeanLam[_, _, _, _]],
-(* Substitute the binder name into the body, as the forall/lambda printers do;
-   without it the bound variable renders as its de Bruijn index (#0). *)
+        (* Substitute the binder name into the body, as the forall/lambda printers do;
+           without it the bound variable renders as its de Bruijn index (#0). *)
         "\[Exists] " <> cleanName[Last[args][[1]]] <> ", " <> leanPP[substBVar0[Last[args][[3]], Last[args][[1]]], d - 1]
         ,
         "Exists " <> StringRiffle[leanPP[#, d - 1]& /@ args, " "]
@@ -2131,11 +1832,7 @@ leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Exists" := With[{args = flat
 (* OfNat.ofNat -- render as literal number *)
 
 leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "OfNat.ofNat" := With[{args = flattenApp[e][[2]]},
-    If[ Length[args] >= 2,
-        leanPP[args[[2]], d - 1]
-        ,
-        "OfNat " <> StringRiffle[leanPP[#, d - 1]& /@ args, " "]
-    ]
+    If[Length[args] >= 2, leanPP[args[[2]], d - 1], "OfNat " <> StringRiffle[leanPP[#, d - 1]& /@ args, " "]]
 ]
 
 (* Function.Injective / Bijective *)
@@ -2147,22 +1844,17 @@ leanPP[e_LeanApp, d_Integer] /; appHeadName[e] === "Function.Bijective" := "Bije
 (* Generic fallback *)
 
 leanPP[e_LeanApp, d_Integer] := Block[{fn = e, args, a},
-    args = Reverse @
-        First[
-            Last[
-                Reap[
-                    While[
-                        MatchQ[fn, LeanApp[_, _]]
-                        ,
-                        a = fn[[2]];
-                        fn = fn[[1]];
-                        Sow[leanPP[a, d - 1]]
-                    ]
-                ]
+    args = Reverse @ First[
+        Last[Reap[
+            While[MatchQ[fn, LeanApp[_, _]],
+                a = fn[[2]];
+                fn = fn[[1]];
+                Sow[leanPP[a, d - 1]]
             ]
-            ,
-            {}
-        ];
+        ]]
+        ,
+        {}
+    ];
     leanPP[fn, d - 1] <> " " <> StringRiffle[args, " "]
 ]
 
@@ -2181,11 +1873,8 @@ leanPP[$Failed, _] := "(failed)"
 leanPP[other_, _] := ToString[Short[other, 1]]
 
 (* ============================================================================ *)
-
 (* leanSource -- Lean 4 source-safe pretty-printer                               *)
-
 (* Unlike leanPP (display), this produces valid Lean 4 ASCII/Unicode syntax.   *)
-
 (* ============================================================================ *)
 
 (* ppExprFFI -- pretty-print via Lean's PrettyPrinter when handle available *)
@@ -2211,81 +1900,62 @@ LeanExportString[env_LeanEnvironment] /; KeyExistsQ[env[[1]], "_DeclOrder"] := B
     decls = Lookup[data, "_DeclOrder", {}];
     (* Preamble *)
     preambleLines = First[
-        Last[
-            Reap[
-                If[ Lookup[preamble, "Imports", {}] =!= {},
-                    Do[Sow["import " <> imp], {imp, preamble["Imports"]}];
-                    Sow[""]
-                ];
-                (* Type axiom *)
-                If[ KeyExistsQ[preamble, "TypeAxiom"],
-                    Sow["axiom " <> preamble["TypeAxiom"] <> " : Type"];
-                    Sow[""]
-                ];
-                (* Operators *)
-                If[ KeyExistsQ[preamble, "Operators"],
-                    KeyValueMap[
-                        Sow["axiom " <> #1 <> " : " <> StringJoin[Table["U " <> FromCharacterCode[8594] <> " ", {#2}]] <> "U"]&,
-                        preamble["Operators"]
-                    ]
-                ];
-                If[ TrueQ[preamble["CenterDot"]],
-                    Sow["axiom cdot : U " <> FromCharacterCode[8594] <> " U " <> FromCharacterCode[8594] <> " U"];
-                    Sow["infixl:70 \" " <> FromCharacterCode[11037] <> " \" => cdot"]
-                ];
-                (* Shared constants *)
-                If[ KeyExistsQ[preamble, "SharedConstants"],
-                    Do[Sow["axiom " <> c <> " : U"], {c, preamble["SharedConstants"]}]
-                ];
-            ]
-        ]
+        Last[Reap[
+            If[ Lookup[preamble, "Imports", {}] =!= {},
+                Do[Sow["import " <> imp], {imp, preamble["Imports"]}];
+                Sow[""]
+            ];
+            (* Type axiom *)
+            If[ KeyExistsQ[preamble, "TypeAxiom"],
+                Sow["axiom " <> preamble["TypeAxiom"] <> " : Type"];
+                Sow[""]
+            ];
+            (* Operators *)
+            If[KeyExistsQ[preamble, "Operators"], KeyValueMap[Sow["axiom " <> #1 <> " : " <> StringJoin[Table["U " <> FromCharacterCode[8594] <> " ", {#2}]] <> "U"]&, preamble["Operators"]]];
+            If[ TrueQ[preamble["CenterDot"]],
+                Sow["axiom cdot : U " <> FromCharacterCode[8594] <> " U " <> FromCharacterCode[8594] <> " U"];
+                Sow["infixl:70 \" " <> FromCharacterCode[11037] <> " \" => cdot"]
+            ];
+            (* Shared constants *)
+            If[KeyExistsQ[preamble, "SharedConstants"], Do[Sow["axiom " <> c <> " : U"], {c, preamble["SharedConstants"]}]];
+        ]]
         ,
         {}
     ];
     (* Declarations *)
     declLines = First[
-        Last[
-            Reap[
-                Do[
-                    With[{term = data[name]},
-                        If[! MatchQ[term, _LeanTerm], Continue[]];
-                        With[{
-                            kind = Lookup[term[[1]], "Kind", "theorem"],
-                            typeExpr = Lookup[term[[1]], "_TypeExpr", None],
-                            tactic = Lookup[term[[1]], "_Tactic", None]
-                        },
-                            If[typeExpr === None, Continue[]];
-                            Switch[ kind,
-                                "axiom",
-                                    Sow["axiom " <> name <> " : " <> leanSource[typeExpr]]
-                                ,
-                                _,
-                                    With[{
-                                        tacStr = Which[ 
-                                            MatchQ[tactic, _LeanTactic],
-                                                tacticSource[tactic]
-                                            ,
-                                            StringQ[tactic],
-                                                tactic
-                                            ,
-                                            True,
-                                                None
-                                        ]
-                                    },
-                                        If[ StringQ[tacStr],
-                                            Sow["theorem " <> name <> " : " <> leanSource[typeExpr] <> " := by\n" <> tacStr <> "\n"]
-                                            ,
-                                            Sow["theorem " <> name <> " : " <> leanSource[typeExpr] <> " := sorry\n"]
-                                        ]
+        Last[Reap[
+            Do[
+                With[{term = data[name]},
+                    If[! MatchQ[term, _LeanTerm], Continue[]];
+                    With[{kind = Lookup[term[[1]], "Kind", "theorem"], typeExpr = Lookup[term[[1]], "_TypeExpr", None], tactic = Lookup[term[[1]], "_Tactic", None]},
+                        If[typeExpr === None, Continue[]];
+                        Switch[ kind,
+                            "axiom",
+                                Sow["axiom " <> name <> " : " <> leanSource[typeExpr]]
+                            ,
+                            _,
+                                With[{
+                                    tacStr = Which[
+                                        MatchQ[tactic, _LeanTactic],
+                                            tacticSource[tactic]
+                                        ,
+                                        StringQ[tactic],
+                                            tactic
+                                        ,
+                                        True,
+                                            None
                                     ]
-                            ]
+                                },
+                                    If[StringQ[tacStr], Sow["theorem " <> name <> " : " <> leanSource[typeExpr] <> " := by\n" <> tacStr <> "\n"], Sow["theorem " <> name <> " : " <> leanSource[typeExpr] <> " := sorry\n"]]
+                                ]
                         ]
                     ]
-                    ,
-                    {name, decls}
-                ];
-            ]
-        ]
+                ]
+                ,
+                {name, decls}
+            ];
+        ]]
         ,
         {}
     ];
@@ -2300,15 +1970,12 @@ LeanExportString[env_LeanEnvironment] /; StringQ[Lookup[env[[1]], "_Source", Non
 (* Generic environment: each constant declared with its type, a theorem as a theorem, an axiom as an
    axiom, and any other constant as a definition, whose body is not reconstructed *)
 
-LeanExportString[env_LeanEnvironment] := With[{constants = environmentConstants[env[[1]]]},
-    StringRiffle[
-        Join[
-            (* a class is declared as a definition here, so an instance binder of one needs this *)
-            If[FreeQ[#["Type"]& /@ Values[constants], LeanForall[_, _, _, "instImplicit"] | LeanLam[_, _, _, "instImplicit"]], {}, {"set_option checkBinderAnnotations false"}],
-            KeyValueMap[exportedDeclarationSource, KeyTake[constants, declarationOrder[constants]]]
-        ],
-        "\n\n"
-    ]
+LeanExportString[env_LeanEnvironment] := Block[
+    {constants = environmentConstants[env[[1]]], options}
+    ,
+    (* a class is declared as a definition here, so an instance binder of one needs this *)
+    options = If[FreeQ[#["Type"]& /@ Values[constants], LeanForall[_, _, _, "instImplicit"] | LeanLam[_, _, _, "instImplicit"]], {}, {"set_option checkBinderAnnotations false"}];
+    StringRiffle[Join[options, KeyValueMap[exportedDeclarationSource, KeyTake[constants, declarationOrder[constants]]]], "\n\n"]
 ]
 
 (* the constants in an order where each comes after the constants its type names *)
@@ -2366,10 +2033,44 @@ leanSource[expr_, mode : "Surface" | "Explicit"] := Block[{$sourceMode = mode, $
 constantNamesOf[expr_] := Union[Flatten[Cases[expr, LeanConst[name_String, _] :> {name, First[StringSplit[name, "."], name]}, {0, Infinity}]]]
 
 $leanKeywords = {
-    "at", "by", "calc", "class", "def", "deriving", "do", "else", "end", "example", "fun", "forall", "from",
-    "have", "if", "import", "in", "inductive", "instance", "let", "match", "mutual", "namespace", "open", "Prop",
-    "return", "section", "show", "Sort", "structure", "suffices", "then", "theorem", "Type", "universe",
-    "variable", "where", "with"
+    "at",
+    "by",
+    "calc",
+    "class",
+    "def",
+    "deriving",
+    "do",
+    "else",
+    "end",
+    "example",
+    "fun",
+    "forall",
+    "from",
+    "have",
+    "if",
+    "import",
+    "in",
+    "inductive",
+    "instance",
+    "let",
+    "match",
+    "mutual",
+    "namespace",
+    "open",
+    "Prop",
+    "return",
+    "section",
+    "show",
+    "Sort",
+    "structure",
+    "suffices",
+    "then",
+    "theorem",
+    "Type",
+    "universe",
+    "variable",
+    "where",
+    "with"
 }
 
 (* the scope lists the names of the bound variables, innermost first *)
@@ -2401,7 +2102,10 @@ sourceOf[LeanProj[_, index_Integer, expr_], scope_] := atomSource[expr, scope] <
 sourceOf[LeanApp[LeanApp[LeanApp[LeanConst["Eq", _], _], lhs_], rhs_], scope_] := atomSource[lhs, scope] <> " = " <> atomSource[rhs, scope]
 
 sourceOf[expr_LeanApp, scope_] := Block[{head = expr, arguments = {}},
-    While[MatchQ[head, LeanApp[_, _]], PrependTo[arguments, head[[2]]]; head = head[[1]]];
+    While[MatchQ[head, LeanApp[_, _]],
+        PrependTo[arguments, head[[2]]];
+        head = head[[1]]
+    ];
     StringRiffle[Prepend[atomSource[#, scope]& /@ arguments, headSource[head, scope]], " "]
 ]
 
@@ -2409,25 +2113,20 @@ sourceOf[expr_LeanApp, scope_] := Block[{head = expr, arguments = {}},
    body does not use; in a term built by name, one with no name. Other binders are gathered into one ∀. *)
 
 sourceOf[expr : LeanForall[_, _, _, _], scope_] := Block[{binders = {}, body = expr, inner = scope, name, domain, binder, bound},
-    While[
-        MatchQ[body, LeanForall[_, _, _, _]] && ! arrowBinderQ[body[[1]], body[[3]], body[[4]]]
-        ,
+    While[MatchQ[body, LeanForall[_, _, _, _]] && ! arrowBinderQ[body[[1]], body[[3]], body[[4]]],
         {name, domain, body, binder} = List @@ body;
         bound = binderName[name, inner, body];
         AppendTo[binders, binderSource[bound, sourceOf[domain, inner], binder]];
         inner = Prepend[inner, bound]
     ];
     If[ binders =!= {},
-        FromCharacterCode[8704] <> " " <> StringRiffle[binders, " "] <> ", " <> sourceOf[body, inner]
-        ,
+        FromCharacterCode[8704] <> " " <> StringRiffle[binders, " "] <> ", " <> sourceOf[body, inner],
         arrowDomainSource[body[[2]], inner] <> " " <> FromCharacterCode[8594] <> " " <> sourceOf[body[[3]], Prepend[inner, binderName[body[[1]], inner, body[[3]]]]]
     ]
 ]
 
 sourceOf[expr : LeanLam[_, _, _, _], scope_] := Block[{binders = {}, body = expr, inner = scope, name, domain, binder, bound},
-    While[
-        MatchQ[body, LeanLam[_, _, _, _]]
-        ,
+    While[MatchQ[body, LeanLam[_, _, _, _]],
         {name, domain, body, binder} = List @@ body;
         bound = binderName[name, inner, body];
         AppendTo[binders, binderSource[bound, sourceOf[domain, inner], binder]];
@@ -2450,7 +2149,9 @@ headSource[head : LeanConst[name_String, _List], scope_] := If[$sourceMode === "
 
 headSource[head_, scope_] := atomSource[head, scope]
 
-atomSource[expr_, scope_] := With[{source = sourceOf[expr, scope]}, If[atomicExprQ[expr], source, "(" <> source <> ")"]]
+atomSource[expr_, scope_] := With[{source = sourceOf[expr, scope]},
+    If[atomicExprQ[expr], source, "(" <> source <> ")"]
+]
 
 atomicExprQ[LeanMData[_, expr_]] := atomicExprQ[expr]
 
@@ -2479,16 +2180,14 @@ binderSource[bound_String, domain_String, _] := "(" <> bound <> " : " <> domain 
 
 binderName[name_, scope_, body_] := freshBinderName[name, scope, body]
 
-arrowBinderQ[name_, body_, binder_] := binder === "default" && ! looseBVarQ[body, 0] && ($sourceMode === "Explicit" || MatchQ[cleanName[name], "" | _?(StringStartsQ["_"])])
+arrowBinderQ[name_, body_, binder_] := binder === "default" && ! looseBVarQ[body, 0] && ($sourceMode === "Explicit" || MatchQ[cleanName[name], "" | _ ? (StringStartsQ["_"])])
 
 (* A name taken by a binder around is only renamed when the body uses that binder's variable, which the
    new name would hide. In body, the variable at position p of the scope has the index p. *)
 
 freshBinderName[name_, scope_List, body_] := Block[{base = binderBaseName[name], candidate, index = 0},
     candidate = base;
-    While[
-        AnyTrue[Flatten[Position[scope, candidate, {1}]], looseBVarQ[body, #]&] || MemberQ[$takenNames, candidate]
-        ,
+    While[AnyTrue[Flatten[Position[scope, candidate, {1}]], looseBVarQ[body, #]&] || MemberQ[$takenNames, candidate],
         index++;
         candidate = base <> "_" <> ToString[index]
     ];
@@ -2498,11 +2197,7 @@ freshBinderName[name_, scope_List, body_] := Block[{base = binderBaseName[name],
 (* a kernel term's binder name may be hygienic or anonymous; a term built by name keeps its names *)
 
 binderBaseName[name_String] := With[{clean = cleanName[name]},
-    If[ $sourceMode =!= "Explicit" && clean =!= "" || StringMatchQ[clean, RegularExpression["[\\p{L}][\\p{L}\\p{N}_'!?\\x{2080}-\\x{209C}]*"]] && ! MemberQ[$leanKeywords, clean],
-        clean
-        ,
-        "x"
-    ]
+    If[$sourceMode =!= "Explicit" && clean =!= "" || StringMatchQ[clean, RegularExpression["[\\p{L}][\\p{L}\\p{N}_'!?\\x{2080}-\\x{209C}]*"]] && ! MemberQ[$leanKeywords, clean], clean, "x"]
 ]
 
 binderBaseName[_] := "x"
@@ -2534,7 +2229,10 @@ sortSource[level_] := "Sort " <> levelAtomSource[level]
 levelSource[LeanLevelZero[]] := "0"
 
 levelSource[level_LeanLevelSucc] := Block[{base = level, steps = 0},
-    While[MatchQ[base, _LeanLevelSucc], base = base[[1]]; steps++];
+    While[MatchQ[base, _LeanLevelSucc],
+        base = base[[1]];
+        steps++
+    ];
     If[base === LeanLevelZero[], ToString[steps], levelAtomSource[base] <> " + " <> ToString[steps]]
 ]
 
@@ -2546,19 +2244,18 @@ levelSource[LeanLevelIMax[a_, b_]] := "imax " <> levelAtomSource[a] <> " " <> le
 
 levelSource[_] := "_"
 
-levelAtomSource[level_] := With[{source = levelSource[level]}, If[StringContainsQ[source, " "], "(" <> source <> ")", source]]
+levelAtomSource[level_] := With[{source = levelSource[level]},
+    If[StringContainsQ[source, " "], "(" <> source <> ")", source]
+]
 
 (* ============================================================================ *)
-
 (* LeanImportString -- compile source string to env                              *)
-
 (* ============================================================================ *)
 
 (* The source's lines end with LF: a Windows editor or checkout gives them
    CRLF, which would reach the stored text and the "Source" of declarations *)
 
-LeanImportString[src_String, opts : OptionsPattern[LeanImport]] /; StringContainsQ[src, "\r"] :=
-    LeanImportString[StringReplace[src, {"\r\n" -> "\n", "\r" -> "\n"}], opts]
+LeanImportString[src_String, opts : OptionsPattern[LeanImport]] /; StringContainsQ[src, "\r"] := LeanImportString[StringReplace[src, {"\r\n" -> "\n", "\r" -> "\n"}], opts]
 
 LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFile, modName, result},
     modName = "LeanLinkTmp" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^6]];
@@ -2588,9 +2285,7 @@ $leanImportRoot = None
    lakefile, or else its own folder *)
 
 leanFileRoot[absFile_String] := Block[{dir = DirectoryName[absFile]},
-    While[
-        dir =!= DirectoryName[dir]
-        ,
+    While[dir =!= DirectoryName[dir],
         If[AnyTrue[{"lakefile.lean", "lakefile.toml"}, FileExistsQ[FileNameJoin[{dir, #}]]&], Return[dir, Block]];
         dir = DirectoryName[dir]
     ];
@@ -2610,10 +2305,7 @@ leanCompile[leanBin_String, olean_String, rootDir_String, source_String, leanPat
 
 sourceImports[leanBin_String, file_String] := Replace[
     Quiet[ImportString[RunProcess[{leanBin, "--deps-json", file}, "StandardOutput"], "RawJSON"]],
-    {
-        KeyValuePattern["imports" -> {KeyValuePattern["result" -> KeyValuePattern["imports" -> imports_List]], ___}] :> DeleteDuplicates[Lookup[imports, "module"]],
-        _ -> {}
-    }
+    {KeyValuePattern["imports" -> {KeyValuePattern["result" -> KeyValuePattern["imports" -> imports_List]], ___}] :> DeleteDuplicates[Lookup[imports, "module"]], _ -> {}}
 ]
 
 (* The .lean file of a module under a root: Foo.Bar is root/Foo/Bar.lean *)
@@ -2637,8 +2329,10 @@ localImportsFrom[leanBin_String, rootDir_String, file_String, state_List] := Fol
                 ]
             ]
         ]
-    ],
-    state,
+    ]
+    ,
+    state
+    ,
     sourceImports[leanBin, file]
 ]
 
@@ -2656,10 +2350,12 @@ failedLocalCompile[leanBin_String, rootDir_String, absFile_String, tmpDir_String
                     If[res["ExitCode"] =!= 0, Throw[Append[res, "File" -> Last[pair]], failedLocalCompile]]
                 ]
             ]
-        ],
+        ]
+        ,
         localImports[leanBin, rootDir, absFile]
     ];
-    None,
+    None
+    ,
     failedLocalCompile
 ]
 
@@ -2672,10 +2368,7 @@ githubRawURL[url_String] := StringReplace[url, {"github.com" -> "raw.githubuserc
 (* Extract the repo base URL and relative path from a GitHub blob URL *)
 
 githubParts[url_String] := Block[{parts},
-    parts = StringCases[
-        url,
-        RegularExpression["https://github\\.com/([^/]+/[^/]+)/blob/([^/]+)/(.+)"] :> {"$1", "$2", "$3"}
-    ];
+    parts = StringCases[url, RegularExpression["https://github\\.com/([^/]+/[^/]+)/blob/([^/]+)/(.+)"] :> {"$1", "$2", "$3"}];
     If[Length[parts] > 0, parts[[1]], None]
 ]
 
@@ -2688,23 +2381,7 @@ parseImports[src_String] := Flatten @ StringCases[
 
 (* LeanImport[url] -- import from a GitHub URL pointing to a .lean file *)
 
-LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" | "https://"] && StringEndsQ[url, ".lean"] := Block[{
-    parts,
-    repo,
-    branch,
-    relPath,
-    baseRaw,
-    tmpDir,
-    downloaded = <||>,
-    queue,
-    modName,
-    content,
-    rawURL,
-    imports,
-    modPath,
-    localPath,
-    targetFile
-},
+LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" | "https://"] && StringEndsQ[url, ".lean"] := Block[{parts, repo, branch, relPath, baseRaw, tmpDir, downloaded = <||>, queue, modName, content, rawURL, imports, modPath, localPath, targetFile},
     parts = githubParts[url];
     If[ parts === None,
         (* Non-GitHub URL: simple download *)
@@ -2718,18 +2395,11 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
     {repo, branch, relPath} = parts;
     baseRaw = "https://raw.githubusercontent.com/" <> repo <> "/" <> branch <> "/";
     (* Create temp project directory *)
-    tmpDir = FileNameJoin[
-        {
-            $TemporaryDirectory,
-            "leanlink_url_" <> ToString[$SessionID] <> "_" <> ToString[RandomInteger[10^6]]
-        }
-    ];
+    tmpDir = FileNameJoin[{$TemporaryDirectory, "leanlink_url_" <> ToString[$SessionID] <> "_" <> ToString[RandomInteger[10^6]]}];
     CreateDirectory[tmpDir];
     (* BFS: download target file and all its imports *)
     queue = {relPath};
-    While[
-        Length[queue] > 0
-        ,
+    While[Length[queue] > 0,
         modPath = First[queue];
         queue = Rest[queue];
         If[KeyExistsQ[downloaded, modPath], Continue[]];
@@ -2759,22 +2429,18 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
         Return[$Failed, Block]
     ];
     (* the download folder is the root of the module names; the files the target imports compile first *)
-    Block[{$leanImportRoot = tmpDir}, LeanImport[targetFile]]
+    Block[{$leanImportRoot = tmpDir},
+        LeanImport[targetFile]
+    ]
 ]
 
 (* ============================================================================ *)
-
 (* Expression head formatting                                                   *)
-
 (* ============================================================================ *)
 
 LeanConst /: MakeBoxes[expr : LeanConst[name_String, levels_List], StandardForm] := iBox[
-    expr
-    ,
-    TooltipBox[
-        StyleBox[shortName[name], FontColor -> RGBColor[0.15, 0.35, 0.6], FontWeight -> Bold],
-        RowBox[{MakeBoxes[name], " ", MakeBoxes[levels, StandardForm]}]
-    ]
+    expr,
+    TooltipBox[StyleBox[shortName[name], FontColor -> RGBColor[0.15, 0.35, 0.6], FontWeight -> Bold], RowBox[{MakeBoxes[name], " ", MakeBoxes[levels, StandardForm]}]]
 ]
 
 LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], StandardForm] := With[{nm = cleanName[name]},
@@ -2788,25 +2454,13 @@ LeanForall /: MakeBoxes[expr : LeanForall[name_String, dom_, body_, bi_String], 
                         RowBox[{"{", StyleBox[nm, FontSlant -> Italic], " : ", MakeBoxes[dom, StandardForm], "}"}]
                     ,
                     "strictImplicit",
-                        RowBox[
-                            {
-                                "\[LeftDoubleBracket]",
-                                StyleBox[nm, FontSlant -> Italic],
-                                " : ",
-                                MakeBoxes[dom, StandardForm],
-                                "\[RightDoubleBracket]"
-                            }
-                        ]
+                        RowBox[{"\[LeftDoubleBracket]", StyleBox[nm, FontSlant -> Italic], " : ", MakeBoxes[dom, StandardForm], "\[RightDoubleBracket]"}]
                     ,
                     "instImplicit",
                         RowBox[{"[", StyleBox[nm, FontSlant -> Italic], " : ", MakeBoxes[dom, StandardForm], "]"}]
                     ,
                     _,
-                        If[ nm === "" || StringMatchQ[nm, "_" ~~ ___],
-                            MakeBoxes[dom, StandardForm]
-                            ,
-                            RowBox[{"(", StyleBox[nm, FontSlant -> Italic], " : ", MakeBoxes[dom, StandardForm], ")"}]
-                        ]
+                        If[nm === "" || StringMatchQ[nm, "_" ~~ ___], MakeBoxes[dom, StandardForm], RowBox[{"(", StyleBox[nm, FontSlant -> Italic], " : ", MakeBoxes[dom, StandardForm], ")"}]]
                 ]
                 ,
                 StyleBox[" \[Implies] ", FontColor -> GrayLevel[0.4]]
@@ -2846,25 +2500,13 @@ LeanLam /: MakeBoxes[expr : LeanLam[name_String, type_, body_, bi_String], Stand
     ]
 ]
 
-LeanBVar /: MakeBoxes[expr : LeanBVar[idx_Integer], StandardForm] := iBox[
-    expr
-    ,
-    TooltipBox[
-        StyleBox["#" <> ToString[idx], FontColor -> GrayLevel[0.5]], RowBox[{"bound var ", MakeBoxes[idx]}]
-    ]
-]
+LeanBVar /: MakeBoxes[expr : LeanBVar[idx_Integer], StandardForm] := iBox[expr, TooltipBox[StyleBox["#" <> ToString[idx], FontColor -> GrayLevel[0.5]], RowBox[{"bound var ", MakeBoxes[idx]}]]]
 
 LeanSort /: MakeBoxes[expr : LeanSort[LeanLevelZero[]], StandardForm] := iBox[expr, StyleBox["Prop", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold]]
 
 LeanSort /: MakeBoxes[expr : LeanSort[LeanLevelSucc[LeanLevelZero[]]], StandardForm] := iBox[expr, StyleBox["Type", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold]]
 
-LeanSort /: MakeBoxes[expr : LeanSort[level_], StandardForm] := iBox[
-    expr
-    ,
-    RowBox[
-        {StyleBox["Sort", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold], " ", MakeBoxes[level, StandardForm]}
-    ]
-]
+LeanSort /: MakeBoxes[expr : LeanSort[level_], StandardForm] := iBox[expr, RowBox[{StyleBox["Sort", FontColor -> RGBColor[0.6, 0.2, 0.6], Bold], " ", MakeBoxes[level, StandardForm]}]]
 
 LeanLitNat /: MakeBoxes[expr : LeanLitNat[n_Integer], StandardForm] := iBox[expr, StyleBox[ToString[n], FontColor -> RGBColor[0.1, 0.5, 0.1]]]
 
@@ -2891,87 +2533,49 @@ LeanLet /: MakeBoxes[expr : LeanLet[name_String, type_, val_, body_], StandardFo
 
 LeanNoValue /: MakeBoxes[expr : LeanNoValue[], StandardForm] := iBox[expr, StyleBox["\[Dash]", FontColor -> GrayLevel[0.6]]]
 
-LeanTruncated /: MakeBoxes[expr : LeanTruncated[info_], StandardForm] := iBox[
-    expr,
-    TooltipBox[StyleBox["\[Ellipsis]", FontColor -> GrayLevel[0.5]], MakeBoxes[info, StandardForm]]
-]
+LeanTruncated /: MakeBoxes[expr : LeanTruncated[info_], StandardForm] := iBox[expr, TooltipBox[StyleBox["\[Ellipsis]", FontColor -> GrayLevel[0.5]], MakeBoxes[info, StandardForm]]]
 
 LeanProj /: MakeBoxes[expr : LeanProj[typeName_, idx_Integer, struct_], StandardForm] := iBox[
     expr,
     RowBox[{MakeBoxes[struct, StandardForm], ".", StyleBox[ToString[idx], FontColor -> GrayLevel[0.5]]}]
 ]
 
-LeanFVar /: MakeBoxes[expr : LeanFVar[name_], StandardForm] := iBox[
-    expr,
-    StyleBox[cleanName[ToString[name]], FontColor -> RGBColor[0.4, 0.4, 0.7], FontSlant -> Italic]
-]
+LeanFVar /: MakeBoxes[expr : LeanFVar[name_], StandardForm] := iBox[expr, StyleBox[cleanName[ToString[name]], FontColor -> RGBColor[0.4, 0.4, 0.7], FontSlant -> Italic]]
 
-LeanMVar /: MakeBoxes[expr : LeanMVar[name_], StandardForm] := iBox[
-    expr,
-    StyleBox["?" <> cleanName[ToString[name]], FontColor -> RGBColor[0.7, 0.4, 0.4], FontSlant -> Italic]
-]
+LeanMVar /: MakeBoxes[expr : LeanMVar[name_], StandardForm] := iBox[expr, StyleBox["?" <> cleanName[ToString[name]], FontColor -> RGBColor[0.7, 0.4, 0.4], FontSlant -> Italic]]
 
 (* ============================================================================ *)
-
 (* Level formatting                                                             *)
-
 (* ============================================================================ *)
 
 LeanLevelZero /: MakeBoxes[expr : LeanLevelZero[], StandardForm] := iBox[expr, StyleBox["0", FontColor -> GrayLevel[0.5], FontSize -> 9]]
 
-LeanLevelSucc /: MakeBoxes[expr : LeanLevelSucc[l_], StandardForm] := iBox[
-    expr,
-    RowBox[{MakeBoxes[l, StandardForm], StyleBox["+1", FontColor -> GrayLevel[0.5], FontSize -> 9]}]
-]
+LeanLevelSucc /: MakeBoxes[expr : LeanLevelSucc[l_], StandardForm] := iBox[expr, RowBox[{MakeBoxes[l, StandardForm], StyleBox["+1", FontColor -> GrayLevel[0.5], FontSize -> 9]}]]
 
 LeanLevelMax /: MakeBoxes[expr : LeanLevelMax[a_, b_], StandardForm] := iBox[
-    expr
-    ,
-    RowBox[
-        {
-            StyleBox["max", FontColor -> GrayLevel[0.5], FontSize -> 9],
-            "(",
-            MakeBoxes[a, StandardForm],
-            ", ",
-            MakeBoxes[b, StandardForm],
-            ")"
-        }
-    ]
+    expr,
+    RowBox[{StyleBox["max", FontColor -> GrayLevel[0.5], FontSize -> 9], "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}]
 ]
 
 LeanLevelIMax /: MakeBoxes[expr : LeanLevelIMax[a_, b_], StandardForm] := iBox[
-    expr
-    ,
-    RowBox[
-        {
-            StyleBox["imax", FontColor -> GrayLevel[0.5], FontSize -> 9],
-            "(",
-            MakeBoxes[a, StandardForm],
-            ", ",
-            MakeBoxes[b, StandardForm],
-            ")"
-        }
-    ]
+    expr,
+    RowBox[{StyleBox["imax", FontColor -> GrayLevel[0.5], FontSize -> 9], "(", MakeBoxes[a, StandardForm], ", ", MakeBoxes[b, StandardForm], ")"}]
 ]
 
 LeanLevelParam /: MakeBoxes[expr : LeanLevelParam[name_String], StandardForm] := iBox[expr, StyleBox[name, FontColor -> RGBColor[0.4, 0.55, 0.4], FontSlant -> Italic, FontSize -> 9]]
 
-LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] := iBox[
-    expr,
-    StyleBox["?" <> ToString[name], FontColor -> GrayLevel[0.6], FontSlant -> Italic, FontSize -> 9]
-]
+LeanLevelMVar /: MakeBoxes[expr : LeanLevelMVar[name_], StandardForm] := iBox[expr, StyleBox["?" <> ToString[name], FontColor -> GrayLevel[0.6], FontSlant -> Italic, FontSize -> 9]]
 
 (* ============================================================================ *)
-
 (* Public API                                                                   *)
-
 (* ============================================================================ *)
 
 LeanLoadEnvironment[imports_List, searchPath_String] := If[ shimLoadableQ[LeanImport],
     With[{h = loadEnvironment[StringRiffle[imports, ","], searchPath]},
         If[IntegerQ[h], registerHandle[h, imports, searchPath]];
         h
-    ],
+    ]
+    ,
     $Failed
 ]
 
@@ -3001,64 +2605,37 @@ isInternalName[name_String] := StringContainsQ[name, $internalPatterns]
 
 (* If module is a directory of sub-modules (no top-level .olean), auto-discover sub-modules *)
 
-LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, "/" | "\\"] && ! StringEndsQ[module, ".lean"] := Block[{
-    projDir, buildLib, srcDir, oleans, subModules, results = <||>, filter, srcFiles, allNames, grouped
-},
+LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, "/" | "\\"] && ! StringEndsQ[module, ".lean"] := Block[{projDir, buildLib, srcDir, oleans, subModules, results = <||>, filter, srcFiles, allNames, grouped},
     projDir = resolveProjDir[OptionValue["ProjectDir"]];
     (* Lake v5 puts oleans in lib/lean/, v4 uses lib/ *)
-    buildLib = With[{
-        v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
-        v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]
-    },
+    buildLib = With[{v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}], v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]},
         If[DirectoryQ[v5], v5, v4]
     ];
     filter = OptionValue["Filter"];
     (* Check if module is a directory of sub-modules *)
-    If[ DirectoryQ[buildLib]
-    &&
-    ! FileExistsQ[FileNameJoin[{buildLib, module <> ".olean"}]]
-    &&
-    DirectoryQ[FileNameJoin[{buildLib, module}]],
+    If[ DirectoryQ[buildLib] && ! FileExistsQ[FileNameJoin[{buildLib, module <> ".olean"}]] && DirectoryQ[FileNameJoin[{buildLib, module}]],
         (* Auto-discover sub-modules from .olean files *)
         oleans = FileNames["*.olean", FileNameJoin[{buildLib, module}], Infinity];
         subModules = oleanModule[#, buildLib]& /@ oleans;
         If[ subModules =!= {},
-(* Load ALL discovered sub-modules so the full environment is available.
-    
-    
-    
-   Load them individually to avoid module clash failures. *)
+            (* Load ALL discovered sub-modules so the full environment is available, one by one to avoid module
+               clash failures. *)
             Block[{envAssoc = <||>, handles, kinds},
                 handles = First[
-                    Last[
-                        Reap[
-                            Do[
-                                With[{h = Quiet[getOrLoadEnv[projDir, {imp}]]},
-                                    If[ IntegerQ[h] && h > 0,
-                                        Sow[h];
-                                        kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
-                                        If[ AssociationQ[kinds],
-                                            If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#]&]];
-                                            AssociateTo[
-                                                envAssoc
-                                                ,
-                                                Association @
-                                                    KeyValueMap[
-                                                        Function[{n, k},
-                                                            n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]
-                                                        ]
-                                                        ,
-                                                        kinds
-                                                    ]
-                                            ];
-                                        ];
-                                    ];
-                                ]
-                                ,
-                                {imp, subModules}
-                            ]
+                    Last[Reap[Do[
+                        With[{h = Quiet[getOrLoadEnv[projDir, {imp}]]},
+                            If[ IntegerQ[h] && h > 0,
+                                Sow[h];
+                                kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
+                                If[ AssociationQ[kinds],
+                                    If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#]&]];
+                                    AssociateTo[envAssoc, Association @ KeyValueMap[Function[{n, k}, n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]], kinds]];
+                                ];
+                            ];
                         ]
-                    ]
+                        ,
+                        {imp, subModules}
+                    ]]]
                     ,
                     {}
                 ];
@@ -3073,89 +2650,47 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
 
 (* LeanImport[file, opts] -- standalone .lean file: compile via lean CLI *)
 
-LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringEndsQ[file, ".lean"] := Block[{
-    absFile,
-    projDir,
-    modName,
-    tmpDir,
-    oleanFile,
-    result,
-    searchPath,
-    tcFile,
-    tcName,
-    leanBin,
-    leanLibDir,
-    content,
-    names,
-    projSearch,
-    rootDir,
-    leanPath
-},
+LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringEndsQ[file, ".lean"] := Block[{absFile, projDir, modName, tmpDir, oleanFile, result, searchPath, tcFile, tcName, leanBin, leanLibDir, content, names, projSearch, rootDir, leanPath},
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
-(* If within a lake project, delegate to module-based import 
-    *)
+    (* If within a lake project, delegate to module-based import *)
     If[ projDir =!= Automatic && insideDirectoryQ[absFile, ExpandFileName[projDir]],
-        modName = StringReplace[
-            StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"],
-            {".lean" -> "", "/" -> ".", "\\" -> "."}
-        ];
-        Return[
-            LeanImport[
-                "Imports" -> {modName},
-                "ProjectDir" -> projDir,
-                "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]],
-                opts
-            ]
-            ,
-            Module
-        ]
+        modName = StringReplace[StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"], {".lean" -> "", "/" -> ".", "\\" -> "."}];
+        Return[LeanImport["Imports" -> {modName}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]], opts], Module]
     ];
-(* A source file outside the project (e.g. a LeanImportString snippet) can still
-   import the project's modules: its oleans go on LEAN_PATH for the compile and
-   on the search path for the load. Only an explicit ProjectDir does this. *)
+    (* A source file outside the project (e.g. a LeanImportString snippet) can still
+       import the project's modules: its oleans go on LEAN_PATH for the compile and
+       on the search path for the load. Only an explicit ProjectDir does this. *)
     projSearch = If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""];
-(* Resolve the correct lean binary from the LeanLink project toolchain 
-    
-    
-    *)
-(* Try: 1) dev mode Native/lean-toolchain, 2) paclet-bundled lean-toolchain 
-    
-    
-    *)
-(* The pinned toolchain the shim was built against comes first: the olean this
-   compile writes must match the runtime that loads it. The paclet ships no
-   lean-toolchain file, so the fallbacks below reached elan's default
-   toolchain, which need not be the pinned one ("incompatible header"). *)
+    (* Resolve the correct lean binary from the LeanLink project toolchain *)
+    (* Try: 1) dev mode Native/lean-toolchain, 2) paclet-bundled lean-toolchain *)
+    (* The pinned toolchain the shim was built against comes first: the olean this
+       compile writes must match the runtime that loads it. The paclet ships no
+       lean-toolchain file, so the fallbacks below reached elan's default
+       toolchain, which need not be the pinned one ("incompatible header"). *)
     With[{tc = leanToolchainDir[]},
         If[ tc =!= $Failed,
             leanBin = leanProgram[FileNameJoin[{tc, "bin"}], "lean"];
             leanLibDir = FileNameJoin[{tc, "lib", "lean"}]
             ,
-        tcFile = None;
-        If[StringQ[$DevProjectRoot], tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}]];
-        If[ ! FileExistsQ[tcFile],
-    (* Paclet-bundled lean-toolchain: in paclet root, cached at load time 
-    
-    
-        *)
-            tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]
-        ];
-        If[ FileExistsQ[tcFile],
-            tcName = StringTrim[Import[tcFile, "Text"]];
-            tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
-            leanBin = leanProgram[FileNameJoin[{elanHome[], "toolchains", tcName, "bin"}], "lean"];
-            leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
-            ,
-    (* No toolchain file at all: try elan default, then bare lean 
-        *)
-            leanBin = leanProgram[FileNameJoin[{elanHome[], "bin"}], "lean"];
-            If[! FileExistsQ[leanBin], leanBin = "lean"];
-            leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
-            If[ ! StringQ[leanLibDir] || ! DirectoryQ[leanLibDir],
-                leanLibDir = FileNameJoin[{DirectoryName[DirectoryName[leanBin]], "lib", "lean"}]
-            ]
-        ];
+            tcFile = None;
+            If[StringQ[$DevProjectRoot], tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}]];
+            If[ ! FileExistsQ[tcFile],
+                (* Paclet-bundled lean-toolchain: in paclet root, cached at load time *)
+                tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]
+            ];
+            If[ FileExistsQ[tcFile],
+                tcName = StringTrim[Import[tcFile, "Text"]];
+                tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
+                leanBin = leanProgram[FileNameJoin[{elanHome[], "toolchains", tcName, "bin"}], "lean"];
+                leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
+                ,
+                (* No toolchain file at all: try elan default, then bare lean *)
+                leanBin = leanProgram[FileNameJoin[{elanHome[], "bin"}], "lean"];
+                If[! FileExistsQ[leanBin], leanBin = "lean"];
+                leanLibDir = Quiet[StringTrim[RunProcess[{leanBin, "--print-libdir"}, "StandardOutput"]]];
+                If[! StringQ[leanLibDir] || ! DirectoryQ[leanLibDir], leanLibDir = FileNameJoin[{DirectoryName[DirectoryName[leanBin]], "lib", "lean"}]]
+            ];
         ]
     ];
     (* Standalone file: compile via lean CLI subprocess *)
@@ -3163,30 +2698,21 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* a folder of its own: an environment loaded earlier from the same file may still read its olean *)
     tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory, "leanlink_" <> modName <> "_" <> ToString[$SessionID] <> "_" <> CreateUUID[]}]];
     oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
-(* Module names are relative to the root: the Lake project around the file, the
-   folder a URL import downloads into, or else the file's own folder. *)
+    (* Module names are relative to the root: the Lake project around the file, the
+       folder a URL import downloads into, or else the file's own folder. *)
     rootDir = If[StringQ[$leanImportRoot], $leanImportRoot, leanFileRoot[absFile]];
-(* Pin LEAN_PATH for the compile. The shim sets it process-wide on every
-   environment load, so inheriting it would make what this source can import
-   depend on whichever environment happened to be loaded last. The folder of the
-   import comes first: the .lean files of the root that the source imports compile
-   into it before the source does. *)
+    (* Pin LEAN_PATH for the compile. The shim sets it process-wide on every
+       environment load, so inheriting it would make what this source can import
+       depend on whichever environment happened to be loaded last. The folder of the
+       import comes first: the .lean files of the root that the source imports compile
+       into it before the source does. *)
     leanPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
-    result = Replace[
-        failedLocalCompile[leanBin, rootDir, absFile, tmpDir, leanPath],
-        None :> leanCompile[leanBin, oleanFile, rootDir, absFile, leanPath]
-    ];
+    result = Replace[failedLocalCompile[leanBin, rootDir, absFile, tmpDir, leanPath], None :> leanCompile[leanBin, oleanFile, rootDir, absFile, leanPath]];
     If[ result["ExitCode"] =!= 0,
-(* lean writes diagnostics to stdout, not stderr; RunProcess decodes them as
-   Latin-1, so re-decode as UTF-8 to keep the goal/type text readable. *)
-        Message[
-            LeanImport::err,
-            "lean compilation failed" <> If[KeyExistsQ[result, "File"], " for " <> result["File"], ""] <> ": " <> StringTrim[
-                Quiet @ Check[
-                    FromCharacterCode[ToCharacterCode[result["StandardOutput"] <> "\n" <> result["StandardError"], "ISO8859-1"], "UTF-8"],
-                    result["StandardOutput"] <> "\n" <> result["StandardError"]
-                ]
-            ]
+        (* lean writes diagnostics to stdout, not stderr; RunProcess decodes them as Latin-1, so they are decoded
+           again as UTF-8 to keep the goal and type text readable *)
+        With[{output = result["StandardOutput"] <> "\n" <> result["StandardError"], where = If[KeyExistsQ[result, "File"], " for " <> result["File"], ""]},
+            Message[LeanImport::err, "lean compilation failed" <> where <> ": " <> StringTrim[Quiet @ Check[FromCharacterCode[ToCharacterCode[output, "ISO8859-1"], "UTF-8"], output]]]
         ];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Block]
@@ -3204,38 +2730,21 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
         ];
-(* Keep exactly the constants this module declares, read from its own olean
-   data. Matching names scraped from the source text missed everything inside
-   a namespace (environment names are qualified, the scraped ones were not),
-   and anything made by a macro, `private`, or an attribute on the same line. *)
+        (* Keep exactly the constants this module declares, read from its own olean
+           data. Matching names scraped from the source text missed everything inside
+           a namespace (environment names are qualified, the scraped ones were not),
+           and anything made by a macro, `private`, or an attribute on the same line. *)
         kinds = decodeWXF[$moduleConstantKindsFn[handle, modName]];
         If[! AssociationQ[kinds], Return[$Failed, Block]];
-        If[ ! TrueQ[OptionValue["IncludeInternal"]],
-            kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]
-        ];
+        If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]];
         (* "Filter" keeps the names that contain it, as for a module *)
-        If[ OptionValue["Filter"] =!= "",
-            kinds = KeySelect[kinds, StringContainsQ[#, OptionValue["Filter"]]&]
-        ];
+        If[OptionValue["Filter"] =!= "", kinds = KeySelect[kinds, StringContainsQ[#, OptionValue["Filter"]]&]];
         registerHandle[handle, {modName}, searchPath];
         $handleSource[handle, "Files"] = <|modName -> absFile|>;
         $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         registerHandleNames[handle, Keys[kinds]];
         (* Build lazy LeanTerms *)
-        res = LeanEnvironment[
-            Append[
-                Association @
-                    KeyValueMap[
-                        Function[{name, kind},
-                            name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]
-                        ]
-                        ,
-                        kinds
-                    ]
-                ,
-                "_Handle" -> handle
-            ]
-        ];
+        res = LeanEnvironment[Append[Association @ KeyValueMap[Function[{name, kind}, name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]], kinds], "_Handle" -> handle]];
         (* Don't delete tmpDir -- olean needed for lazy queries *)
         res
     ]
@@ -3261,14 +2770,10 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
     ];
     imports = OptionValue["Imports"];
     projDir = resolveProjDir[OptionValue["ProjectDir"]];
-(* Auto-discover all project modules when no imports specified 
-    *)
+    (* Auto-discover all project modules when no imports specified *)
     If[ imports === {},
         Block[{buildLib, oleans, subModules},
-            buildLib = With[{
-                v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}],
-                v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]
-            },
+            buildLib = With[{v5 = FileNameJoin[{projDir, ".lake", "build", "lib", "lean"}], v4 = FileNameJoin[{projDir, ".lake", "build", "lib"}]},
                 If[DirectoryQ[v5], v5, v4]
             ];
             If[ DirectoryQ[buildLib],
@@ -3278,16 +2783,9 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             ]
         ]
     ];
-(* If user requested a list of imports, load them together.
-   If we auto-discovered them, load them individually to prevent Lean module clash failures 
-    
-    
-    *)
-    Block[{
-        loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}],
-        envAssoc = <||>,
-        handles = {}
-    },
+    (* If the user gave a list of imports, load them together; if they were discovered, load them one by one to
+       prevent Lean module clash failures *)
+    Block[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}], envAssoc = <||>, handles = {}},
         Do[
             With[{h = Quiet[getOrLoadEnv[projDir, batch]]},
                 If[ IntegerQ[h] && h > 0,
@@ -3296,22 +2794,8 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
                     If[ AssociationQ[kinds],
                         If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#]&]];
                         registerHandleNames[h, Keys[kinds]];
-(* Build lazy LeanTerms: Name + Kind + _Handle. Each symbol remembers its specific handle! 
-    
-    
-    *)
-                        AssociateTo[
-                            envAssoc
-                            ,
-                            Association @
-                                KeyValueMap[
-                                    Function[{name, kind},
-                                        name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> h|>]
-                                    ]
-                                    ,
-                                    kinds
-                                ]
-                        ];
+                        (* Build lazy LeanTerms: Name + Kind + _Handle. Each symbol remembers its specific handle! *)
+                        AssociateTo[envAssoc, Association @ KeyValueMap[Function[{name, kind}, name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> h|>]], kinds]];
                     ];
                 ];
             ]
@@ -3330,23 +2814,11 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
 
 Options[LeanExpr] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Depth" -> 100}
 
-LeanExpr[name_String, opts : OptionsPattern[]] := callNative[
-    $getTypeFn,
-    {name, OptionValue["Depth"]},
-    resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"],
-    LeanExpr
-]
+LeanExpr[name_String, opts : OptionsPattern[]] := callNative[$getTypeFn, {name, OptionValue["Depth"]}, resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"], LeanExpr]
 
 Options[LeanValue] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Depth" -> 100}
 
-LeanValue[name_String, opts : OptionsPattern[]] := callNative[
-    $getValueFn,
-    {name, OptionValue["Depth"]},
-    resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"],
-    LeanValue
-]
+LeanValue[name_String, opts : OptionsPattern[]] := callNative[$getValueFn, {name, OptionValue["Depth"]}, resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"], LeanValue]
 
 Options[LeanConstantInfo] = {"ProjectDir" -> Automatic, "Imports" -> {}}
 
@@ -3354,18 +2826,10 @@ LeanConstantInfo[name_String, opts : OptionsPattern[]] := callNative[$getConstan
 
 Options[LeanListConstants] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> ""}
 
-LeanListConstants[opts : OptionsPattern[]] := callNative[
-    $listTheoremsFn,
-    {OptionValue["Filter"]},
-    resolveProjDir[OptionValue["ProjectDir"]],
-    OptionValue["Imports"],
-    LeanListConstants
-]
+LeanListConstants[opts : OptionsPattern[]] := callNative[$listTheoremsFn, {OptionValue["Filter"]}, resolveProjDir[OptionValue["ProjectDir"]], OptionValue["Imports"], LeanListConstants]
 
 (* ============================================================================ *)
-
 (* LeanEnvironment -- typed collection of LeanTerms                              *)
-
 (* ============================================================================ *)
 
 (* Property/key access -- env[key] returns LeanTerm with env handle injected *)
@@ -3438,26 +2902,12 @@ LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardFo
         ,
         icon
         ,
-        {
-            BoxForm`SummaryItem[{"Constants: ", n}]
-            ,
-            If[ Length[kinds] > 0,
-                BoxForm`SummaryItem[{"Kinds: ", Row[KeyValueMap[Row[{#2, " ", Style[#1, Gray]}]&, kinds], "  "]}]
-                ,
-                Nothing
-            ]
-        }
+        {BoxForm`SummaryItem[{"Constants: ", n}], If[Length[kinds] > 0, BoxForm`SummaryItem[{"Kinds: ", Row[KeyValueMap[Row[{#2, " ", Style[#1, Gray]}]&, kinds], "  "]}], Nothing]}
         ,
         {
-            BoxForm`SummaryItem[{"Handle: ", If[IntegerQ[handle], Style[handle, Bold], Style["none", Gray]]}]
-            ,
-            If[hasSource, BoxForm`SummaryItem[{"Source: ", Style["available", Darker[Green]]}], Nothing]
-            ,
-            If[ KeyExistsQ[data, "_DeclOrder"],
-                BoxForm`SummaryItem[{"Declarations: ", Length[data["_DeclOrder"]]}]
-                ,
-                Nothing
-            ]
+            BoxForm`SummaryItem[{"Handle: ", If[IntegerQ[handle], Style[handle, Bold], Style["none", Gray]]}],
+            If[hasSource, BoxForm`SummaryItem[{"Source: ", Style["available", Darker[Green]]}], Nothing],
+            If[KeyExistsQ[data, "_DeclOrder"], BoxForm`SummaryItem[{"Declarations: ", Length[data["_DeclOrder"]]}], Nothing]
         }
         ,
         StandardForm
@@ -3467,9 +2917,7 @@ LeanEnvironment /: MakeBoxes[obj : LeanEnvironment[data_Association], StandardFo
 ]
 
 (* ============================================================================ *)
-
 (* LeanState -- interactive proof state                                          *)
-
 (* ============================================================================ *)
 
 (* Constructor: LeanState[term_LeanTerm] opens a proof goal *)
@@ -3481,14 +2929,7 @@ LeanState[term_LeanTerm] := Block[{data = term[[1]], handle, name, result, state
         (* Native path: use Lean runtime *)
         result = Quiet[decodeWXF[$openGoalFn[handle, name]]];
         If[! AssociationQ[result], Return[$Failed]];
-        state = LeanState[
-            <|
-                "stateId" -> result["stateId"],
-                "goals" -> (LeanGoal /@ result["goals"]),
-                "goalCount" -> result["goalCount"],
-                "_Handle" -> handle
-            |>
-        ];
+        state = LeanState[<|"stateId" -> result["stateId"], "goals" -> (LeanGoal /@ result["goals"]), "goalCount" -> result["goalCount"], "_Handle" -> handle|>];
         (* Auto-apply existing tactic if term has one *)
         tactic = Lookup[data, "_Tactic", None];
         If[MatchQ[tactic, _LeanTactic], state = tactic[state]];
@@ -3498,19 +2939,9 @@ LeanState[term_LeanTerm] := Block[{data = term[[1]], handle, name, result, state
         typeExpr = Lookup[data, "_TypeExpr", None];
         tactic = Lookup[data, "_Tactic", None];
         If[typeExpr === None, Return[$Failed]];
-        state = LeanState[
-            <|
-                "stateId" -> 0,
-                "goals" -> {LeanGoal[<|"target" -> leanSource[typeExpr], "context" -> {}|>]},
-                "goalCount" -> 1,
-                "_Symbolic" -> True
-            |>
-        ];
-(* If tactic exists, the proof is known -- mark complete 
-    *)
-        If[ MatchQ[tactic, _LeanTactic],
-            state = LeanState[<|"stateId" -> 0, "goals" -> {}, "goalCount" -> 0, "_Symbolic" -> True, "_Tactic" -> tactic|>]
-        ];
+        state = LeanState[<|"stateId" -> 0, "goals" -> {LeanGoal[<|"target" -> leanSource[typeExpr], "context" -> {}|>]}, "goalCount" -> 1, "_Symbolic" -> True|>];
+        (* If tactic exists, the proof is known -- mark complete *)
+        If[MatchQ[tactic, _LeanTactic], state = LeanState[<|"stateId" -> 0, "goals" -> {}, "goalCount" -> 0, "_Symbolic" -> True, "_Tactic" -> tactic|>]];
         state
     ]
 ]
@@ -3570,17 +3001,27 @@ LeanGoal /: LeanGoal[data_Association][prop_String] := Switch[ prop,
    leanPP, which cannot, only when the expression is all there is *)
 
 ppGoalTarget[g_Association] := Which[
-    StringQ[Lookup[g, "target", None]], g["target"],
-    KeyExistsQ[g, "targetExpr"] && ! MatchQ[g["targetExpr"], _String | _Missing], leanPP[g["targetExpr"]],
-    True, "?"
+    StringQ[Lookup[g, "target", None]],
+        g["target"]
+    ,
+    KeyExistsQ[g, "targetExpr"] && ! MatchQ[g["targetExpr"], _String | _Missing],
+        leanPP[g["targetExpr"]]
+    ,
+    True,
+        "?"
 ]
 
 (* Helper: a context entry type, the same way *)
 
 ppCtxType[entry_Association] := Which[
-    StringQ[Lookup[entry, "type", None]], entry["type"],
-    KeyExistsQ[entry, "typeExpr"] && ! MatchQ[entry["typeExpr"], _String | _Missing], leanPP[entry["typeExpr"]],
-    True, "?"
+    StringQ[Lookup[entry, "type", None]],
+        entry["type"]
+    ,
+    KeyExistsQ[entry, "typeExpr"] && ! MatchQ[entry["typeExpr"], _String | _Missing],
+        leanPP[entry["typeExpr"]]
+    ,
+    True,
+        "?"
 ]
 
 (* MakeBoxes for LeanState *)
@@ -3600,17 +3041,8 @@ LeanState /: MakeBoxes[LeanState[data_Association], StandardForm] := Block[{n = 
                             target = ppGoalTarget[g];
                             Column[
                                 {
-                                    If[ Length[ctx] > 0,
-                                        Column[(Style[#["name"] <> " : " <> ppCtxType[#], "Input"]& /@ ctx), Spacings -> 0.3]
-                                        ,
-                                        Nothing
-                                    ]
-                                    ,
-                                    Style[
-                                        "\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]",
-                                        Gray
-                                    ]
-                                    ,
+                                    If[Length[ctx] > 0, Column[(Style[#["name"] <> " : " <> ppCtxType[#], "Input"]& /@ ctx), Spacings -> 0.3], Nothing],
+                                    Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
                                     Style["\[RightTriangle] " <> target, Bold, "Input"]
                                 }
                                 ,
@@ -3636,17 +3068,8 @@ LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] := Block[{ctx = 
     With[{
         display = Column[
             {
-                If[ Length[ctx] > 0,
-                    Column[(Style[#["name"] <> " : " <> ppCtxType[#], "Input"]& /@ ctx), Spacings -> 0.3]
-                    ,
-                    Nothing
-                ]
-                ,
-                Style[
-                    "\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]",
-                    Gray
-                ]
-                ,
+                If[Length[ctx] > 0, Column[(Style[#["name"] <> " : " <> ppCtxType[#], "Input"]& /@ ctx), Spacings -> 0.3], Nothing],
+                Style["\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]\[LongDash]", Gray],
                 Style["\[RightTriangle] " <> target, Bold, "Input"]
             }
             ,
@@ -3658,9 +3081,7 @@ LeanGoal /: MakeBoxes[LeanGoal[data_Association], StandardForm] := Block[{ctx = 
 ]
 
 (* ============================================================================ *)
-
 (* LeanTactic -- structured tactic objects                                        *)
-
 (* ============================================================================ *)
 
 (* ---- tacticSource: serialize structured LeanTactic -> string ---- *)
@@ -3743,19 +3164,12 @@ applyTacticStr[tac_String, state_LeanState, head_ : LeanTactic] := Block[{data =
         Return[$Failed]
     ];
     If[ ! AssociationQ[result],
-(* The shim reports a failed tactic as an error string ("unsupported tactic: ...",
-   a Lean elaboration error). Surface it instead of returning a bare $Failed. *)
+        (* The shim reports a failed tactic as an error string ("unsupported tactic: ...",
+           a Lean elaboration error). Surface it instead of returning a bare $Failed. *)
         If[StringQ[result], Message[head::err, StringDelete[result, StartOfString ~~ "ERROR: "]]];
         $Failed
         ,
-        LeanState[
-            <|
-                "stateId" -> result["stateId"],
-                "goals" -> (LeanGoal /@ result["goals"]),
-                "goalCount" -> result["goalCount"],
-                "_Handle" -> handle
-            |>
-        ]
+        LeanState[<|"stateId" -> result["stateId"], "goals" -> (LeanGoal /@ result["goals"]), "goalCount" -> result["goalCount"], "_Handle" -> handle|>]
     ]
 ]
 
@@ -3773,15 +3187,12 @@ LeanTactic /: MakeBoxes[t : LeanTactic[tag_String, ___], StandardForm] := With[{
     ToBoxes[Interpretation[display, t]]
 ]
 
-LeanTactic /: MakeBoxes[t : LeanTactic[tactics_List], StandardForm] := With[
-    {display = Column[Style[StringTrim[#], "Input"]& /@ (tacticSource /@ tactics), Spacings -> 0.2]},
+LeanTactic /: MakeBoxes[t : LeanTactic[tactics_List], StandardForm] := With[{display = Column[Style[StringTrim[#], "Input"]& /@ (tacticSource /@ tactics), Spacings -> 0.2]},
     ToBoxes[Interpretation[display, t]]
 ]
 
 (* ============================================================================ *)
-
 (* LeanToFunction / LeanCompile -- Lean defs -> FunctionCompile                   *)
-
 (* ============================================================================ *)
 
 LeanToFunction::notype = "Cannot map Lean type `1` to a compiled WL type."
@@ -3862,28 +3273,20 @@ leanTypeToWL[other_] := $Failed
 
 collectFunctionSignature[type_] := Block[{params, body = type, name, dom, bi, domTy},
     params = First[
-        Last[
-            Reap[
-                While[
-                    MatchQ[body, LeanForall[_, _, _, _]]
+        Last[Reap[
+            While[MatchQ[body, LeanForall[_, _, _, _]],
+                {name, dom, body, bi} = List @@ body;
+                (* Only collect explicit ("default") binders as function params *)
+                If[ bi === "default",
+                    domTy = leanTypeToWL[dom];
+                    If[FailureQ[domTy], Return[$Failed, Block]];
+                    Sow[{cleanName[name], domTy}]
                     ,
-                    {name, dom, body, bi} = List @@ body;
-(* Only collect explicit ("default") binders as function params
-    *)
-                    If[ bi === "default",
-                        domTy = leanTypeToWL[dom];
-                        If[FailureQ[domTy], Return[$Failed, Block]];
-                        Sow[{cleanName[name], domTy}]
-                        ,
-(* Skip implicit/instance binders -- these are type-level, not runtime 
-    
-    
-    *)
-                        Continue[]
-                    ]
+                    (* Skip implicit/instance binders -- these are type-level, not runtime *)
+                    Continue[]
                 ]
             ]
-        ]
+        ]]
         ,
         {}
     ];
@@ -3898,16 +3301,12 @@ collectFunctionSignature[type_] := Block[{params, body = type, name, dom, bi, do
 
 freshSymbol[name_] := Unique[Replace[cleanName[name], other : Except[_String ? symbolNameQ] :> "x"]]
 
-symbolNameQ[name_String] := StringMatchQ[name, (LetterCharacter | "$") ~~ (LetterCharacter | DigitCharacter | "$") ...]
+symbolNameQ[name_String] := StringMatchQ[name, (LetterCharacter | "$") ~~ (LetterCharacter | DigitCharacter | "$")...]
 
 (* the last n arguments of an application, translated, or $Failed *)
 
 lastArguments[e_LeanApp, n_Integer, ctx_List] := With[{args = flattenApp[e][[2]]},
-    If[ Length[args] >= n,
-        Replace[leanExprToWL[#, ctx]& /@ Take[args, -n], translated_ /; AnyTrue[translated, FailureQ] -> $Failed]
-        ,
-        $Failed
-    ]
+    If[Length[args] >= n, Replace[leanExprToWL[#, ctx]& /@ Take[args, -n], translated_ /; AnyTrue[translated, FailureQ] -> $Failed], $Failed]
 ]
 
 (* ctx is a List of variable names, index 0 = last element *)
@@ -3943,16 +3342,17 @@ leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "OfNat.ofNat" && Length[
 (* a decimal literal, mantissa * 10 ^ -exponent or mantissa * 10 ^ exponent: the nearest Float, 0 when it is too
    small for one *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Float.ofScientific" || (appHeadName[e] === "OfScientific.ofScientific" && arithmeticType[e] === "Float") :=
-    Replace[lastArguments[e, 3, ctx], {
-        {mantissa_Integer, negative : True | False, exponent_Integer} :> Quiet[N[mantissa * 10 ^ If[negative, -exponent, exponent]], General::munfl],
-        _ -> $Failed
-    }]
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Float.ofScientific" || (appHeadName[e] === "OfScientific.ofScientific" && arithmeticType[e] === "Float") := Replace[
+    lastArguments[e, 3, ctx],
+    {{mantissa_Integer, negative : True | False, exponent_Integer} :> Quiet[N[mantissa * 10 ^ If[negative, -exponent, exponent]], General::munfl], _ -> $Failed}
+]
 
 (* conversions that keep the number: from Nat to Int, and to Float *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Nat.cast" | "NatCast.natCast" | "Int.cast" | "IntCast.intCast"] && MatchQ[arithmeticType[e], "Nat" | "Int"] :=
-    Replace[lastArguments[e, 1, ctx], {a_} :> a]
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "Nat.cast" | "NatCast.natCast" | "Int.cast" | "IntCast.intCast"] && MatchQ[arithmeticType[e], "Nat" | "Int"] := Replace[
+    lastArguments[e, 1, ctx],
+    {a_} :> a
+]
 
 leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Int.ofNat" := Replace[lastArguments[e, 1, ctx], {a_} :> a]
 
@@ -4059,13 +3459,10 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HMod.hMod" | "instH
 
 (* Powers: x ^ 0 is 1, 0 ^ 0 included, as in Lean *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HPow.hPow" | "instHPow.hPow"] := Replace[lastArguments[e, 2, ctx], {
-    {a_, b_} :> Replace[arithmeticType[e], {
-        "Nat" | "Int" :> If[b == 0, 1, a ^ b],
-        "Float" :> If[b == 0, 1., a ^ b],
-        _ -> $Failed
-    }]
-}]
+leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "HPow.hPow" | "instHPow.hPow"] := Replace[
+    lastArguments[e, 2, ctx],
+    {{a_, b_} :> Replace[arithmeticType[e], {"Nat" | "Int" :> If[b == 0, 1, a^b], "Float" :> If[b == 0, 1., a^b], _ -> $Failed}]}
+]
 
 leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Max.max" := Replace[lastArguments[e, 2, ctx], {a_, b_} :> Max[a, b]]
 
@@ -4101,11 +3498,7 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "bne" | "Ne"] := Rep
 
 (* the proposition a = b, as the condition of an if: c = true is c *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Eq" := Replace[lastArguments[e, 2, ctx], {
-    {a_, True} :> a,
-    {a_, False} :> ! a,
-    {a_, b_} :> Equal[a, b]
-}]
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "Eq" := Replace[lastArguments[e, 2, ctx], {{a_, True} :> a, {a_, False} :> ! a, {a_, b_} :> Equal[a, b]}]
 
 (* the connectives of Bool, and of decidable propositions *)
 
@@ -4170,14 +3563,9 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "GE.ge" | "instGE.ge
 leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "ite" | "instDecidableIte"] := With[
     {args = flattenApp[e][[2]]}
     ,
-(* ite has args: type, cond, decidableInst, thenBranch, elseBranch 
-    *)
+    (* ite has args: type, cond, decidableInst, thenBranch, elseBranch *)
     If[ Length[args] >= 5,
-        With[{
-            c = leanExprToWL[args[[2]], ctx],
-            t = leanExprToWL[args[[4]], ctx],
-            f = leanExprToWL[args[[5]], ctx]
-        },
+        With[{c = leanExprToWL[args[[2]], ctx], t = leanExprToWL[args[[4]], ctx], f = leanExprToWL[args[[5]], ctx]},
             If[FailureQ[c] || FailureQ[t] || FailureQ[f], $Failed, If[c, t, f]]
         ]
         ,
@@ -4187,13 +3575,12 @@ leanExprToWL[e_LeanApp, ctx_List] /; MatchQ[appHeadName[e], "ite" | "instDecidab
 
 (* bif c then t else e: cond _ c t e *)
 
-leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "cond" := Replace[flattenApp[e][[2]], {
-    {_, c_, t_, f_} :> Replace[leanExprToWL[#, ctx]& /@ {c, t, f}, {
-        translated_ /; AnyTrue[translated, FailureQ] -> $Failed,
-        {cWL_, tWL_, fWL_} :> If[cWL, tWL, fWL]
-    }],
-    _ -> $Failed
-}]
+leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "cond" := Replace[
+    flattenApp[e][[2]], {
+        {_, c_, t_, f_} :> Replace[leanExprToWL[#, ctx]& /@ {c, t, f}, {translated_ /; AnyTrue[translated, FailureQ] -> $Failed, {cWL_, tWL_, fWL_} :> If[cWL, tWL, fWL]}],
+        _ -> $Failed
+    }
+]
 
 (* dite -- decidable if-then-else (dependent): dite type cond inst thenLam elseLam *)
 
@@ -4203,18 +3590,9 @@ leanExprToWL[e_LeanApp, ctx_List] /; appHeadName[e] === "dite" := With[{args = f
             Block[
                 {thenBody, elseBody}
                 ,
-(* thenLam/elseLam are lambdas -- extract body, push dummy name 
-    *)
-                thenBody = If[ MatchQ[args[[4]], LeanLam[_, _, _, _]],
-                    leanExprToWL[args[[4, 3]], Append[ctx, "_h"]]
-                    ,
-                    leanExprToWL[args[[4]], ctx]
-                ];
-                elseBody = If[ MatchQ[args[[5]], LeanLam[_, _, _, _]],
-                    leanExprToWL[args[[5, 3]], Append[ctx, "_h"]]
-                    ,
-                    leanExprToWL[args[[5]], ctx]
-                ];
+                (* thenLam/elseLam are lambdas -- extract body, push dummy name *)
+                thenBody = If[MatchQ[args[[4]], LeanLam[_, _, _, _]], leanExprToWL[args[[4, 3]], Append[ctx, "_h"]], leanExprToWL[args[[4]], ctx]];
+                elseBody = If[MatchQ[args[[5]], LeanLam[_, _, _, _]], leanExprToWL[args[[5, 3]], Append[ctx, "_h"]], leanExprToWL[args[[5]], ctx]];
                 If[FailureQ[c] || FailureQ[thenBody] || FailureQ[elseBody], $Failed, If[c, thenBody, elseBody]]
             ]
         ]
@@ -4280,24 +3658,19 @@ leanExprToWL[_, _] := $Failed
 
 peelLambdas[term_, paramTypes_List] := Block[{params, body = term, name, type, bi, remaining = paramTypes, sym},
     params = First[
-        Last[
-            Reap[
-                While[
-                    MatchQ[body, LeanLam[_, _, _, _]] && Length[remaining] > 0
+        Last[Reap[
+            While[MatchQ[body, LeanLam[_, _, _, _]] && Length[remaining] > 0,
+                {name, type, body, bi} = {body[[1]], body[[2]], body[[3]], body[[4]]};
+                If[ bi === "default",
+                    sym = freshSymbol[name];
+                    Sow[{sym, First[remaining][[2]]}];
+                    remaining = Rest[remaining]
                     ,
-                    {name, type, body, bi} = {body[[1]], body[[2]], body[[3]], body[[4]]};
-                    If[ bi === "default",
-                        sym = freshSymbol[name];
-                        Sow[{sym, First[remaining][[2]]}];
-                        remaining = Rest[remaining]
-                        ,
-(* implicit binder -- skip, don't consume from paramTypes
-    *)
-                        Null
-                    ];
-                ]
+                    (* implicit binder -- skip, don't consume from paramTypes *)
+                    Null
+                ];
             ]
-        ]
+        ]]
         ,
         {}
     ];
@@ -4307,21 +3680,7 @@ peelLambdas[term_, paramTypes_List] := Block[{params, body = term, name, type, b
 (* ---- Main API: LeanToFunction ---- *)
 
 LeanToFunction[term_LeanTerm] := Block[
-    {
-        data = term[[1]],
-        kind,
-        typeExpr,
-        termExpr,
-        sig,
-        params,
-        lambdaParams,
-        body,
-        ctx,
-        bodyWL,
-        argSpecs,
-        handle,
-        name
-    }
+    {data = term[[1]], kind, typeExpr, termExpr, sig, params, lambdaParams, body, ctx, bodyWL, argSpecs, handle, name}
     ,
     (* Get type and term *)
     handle = Lookup[data, "_Handle", None];
@@ -4343,13 +3702,9 @@ LeanToFunction[term_LeanTerm] := Block[
         Return[$Failed]
     ];
     params = sig["Params"];
-(* Peel lambda binders from term body -- creates unique symbols 
-    *)
+    (* Peel lambda binders from term body -- creates unique symbols *)
     {lambdaParams, body} = peelLambdas[termExpr, params];
-(* Build variable context: list of actual symbols for de Bruijn resolution 
-    
-    
-    *)
+    (* Build variable context: list of actual symbols for de Bruijn resolution *)
     ctx = lambdaParams[[All, 1]];
     (* Translate body *)
     bodyWL = leanExprToWL[body, ctx];

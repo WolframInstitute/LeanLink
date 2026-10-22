@@ -30,7 +30,7 @@ $minPacletPage = "0.3.11"
 
 $pacletPageResource = "https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/PacletPage"
 
-versionKey[v_String] := PadRight[FromDigits /@ StringCases[v, DigitCharacter ..], 3]
+versionKey[v_String] := PadRight[FromDigits /@ StringCases[v, DigitCharacter..], 3]
 
 newEnoughQ[p_PacletObject] := Order[versionKey[p["Version"]], versionKey[$minPacletPage]] <= 0
 
@@ -42,7 +42,10 @@ newEnoughQ[_] := False
 
 loadPacletPage[] := Block[{dir = Environment["PACLETPAGE_DIR"], paclet},
     If[ StringQ[dir],
-        If[! DirectoryQ[dir], Print["FATAL: PACLETPAGE_DIR is not a directory: ", dir]; Exit[1]];
+        If[ ! DirectoryQ[dir],
+            Print["FATAL: PACLETPAGE_DIR is not a directory: ", dir];
+            Exit[1]
+        ];
         PacletDirectoryLoad[dir]
     ];
     paclet = First[PacletFind["WolframInstitute/PacletPage"], None];
@@ -65,7 +68,10 @@ $buildOptions = {"Source" -> $docsDir}
    cache, so every build reports it until it is fixed. *)
 
 checkBuild[result_] := Block[{unevaluated},
-    If[! AssociationQ[result], Print["FATAL: BuildPacletDocumentation gave ", Short[result, 2]]; Exit[1]];
+    If[ ! AssociationQ[result],
+        Print["FATAL: BuildPacletDocumentation gave ", Short[result, 2]];
+        Exit[1]
+    ];
     Print["pages: ", Length[result["Notebooks"]], " (", Length[result["Evaluated"]], " evaluated, ", Length[result["Cached"]], " cached)   definition: ", result["Definition"]];
     If[ result["Failed"] =!= {},
         Print["FAILED: ", result["Failed"]];
@@ -73,7 +79,10 @@ checkBuild[result_] := Block[{unevaluated},
     ];
     unevaluated = Lookup[result, "Unevaluated", <||>];
     If[ Length[unevaluated] > 0,
-        KeyValueMap[Function[{file, reports}, Print["UNEVALUATED ", FileNameTake[file], ": ", StringRiffle[Map[#["Heading"] <> " reads " <> StringRiffle[ToString /@ #["Symbols"], ", "] &, reports], "; "]]], unevaluated];
+        KeyValueMap[
+            Function[{file, reports}, Print["UNEVALUATED ", FileNameTake[file], ": ", StringRiffle[Map[#["Heading"] <> " reads " <> StringRiffle[ToString /@ #["Symbols"], ", "]&, reports], "; "]]],
+            unevaluated
+        ];
         Exit[1]
     ]
 ]
@@ -88,17 +97,9 @@ buildDocumentation[] := checkBuild[WolframInstitute`PacletPage`BuildPacletDocume
    about 160 MB) from the user's own toolchain next to each shim. Those links must
    never reach the archive, which ships only the shims. *)
 
-$resourceOptions = {
-    "Exclude" -> {
-        "LibraryResources/*/libleanshared*",
-        "LibraryResources/*/libInit_shared*",
-        "LibraryResources/*/libLake_shared*"
-    }
-}
+$resourceOptions = {"Exclude" -> {"LibraryResources/*/libleanshared*", "LibraryResources/*/libInit_shared*", "LibraryResources/*/libLake_shared*"}}
 
 (* Feedback sent through the site's form is readable by the site's owner, by
    signed-in wolframinstitute.org accounts, and by the readers listed. *)
 
-$siteOptions = {
-    "FeedbackOptions" -> {"Domains" -> {"wolframinstitute.org"}, "Readers" -> {"nikm@wolfram.com"}}
-}
+$siteOptions = {"FeedbackOptions" -> {"Domains" -> {"wolframinstitute.org"}, "Readers" -> {"nikm@wolfram.com"}}}

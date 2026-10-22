@@ -19,9 +19,7 @@ LeanListTheorems::usage = "LeanListTheorems[opts] lists theorems via subprocess.
 Begin["`Private`"];
 
 (* ============================================================================ *)
-
 (* Lean runtime helpers                                                         *)
-
 (* ============================================================================ *)
 
 (* Honor ELAN_HOME (containers relocate elan, e.g. /opt/elan). Inlined rather
@@ -42,37 +40,13 @@ decodeUTF8[s_String] := FromCharacterCode[ToCharacterCode[s, "ISO8859-1"], "UTF-
 isLakeProject[dir_String] := AnyTrue[{"lakefile.lean", "lakefile.toml", "lean-toolchain"}, FileExistsQ[FileNameJoin[{dir, #}]]&]
 
 runLean[projDir_String, args_List] := Block[{cmd, res},
-    If[ ! FileExistsQ[$CodeLean],
-        Return[
-            <|
-                "ExitCode" -> 1,
-                "StandardOutput" -> "",
-                "StandardError" -> "code.lean not found at: " <> ToString[$CodeLean]
-            |>
-        ]
-    ];
-    cmd = If[ isLakeProject[projDir],
-        {$LakeBin, "env", "lean", "--run", $CodeLean, Sequence @@ args}
-        ,
-        {$LeanBin, "--run", $CodeLean, Sequence @@ args}
-    ];
-    If[ ! FileExistsQ[First[cmd]],
-        Return[
-            <|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "Binary not found: " <> First[cmd]|>
-        ]
-    ];
-(* Not the LEAN_PATH of the kernel's process: lake env sets the project's, and a
-   lean of its own finds its library itself. *)
+    If[! FileExistsQ[$CodeLean], Return[<|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "code.lean not found at: " <> ToString[$CodeLean]|>]];
+    cmd = If[isLakeProject[projDir], {$LakeBin, "env", "lean", "--run", $CodeLean, Sequence @@ args}, {$LeanBin, "--run", $CodeLean, Sequence @@ args}];
+    If[! FileExistsQ[First[cmd]], Return[<|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "Binary not found: " <> First[cmd]|>]];
+    (* Not the LEAN_PATH of the kernel's process: lake env sets the project's, and a
+       lean of its own finds its library itself. *)
     res = RunProcess[cmd, ProcessDirectory -> projDir, ProcessEnvironment -> KeyDrop[GetEnvironment[], "LEAN_PATH"]];
-    If[ ! AssociationQ[res],
-        <|
-            "ExitCode" -> 1,
-            "StandardOutput" -> "",
-            "StandardError" -> "RunProcess failed for: " <> StringRiffle[cmd, " "]
-        |>
-        ,
-        res
-    ]
+    If[! AssociationQ[res], <|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "RunProcess failed for: " <> StringRiffle[cmd, " "]|>, res]
 ]
 
 dotToGraph[dotStr_String, graphOpts___] := Block[{tmpFile, g},
@@ -106,23 +80,11 @@ leanFileArgs[files_List] := ("+file=" <> #&) /@ files
 leanImportArgs[imports_List] := ("+import=" <> #&) /@ imports
 
 (* ============================================================================ *)
-
 (* LeanExprGraph                                                                *)
-
 (* ============================================================================ *)
 
 Options[LeanExprGraph] = Join[
-    {
-        "ConstDepth" -> 1,
-        "Depth" -> 10000,
-        "MaxNodes" -> 200000,
-        "ShowLevels" -> True,
-        "ProjectDir" -> Automatic,
-        "Files" -> {},
-        "Imports" -> {},
-        "RawDOT" -> False
-    }
-    ,
+    {"ConstDepth" -> 1, "Depth" -> 10000, "MaxNodes" -> 200000, "ShowLevels" -> True, "ProjectDir" -> Automatic, "Files" -> {}, "Imports" -> {}, "RawDOT" -> False},
     Options[Graph]
 ]
 
@@ -130,23 +92,12 @@ LeanExprGraph[file_String, root_String, opts : OptionsPattern[]] := LeanExprGrap
 
 LeanExprGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, args, res, dotStr},
     files = OptionValue["Files"];
-    projDir = Replace[
-        OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]
-    ];
+    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
     args = Join[
-        {
-            "expr",
-            "+constdepth=" <> ToString[OptionValue["ConstDepth"]],
-            "+depth=" <> ToString[OptionValue["Depth"]],
-            "+maxnodes=" <> ToString[OptionValue["MaxNodes"]]
-        }
-        ,
-        If[TrueQ[OptionValue["ShowLevels"]], {"+showlevels"}, {"-showlevels"}]
-        ,
-        leanFileArgs[files]
-        ,
-        leanImportArgs[OptionValue["Imports"]]
-        ,
+        {"expr", "+constdepth=" <> ToString[OptionValue["ConstDepth"]], "+depth=" <> ToString[OptionValue["Depth"]], "+maxnodes=" <> ToString[OptionValue["MaxNodes"]]},
+        If[TrueQ[OptionValue["ShowLevels"]], {"+showlevels"}, {"-showlevels"}],
+        leanFileArgs[files],
+        leanImportArgs[OptionValue["Imports"]],
         {root}
     ];
     res = runLean[projDir, args];
@@ -161,29 +112,17 @@ LeanExprGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, ar
 LeanExprGraph::err = "Lean error: `1`"
 
 (* ============================================================================ *)
-
 (* LeanCallGraph                                                                *)
-
 (* ============================================================================ *)
 
-Options[LeanCallGraph] = Join[
-    {"Depth" -> 0, "ProjectDir" -> Automatic, "Files" -> {}, "Imports" -> {}, "RawDOT" -> False},
-    Options[Graph]
-]
+Options[LeanCallGraph] = Join[{"Depth" -> 0, "ProjectDir" -> Automatic, "Files" -> {}, "Imports" -> {}, "RawDOT" -> False}, Options[Graph]]
 
 LeanCallGraph[file_String, root_String, opts : OptionsPattern[]] := LeanCallGraph[root, "Files" -> {file}, opts]
 
 LeanCallGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, args, res, dotStr},
     files = OptionValue["Files"];
-    projDir = Replace[
-        OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]
-    ];
-    args = Join[
-        {"call", "+depth=" <> ToString[OptionValue["Depth"]]},
-        leanFileArgs[files],
-        leanImportArgs[OptionValue["Imports"]],
-        {root}
-    ];
+    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
+    args = Join[{"call", "+depth=" <> ToString[OptionValue["Depth"]]}, leanFileArgs[files], leanImportArgs[OptionValue["Imports"]], {root}];
     res = runLean[projDir, args];
     If[ res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"]] == 0,
         Message[LeanCallGraph::err, res["StandardError"]];
@@ -196,9 +135,7 @@ LeanCallGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, ar
 LeanCallGraph::err = "Lean error: `1`"
 
 (* ============================================================================ *)
-
 (* LeanListTheorems                                                             *)
-
 (* ============================================================================ *)
 
 Options[LeanListTheorems] = {"ProjectDir" -> Automatic, "Files" -> {}, "Imports" -> {}, "Filter" -> ""}
@@ -207,15 +144,8 @@ LeanListTheorems[file_String, opts : OptionsPattern[]] := LeanListTheorems["File
 
 LeanListTheorems[opts : OptionsPattern[]] := Block[{projDir, files, args, res, lines},
     files = OptionValue["Files"];
-    projDir = Replace[
-        OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]
-    ];
-    args = Join[
-        {"list"},
-        If[OptionValue["Filter"] =!= "", {"+filter=" <> OptionValue["Filter"]}, {}],
-        leanFileArgs[files],
-        leanImportArgs[OptionValue["Imports"]]
-    ];
+    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
+    args = Join[{"list"}, If[OptionValue["Filter"] =!= "", {"+filter=" <> OptionValue["Filter"]}, {}], leanFileArgs[files], leanImportArgs[OptionValue["Imports"]]];
     res = runLean[projDir, args];
     If[ res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"]] == 0,
         Message[LeanListTheorems::err, res["StandardError"]];

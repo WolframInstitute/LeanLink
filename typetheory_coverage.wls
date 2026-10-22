@@ -24,138 +24,170 @@ $rootDirectory = DirectoryName[$InputFileName];
 arguments = Rest[Replace[$ScriptCommandLine, {} -> {$InputFileName}]];
 
 optionNames = {"--project-dir", "--time-limit", "--typetheory", "--out"};
+
 optionValues = Association[Cases[Partition[arguments, 2, 1], {name_String, value_String} /; MemberQ[optionNames, name] :> (name -> value)]];
+
 optionPositions = Flatten[Function[position, {{position}, {position + 1}}] /@ Flatten[Position[arguments, Alternatives @@ optionNames, {1}]], 1];
 
 $modules = Replace[Delete[arguments, optionPositions], {} -> {"Init.Prelude"}];
+
 $projectDirectory = Lookup[optionValues, "--project-dir", FileNameJoin[{$HomeDirectory, "src", "mathlib4"}]];
+
 $timeLimit = ToExpression[Lookup[optionValues, "--time-limit", "300"]];
+
 $typeTheoryDirectory = Lookup[optionValues, "--typetheory", FileNameJoin[{ParentDirectory[$rootDirectory], "TypeTheory", "TypeTheory"}]];
+
 $statusFile = Lookup[optionValues, "--out", None];
 
-If[ DirectoryQ[$typeTheoryDirectory], PacletDirectoryLoad[$typeTheoryDirectory]];
+If[DirectoryQ[$typeTheoryDirectory], PacletDirectoryLoad[$typeTheoryDirectory]];
+
 PacletDirectoryLoad[FileNameJoin[{$rootDirectory, "LeanLink"}]];
+
 Needs["Wolfram`LeanLink`"];
 
 lean = LeanImport["ProjectDir" -> $projectDirectory, "Imports" -> $modules];
+
 If[ FailureQ[lean],
-	Print["The modules did not load: ", lean];
-	Exit[1]
+    Print["The modules did not load: ", lean];
+    Exit[1]
 ];
-Print["LeanLink ", PacletFind["Wolfram/LeanLink"][[1]]["Version"], ", TypeTheory ", PacletFind["WolframInstitute/TypeTheory"][[1]]["Version"], " from ",
-	PacletFind["WolframInstitute/TypeTheory"][[1]]["Location"]];
+
+Print[
+    "LeanLink ",
+    PacletFind["Wolfram/LeanLink"][[1]]["Version"],
+    ", TypeTheory ",
+    PacletFind["WolframInstitute/TypeTheory"][[1]]["Version"],
+    " from ",
+    PacletFind["WolframInstitute/TypeTheory"][[1]]["Location"]
+];
+
 Wolfram`LeanLink`Private`loadTypeTheoryBridge[];
 
 Begin["Wolfram`LeanLink`Private`"];
 
 (* the dependency cone of the roots, in dependency order; a constant the walk cannot follow fails *)
 coverageVisit[name_String] := With[{primary = Replace[Catch[primaryName[name], $bridgeTag], Except[_String] -> name]},
-	If[ ! KeyExistsQ[$seen, primary],
-		$seen[primary] = True;
-		With[{dependencies = Catch[DeleteDuplicates[primaryName /@ DeleteCases[constantDependencies[primary], Alternatives @@ ownNames[primary]]], $bridgeTag]},
-			If[ ListQ[dependencies],
-				$dependencies[primary] = dependencies;
-				Scan[coverageVisit, dependencies],
-				$dependencies[primary] = {};
-				$walkFailures[primary] = dependencies
-			]
-		];
-		Sow[primary, $coneTag]
-	]
+    If[ ! KeyExistsQ[$seen, primary],
+        $seen[primary] = True;
+        With[{dependencies = Catch[DeleteDuplicates[primaryName /@ DeleteCases[constantDependencies[primary], Alternatives @@ ownNames[primary]]], $bridgeTag]},
+            If[ ListQ[dependencies],
+                $dependencies[primary] = dependencies;
+                Scan[coverageVisit, dependencies]
+                ,
+                $dependencies[primary] = {};
+                $walkFailures[primary] = dependencies
+            ]
+        ];
+        Sow[primary, $coneTag]
+    ]
 ]
 
 (* the constant being checked, in a file of its own, so a crash of the kernel names it *)
 recordCurrent[name_String] := If[ StringQ[$statusFile],
-	With[{stream = OpenWrite[$statusFile <> ".current"]}, WriteString[stream, name]; Close[stream]]
+    With[{stream = OpenWrite[$statusFile <> ".current"]},
+        WriteString[stream, name];
+        Close[stream]
+    ]
 ]
 
-failureStatus[failure_] := {
-	"Failed",
-	If[FailureQ[failure], First[failure], "Other"],
-	StringTake[ToString[If[FailureQ[failure], failure["Message"], Short[failure]]], UpTo[400]]
-}
+failureStatus[failure_] := {"Failed", If[FailureQ[failure], First[failure], "Other"], StringTake[ToString[If[FailureQ[failure], failure["Message"], Short[failure]]], UpTo[400]]}
 
 coverageStatus[name_String, environment_] := Which[
-	KeyExistsQ[$walkFailures, name],
-		{failureStatus[$walkFailures[name]], environment},
-	AnyTrue[$dependencies[name], Function[dependency, Lookup[$status, dependency, "OK"] =!= "OK"]],
-		{{"Blocked", SelectFirst[$dependencies[name], Function[dependency, Lookup[$status, dependency, "OK"] =!= "OK"]]}, environment},
-	True,
-		With[
-			{
-				result = TimeConstrained[
-					Catch[
-						With[{extended = TypeTheoryEnvironment[environment, importedDeclarations[environment, name]]},
-							If[ ! FailureQ[extended] && constantKind[name] === "inductive", checkRecursor[extended, name]];
-							extended
-						],
-						$bridgeTag
-					],
-					$timeLimit,
-					Failure["Timeout", <|"MessageTemplate" -> "It did not check within `1` seconds.", "MessageParameters" -> {$timeLimit}|>]
-				]
-			},
-			If[MatchQ[result, _TypeTheoryEnvironment], {"OK", result}, {failureStatus[result], environment}]
-		]
+    KeyExistsQ[$walkFailures, name],
+        {failureStatus[$walkFailures[name]], environment}
+    ,
+    AnyTrue[$dependencies[name], Function[dependency, Lookup[$status, dependency, "OK"] =!= "OK"]],
+        {{"Blocked", SelectFirst[$dependencies[name], Function[dependency, Lookup[$status, dependency, "OK"] =!= "OK"]]}, environment}
+    ,
+    True,
+        With[{
+            result = TimeConstrained[
+                Catch[
+                    With[{extended = TypeTheoryEnvironment[environment, importedDeclarations[environment, name]]},
+                        If[! FailureQ[extended] && constantKind[name] === "inductive", checkRecursor[extended, name]];
+                        extended
+                    ]
+                    ,
+                    $bridgeTag
+                ]
+                ,
+                $timeLimit
+                ,
+                Failure["Timeout", <|"MessageTemplate" -> "It did not check within `1` seconds.", "MessageParameters" -> {$timeLimit}|>]
+            ]
+        },
+            If[MatchQ[result, _TypeTheoryEnvironment], {"OK", result}, {failureStatus[result], environment}]
+        ]
 ]
 
-coverage[handle_, rootGroups_List] := Block[
-	{$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, $seen = <||>, $dependencies = <||>, $walkFailures = <||>, $status = <||>, $seconds = <||>},
-	Module[{environment = TypeTheoryEnvironment[quotientRules[]], start = AbsoluteTime[]},
-		Scan[
-			Function[group,
-				Scan[
-					Function[name,
-						recordCurrent[name];
-						With[{timed = AbsoluteTiming[coverageStatus[name, environment]]},
-							$seconds[name] = First[timed];
-							$status[name] = First[Last[timed]];
-							(* an environment lives for the session, so the one replaced is removed, or each would stay *)
-							If[ Last[Last[timed]] =!= environment, Remove @@ {First[environment]}];
-							environment = Last[Last[timed]]
-						];
-						If[ Mod[Length[$status], 100] == 0 && StringQ[$statusFile], Put[$status, $statusFile]];
-						If[ Mod[Length[$status], 200] == 0,
-							Print[Length[$status], " constants, ", Count[$status, "OK"], " check, ", Round[AbsoluteTime[] - start], " s, ", Round[MemoryInUse[] / 2.^30, 0.1], " GB"]
-						]
-					],
-					Flatten[Last[Reap[Scan[coverageVisit, group], $coneTag]]]
-				];
-				Print["roots of a module done: ", Length[$status], " constants, ", Count[$status, "OK"], " check, ", Round[AbsoluteTime[] - start], " s"]
-			],
-			rootGroups
-		];
-		(* a constructor or recursor is checked with its inductive type *)
-		{$status, AssociationMap[Function[name, Replace[Catch[primaryName[name], $bridgeTag], Except[_String] -> name]], Flatten[rootGroups]], $seconds}
-	]
+coverage[handle_, rootGroups_List] := Block[{$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, $seen = <||>, $dependencies = <||>, $walkFailures = <||>, $status = <||>, $seconds = <||>},
+    Module[{environment = TypeTheoryEnvironment[quotientRules[]], start = AbsoluteTime[]},
+        Scan[
+            Function[group,
+                Scan[
+                    Function[name,
+                        recordCurrent[name];
+                        With[{timed = AbsoluteTiming[coverageStatus[name, environment]]},
+                            $seconds[name] = First[timed];
+                            $status[name] = First[Last[timed]];
+                            (* an environment lives for the session, so the one replaced is removed, or each would stay *)
+                            If[Last[Last[timed]] =!= environment, Remove @@ {First[environment]}];
+                            environment = Last[Last[timed]]
+                        ];
+                        If[Mod[Length[$status], 100] == 0 && StringQ[$statusFile], Put[$status, $statusFile]];
+                        If[Mod[Length[$status], 200] == 0, Print[Length[$status], " constants, ", Count[$status, "OK"], " check, ", Round[AbsoluteTime[] - start], " s, ", Round[MemoryInUse[] / 2.^30, 0.1], " GB"]]
+                    ]
+                    ,
+                    Flatten[Last[Reap[Scan[coverageVisit, group], $coneTag]]]
+                ];
+                Print["roots of a module done: ", Length[$status], " constants, ", Count[$status, "OK"], " check, ", Round[AbsoluteTime[] - start], " s"]
+            ]
+            ,
+            rootGroups
+        ];
+        (* a constructor or recursor is checked with its inductive type *)
+        {$status, AssociationMap[Function[name, Replace[Catch[primaryName[name], $bridgeTag], Except[_String] -> name]], Flatten[rootGroups]], $seconds}
+    ]
 ]
 
 End[];
 
 moduleOf = AssociationMap[Function[name, Quiet[lean[name]["Module"]]], Keys[lean]];
+
 roots = Function[module, Select[Keys[lean], Function[name, moduleOf[name] === module]]] /@ $modules;
+
 Print["modules: ", AssociationThread[$modules, Length /@ roots]];
 
 {status, primaryOf, seconds} = Wolfram`LeanLink`Private`coverage[Wolfram`LeanLink`Private`extractHandle[lean], roots];
-If[ StringQ[$statusFile], Put[status, $statusFile]];
+
+If[StringQ[$statusFile], Put[status, $statusFile]];
 
 (* a blocked constant is charged to the failure at the end of its chain of blocked dependencies *)
 rootFailure[name_String] := FixedPoint[Function[current, Replace[status[current], {{"Blocked", dependency_} :> dependency, _ :> current}]], name];
 
 Print["\nwalked ", Length[status], ", checked ", Count[status, "OK"], ", failed ", Count[status, {"Failed", ___}], ", blocked ", Count[status, {"Blocked", _}]];
+
 Print["failures by tag: ", ReverseSort[Counts[Cases[Values[status], {"Failed", tag_, _} :> tag]]]];
+
 Print["\nfailures, with the constants each one blocks:"];
+
 With[{blocked = Counts[rootFailure /@ Keys[Select[status, MatchQ[{"Blocked", _}]]]]},
-	Scan[
-		Function[name, Print["  ", name, " (", status[name][[2]], ", blocks ", Lookup[blocked, name, 0], "): ", StringTake[status[name][[3]], UpTo[160]]]],
-		ReverseSortBy[Keys[Select[status, MatchQ[{"Failed", ___}]]], Function[name, Lookup[blocked, name, 0]]]
-	]
+    Scan[
+        Function[name, Print["  ", name, " (", status[name][[2]], ", blocks ", Lookup[blocked, name, 0], "): ", StringTake[status[name][[3]], UpTo[160]]]],
+        ReverseSortBy[Keys[Select[status, MatchQ[{"Failed", ___}]]], Function[name, Lookup[blocked, name, 0]]]
+    ]
 ];
+
 Print["\nper module, its own constants:"];
+
 Scan[
-	Function[{pair}, Print["  ", First[pair], ": ", Length[Last[pair]], " constants, ",
-		Counts[Function[name, Replace[Lookup[status, primaryOf[name], "NotWalked"], {{kind_, ___} :> kind}]] /@ Last[pair]]]],
-	Transpose[{$modules, roots}]
+    Function[{pair},
+        Print["  ", First[pair], ": ", Length[Last[pair]], " constants, ", Counts[Function[name, Replace[Lookup[status, primaryOf[name], "NotWalked"], {{kind_, ___} :> kind}]] /@ Last[pair]]]
+    ]
+    ,
+    Transpose[{$modules, roots}]
 ];
+
 Print["\nthe constants that took longest to check:"];
+
 Scan[Function[name, Print["  ", name, ": ", Round[seconds[name], 0.01], " s"]], Take[ReverseSortBy[Keys[seconds], seconds], UpTo[10]]];

@@ -29,29 +29,24 @@ Get[FileNameJoin[{DirectoryName[$InputFileName], "pacletpage.wl"}]]
 Print["PacletPage ", loadPacletPage[]]
 
 (* the pages, by file name, but the author notes and the definition, which the whole build makes *)
-documentationPages[] := Select[
-	FileNameTake /@ FileNames["*.md", $docsDir, Infinity],
-	Function[page, ! MemberQ[{"DOC_GUIDE.md", "ResourceDefinition.md"}, page]]
-]
+documentationPages[] := Select[FileNameTake /@ FileNames["*.md", $docsDir, Infinity], Function[page, ! MemberQ[{"DOC_GUIDE.md", "ResourceDefinition.md"}, page]]]
 
 (* one page, evaluated in this kernel, into the cache: what --per-page runs for each page *)
-buildPage[page_String] := With[
-	{result = WolframInstitute`PacletPage`BuildPacletDocumentation[$leanlinkDir, "Files" -> page, "Parallel" -> False, "Definition" -> None, Sequence @@ $buildOptions]},
-	Print[page, ": ", If[AssociationQ[result], {Length[result["Evaluated"]], " evaluated, failed ", result["Failed"]}, result]];
-	If[! AssociationQ[result] || result["Failed"] =!= {}, Exit[1]]
+buildPage[page_String] := With[{result = WolframInstitute`PacletPage`BuildPacletDocumentation[$leanlinkDir, "Files" -> page, "Parallel" -> False, "Definition" -> None, Sequence @@ $buildOptions]},
+    Print[page, ": ", If[AssociationQ[result], {Length[result["Evaluated"]], " evaluated, failed ", result["Failed"]}, result]];
+    If[! AssociationQ[result] || result["Failed"] =!= {}, Exit[1]]
 ]
 
 Which[
-	MemberQ[$ScriptCommandLine, "--page"],
-		buildPage[Last[$ScriptCommandLine]],
-	MemberQ[$ScriptCommandLine, "--per-page"],
-		Scan[
-			Function[page, Print[StringTrim[RunProcess[{"wl", "-f", $InputFileName, "--page", page}, "StandardOutput"]]]],
-			documentationPages[]
-		];
-		buildDocumentation[],
-	True,
-		buildDocumentation[]
+    MemberQ[$ScriptCommandLine, "--page"],
+        buildPage[Last[$ScriptCommandLine]]
+    ,
+    MemberQ[$ScriptCommandLine, "--per-page"],
+        Scan[Function[page, Print[StringTrim[RunProcess[{"wl", "-f", $InputFileName, "--page", page}, "StandardOutput"]]]], documentationPages[]];
+        buildDocumentation[]
+    ,
+    True,
+        buildDocumentation[]
 ]
 
 Print["done"]

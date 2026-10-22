@@ -5,9 +5,7 @@
 BeginTestSection["NativeAPI"]
 
 (* ================================================================ *)
-
 (* LeanImport                                                        *)
-
 (* ================================================================ *)
 
 VerificationTest[
@@ -30,12 +28,7 @@ VerificationTest[$env["LeanLink.Examples.Vec"]["Kind"], "inductive", TestID -> "
 (* Filtered import *)
 
 VerificationTest[
-    $filtered = LeanImport[
-        "LeanLink.Examples",
-        "ProjectDir" -> $LeanLinkTestProjectDir,
-        "Imports" -> {"LeanLink"},
-        "Filter" -> "Examples"
-    ];
+    $filtered = LeanImport["LeanLink.Examples", "ProjectDir" -> $LeanLinkTestProjectDir, "Imports" -> {"LeanLink"}, "Filter" -> "Examples"];
     Head[$filtered] === LeanEnvironment && Length[$filtered] >= 10
     ,
     True
@@ -43,17 +36,9 @@ VerificationTest[
     TestID -> "LeanImport-Filtered-Count"
 ]
 
-VerificationTest[
-    KeyExistsQ[$filtered, "LeanLink.Examples.modus_ponens"],
-    True,
-    TestID -> "LeanImport-Filtered-HasModusPonens"
-]
+VerificationTest[KeyExistsQ[$filtered, "LeanLink.Examples.modus_ponens"], True, TestID -> "LeanImport-Filtered-HasModusPonens"]
 
-VerificationTest[
-    KeyExistsQ[$filtered, "LeanLink.Examples.Vec.head"],
-    True,
-    TestID -> "LeanImport-Filtered-HasVecHead"
-]
+VerificationTest[KeyExistsQ[$filtered, "LeanLink.Examples.Vec.head"], True, TestID -> "LeanImport-Filtered-HasVecHead"]
 
 (* Standalone file import *)
 
@@ -66,23 +51,9 @@ VerificationTest[
     TestID -> "LeanImport-Standalone-Returns-Env"
 ]
 
-VerificationTest[
-    KeyExistsQ[$standalone, "add_zero_term"]
-    &&
-    KeyExistsQ[$standalone, "modus_ponens"]
-    &&
-    KeyExistsQ[$standalone, "Vec.head"]
-    ,
-    True
-    ,
-    TestID -> "LeanImport-Standalone-HasKeys"
-]
+VerificationTest[KeyExistsQ[$standalone, "add_zero_term"] && KeyExistsQ[$standalone, "modus_ponens"] && KeyExistsQ[$standalone, "Vec.head"], True, TestID -> "LeanImport-Standalone-HasKeys"]
 
-VerificationTest[
-    Head[$standalone["add_zero_term"]["Type"]],
-    LeanForall,
-    TestID -> "LeanImport-Standalone-TypeResolves"
-]
+VerificationTest[Head[$standalone["add_zero_term"]["Type"]], LeanForall, TestID -> "LeanImport-Standalone-TypeResolves"]
 
 VerificationTest[
     $env2 = LeanImport["LeanLink", "ProjectDir" -> $LeanLinkTestProjectDir, "Filter" -> "LeanLink.Examples.add_zero"];
@@ -94,86 +65,39 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
 (* Property access                                                   *)
-
 (* ================================================================ *)
 
-VerificationTest[
-    $filtered["LeanLink.Examples.modus_ponens"]["Name"],
-    "LeanLink.Examples.modus_ponens",
-    TestID -> "Property-Name"
-]
+VerificationTest[$filtered["LeanLink.Examples.modus_ponens"]["Name"], "LeanLink.Examples.modus_ponens", TestID -> "Property-Name"]
 
 VerificationTest[$filtered["LeanLink.Examples.modus_ponens"]["Kind"], "theorem", TestID -> "Property-Kind"]
 
-VerificationTest[
-    Head[$filtered["LeanLink.Examples.modus_ponens"]["Type"]],
-    LeanForall,
-    TestID -> "Property-Type-Head"
-]
+VerificationTest[Head[$filtered["LeanLink.Examples.modus_ponens"]["Type"]], LeanForall, TestID -> "Property-Type-Head"]
+
+VerificationTest[Head[$filtered["LeanLink.Examples.modus_ponens"]["Term"]], LeanLam, TestID -> "Property-Term-Head"]
 
 VerificationTest[
-    Head[$filtered["LeanLink.Examples.modus_ponens"]["Term"]], LeanLam, TestID -> "Property-Term-Head"
-]
-
-VerificationTest[
-    $filtered["LeanLink.Examples.modus_ponens"]["Properties"]
-    ,
-    {
-        "Name",
-        "Kind",
-        "Type",
-        "Term",
-        "TypeForm",
-        "TermForm",
-        "TypeRefs",
-        "TermRefs",
-        "Axioms",
-        "KernelCheck",
-        "Module",
-        "Source",
-        "ExprGraph",
-        "CallGraph",
-        "Parameters",
-        "Body"
-    }
-    ,
+    $filtered["LeanLink.Examples.modus_ponens"]["Properties"],
+    {"Name", "Kind", "Type", "Term", "TypeForm", "TermForm", "TypeRefs", "TermRefs", "Axioms", "KernelCheck", "Module", "Source", "ExprGraph", "CallGraph", "Parameters", "Body"},
     TestID -> "Property-Properties-List"
 ]
 
 (* Axioms: exact audit via Lean.collectAxioms. modus_ponens is pure logic. *)
 
-VerificationTest[
-    $filtered["LeanLink.Examples.modus_ponens"]["Axioms"]
-    ,
-    {}
-    ,
-    TestID -> "Property-Axioms-ModusPonens-None"
-]
+VerificationTest[$filtered["LeanLink.Examples.modus_ponens"]["Axioms"], {}, TestID -> "Property-Axioms-ModusPonens-None"]
 
-VerificationTest[
-    ListQ[$filtered["LeanLink.Examples.Vec.head"]["Axioms"]]
-    ,
-    True
-    ,
-    TestID -> "Property-Axioms-IsList"
-]
+VerificationTest[ListQ[$filtered["LeanLink.Examples.Vec.head"]["Axioms"]], True, TestID -> "Property-Axioms-IsList"]
 
 (* KernelCheck: the declaring module replayed through the kernel, as leanchecker
    does. A declaration added with debug.skipKernelTC shows no axioms; only the
    replay rejects it. *)
 
-VerificationTest[
-    $filtered["LeanLink.Examples.modus_ponens"]["KernelCheck"]["Module"]
-    ,
-    "LeanLink.Examples"
-    ,
-    TestID -> "Property-KernelCheck-Accepts"
-]
+VerificationTest[$filtered["LeanLink.Examples.modus_ponens"]["KernelCheck"]["Module"], "LeanLink.Examples", TestID -> "Property-KernelCheck-Accepts"]
 
 VerificationTest[
-    $forged = LeanImportString["import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"]["Forged.falseProof"];
+    $forged = LeanImportString[
+        "import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `Forged.falseProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"
+    ]["Forged.falseProof"];
     {$forged["Axioms"], $forged["KernelCheck"]["Tag"]}
     ,
     {{}, "KernelRejected"}
@@ -184,42 +108,24 @@ VerificationTest[
 (* LeanEvaluate: #eval, value back through JSON. *)
 
 VerificationTest[
-    {LeanEvaluate["1 + 1"], LeanEvaluate["[1, 2, 3].map (· * 2)"], LeanEvaluate["decide (3 < 5)"], LeanEvaluate["\"\[ForAll]x\""]}
-    ,
-    {2, {2, 4, 6}, True, "\[ForAll]x"}
-    ,
+    {LeanEvaluate["1 + 1"], LeanEvaluate["[1, 2, 3].map (· * 2)"], LeanEvaluate["decide (3 < 5)"], LeanEvaluate["\"\[ForAll]x\""]},
+    {2, {2, 4, 6}, True, "\[ForAll]x"},
     TestID -> "LeanEvaluate-Values"
 ]
 
 VerificationTest[
-    LeanEvaluate["(List.range 8).map (fib 1 1)", "Source" -> "def fib (a b : Nat) : Nat -> Nat\n  | 0 => a\n  | n + 1 => fib b (a + b) n"]
-    ,
-    {1, 1, 2, 3, 5, 8, 13, 21}
-    ,
+    LeanEvaluate["(List.range 8).map (fib 1 1)", "Source" -> "def fib (a b : Nat) : Nat -> Nat\n  | 0 => a\n  | n + 1 => fib b (a + b) n"],
+    {1, 1, 2, 3, 5, 8, 13, 21},
     TestID -> "LeanEvaluate-Source"
 ]
 
-VerificationTest[
-    LeanEvaluate["undefinedThing + 1"]["Tag"]
-    ,
-    "LeanEvaluateFailed"
-    ,
-    TestID -> "LeanEvaluate-ErrorFailure"
-]
+VerificationTest[LeanEvaluate["undefinedThing + 1"]["Tag"], "LeanEvaluateFailed", TestID -> "LeanEvaluate-ErrorFailure"]
+
+VerificationTest[LeanEvaluate["(List.range 300000000).foldl (· + ·) 0", "TimeLimit" -> 2]["Tag"], "TimedOut", TestID -> "LeanEvaluate-TimeLimit"]
 
 VerificationTest[
-    LeanEvaluate["(List.range 300000000).foldl (· + ·) 0", "TimeLimit" -> 2]["Tag"]
-    ,
-    "TimedOut"
-    ,
-    TestID -> "LeanEvaluate-TimeLimit"
-]
-
-VerificationTest[
-    {LeanEvaluate["(2.5 : Float) * 2"], LeanEvaluate["(0.1 : Float) + 0.2"], LeanEvaluate["(1e300 : Float) * 1e10"], LeanEvaluate["(0 : Float) / 0"], LeanEvaluate["[(1.5 : Float), 2]"]}
-    ,
-    {5., 0.30000000000000004, Infinity, Indeterminate, {1.5, 2.}}
-    ,
+    {LeanEvaluate["(2.5 : Float) * 2"], LeanEvaluate["(0.1 : Float) + 0.2"], LeanEvaluate["(1e300 : Float) * 1e10"], LeanEvaluate["(0 : Float) / 0"], LeanEvaluate["[(1.5 : Float), 2]"]},
+    {5., 0.30000000000000004, Infinity, Indeterminate, {1.5, 2.}},
     TestID -> "LeanEvaluate-Float-is-exact"
 ]
 
@@ -233,13 +139,7 @@ $lbProject[pin_String, src_String] := Module[{d = CreateDirectory[]},
     d
 ]
 
-VerificationTest[
-    Head[LeanBuild[$LeanLinkTestProjectDir, {"LeanLink.Examples"}]]
-    ,
-    Success
-    ,
-    TestID -> "LeanBuild-UpToDate"
-]
+VerificationTest[Head[LeanBuild[$LeanLinkTestProjectDir, {"LeanLink.Examples"}]], Success, TestID -> "LeanBuild-UpToDate"]
 
 (* A path dependency (`path = "../dep"` in the lakefile) lives outside
    .lake/packages: "ProjectDir" finds it through lake-manifest.json. *)
@@ -252,7 +152,7 @@ VerificationTest[
         Export[FileNameJoin[{dep, "Dep.lean"}], "theorem Dep.two : 1 + 1 = 2 := rfl\n", "Text"];
         Export[FileNameJoin[{main, "lakefile.toml"}], "name = \"main\"\ndefaultTargets = [\"Main\"]\n[[require]]\nname = \"dep\"\npath = \"../dep\"\n[[lean_lib]]\nname = \"Main\"\n", "Text"];
         Export[FileNameJoin[{main, "Main.lean"}], "import Dep\ntheorem Main.two : 1 + 1 = 2 := Dep.two\n", "Text"];
-        Scan[Export[FileNameJoin[{#, "lean-toolchain"}], "leanprover/lean4:v4.35.0", "Text"] &, {dep, main}];
+        Scan[Export[FileNameJoin[{#, "lean-toolchain"}], "leanprover/lean4:v4.35.0", "Text"]&, {dep, main}];
         LeanBuild[main];
         {LeanImport["Main", "ProjectDir" -> main]["Main.two"]["TypeForm"], LeanImportString["import Dep\ntheorem t : 1 + 1 = 2 := Dep.two", "ProjectDir" -> main]["t"]["TypeForm"]}
     ]
@@ -272,50 +172,24 @@ VerificationTest[
     TestID -> "LeanBuild-ErrorCarried"
 ]
 
-VerificationTest[
-    LeanBuild[$lbProject["leanprover/lean4:v4.0.0-not-installed", "theorem ok : 1 = 1 := rfl\n"], {"Probe"}]["Tag"]
-    ,
-    "ToolchainNotInstalled"
-    ,
-    TestID -> "LeanBuild-ToolchainNotInstalled"
-]
+VerificationTest[LeanBuild[$lbProject["leanprover/lean4:v4.0.0-not-installed", "theorem ok : 1 = 1 := rfl\n"], {"Probe"}]["Tag"], "ToolchainNotInstalled", TestID -> "LeanBuild-ToolchainNotInstalled"]
 
 (* TypeForm is #check output: Lean's own delaborator via the lean frontend,
    with notation (not raw applications) and "Open" -> {ns} shortening names. *)
 
-VerificationTest[
-    $filtered["LeanLink.Examples.modus_ponens"]["TypeForm"]
-    ,
-    "\[ForAll] (P Q : Prop), P \[RightArrow] (P \[RightArrow] Q) \[RightArrow] Q"
-    ,
-    TestID -> "TypeForm-LeanNotation"
-]
+VerificationTest[$filtered["LeanLink.Examples.modus_ponens"]["TypeForm"], "\[ForAll] (P Q : Prop), P \[RightArrow] (P \[RightArrow] Q) \[RightArrow] Q", TestID -> "TypeForm-LeanNotation"]
+
+VerificationTest[$filtered["LeanLink.Examples.contrapositive"]["TypeForm"], "\[ForAll] (P Q : Prop), (P \[RightArrow] Q) \[RightArrow] \[Not]Q \[RightArrow] \[Not]P", TestID -> "TypeForm-NotNotation"]
 
 VerificationTest[
-    $filtered["LeanLink.Examples.contrapositive"]["TypeForm"]
-    ,
-    "\[ForAll] (P Q : Prop), (P \[RightArrow] Q) \[RightArrow] \[Not]Q \[RightArrow] \[Not]P"
-    ,
-    TestID -> "TypeForm-NotNotation"
-]
-
-VerificationTest[
-    $filtered["LeanLink.Examples.Vec.head"]["TypeForm", "Open" -> {"LeanLink.Examples"}]
-    ,
-    "{a : Type} \[RightArrow] {n : Nat} \[RightArrow] Vec a (n + 1) \[RightArrow] a"
-    ,
+    $filtered["LeanLink.Examples.Vec.head"]["TypeForm", "Open" -> {"LeanLink.Examples"}],
+    "{a : Type} \[RightArrow] {n : Nat} \[RightArrow] Vec a (n + 1) \[RightArrow] a",
     TestID -> "TypeForm-Open"
 ]
 
 (* Source: the declaration's text, from the olean's range and the module's file. *)
 
-VerificationTest[
-    $filtered["LeanLink.Examples.identity"]["Source"]
-    ,
-    "theorem identity : forall (P : Prop), P -> P := fun _ hp => hp"
-    ,
-    TestID -> "Property-Source"
-]
+VerificationTest[$filtered["LeanLink.Examples.identity"]["Source"], "theorem identity : forall (P : Prop), P -> P := fun _ hp => hp", TestID -> "Property-Source"]
 
 (* WXF integers >= 128 (machine sizes and big integers) round-trip. LeanLink
    used non-WXF tokens past int8, so a type with a literal >= 128 failed. *)
@@ -332,26 +206,15 @@ VerificationTest[
 
 (* Module: the module that declares a constant. *)
 
-VerificationTest[
-    $filtered["LeanLink.Examples.modus_ponens"]["Module"]
-    ,
-    "LeanLink.Examples"
-    ,
-    TestID -> "Property-Module"
-]
+VerificationTest[$filtered["LeanLink.Examples.modus_ponens"]["Module"], "LeanLink.Examples", TestID -> "Property-Module"]
 
 (* LeanImportString keeps what the source declares, including inside a
    namespace. It used to match unqualified names scraped from the text against
    the qualified environment names, so namespaced declarations came back empty. *)
 
 VerificationTest[
-    Sort @ DeleteCases[
-        Keys[First[LeanImportString["namespace LLTest\ntheorem t1 : 1 = 1 := rfl\ndef d1 : Nat := 3\nend LLTest"]]],
-        "_Handle"
-    ]
-    ,
-    {"LLTest.d1", "LLTest.t1"}
-    ,
+    Sort @ DeleteCases[Keys[First[LeanImportString["namespace LLTest\ntheorem t1 : 1 = 1 := rfl\ndef d1 : Nat := 3\nend LLTest"]]], "_Handle"],
+    {"LLTest.d1", "LLTest.t1"},
     TestID -> "ImportString-Namespace-Kept"
 ]
 
@@ -407,23 +270,11 @@ VerificationTest[
     TestID -> "Tactic-Exact-WrongHypothesis-Rejected"
 ]
 
-VerificationTest[
-    MatchQ[$filtered["LeanLink.Examples.Vec.head"]["Type"], _LeanForall],
-    True,
-    TestID -> "Property-Type-IsForall"
-]
+VerificationTest[MatchQ[$filtered["LeanLink.Examples.Vec.head"]["Type"], _LeanForall], True, TestID -> "Property-Type-IsForall"]
 
-VerificationTest[
-    StringQ[$filtered["LeanLink.Examples.Vec.head"]["TypeForm"]],
-    True,
-    TestID -> "Property-TypeForm-IsString"
-]
+VerificationTest[StringQ[$filtered["LeanLink.Examples.Vec.head"]["TypeForm"]], True, TestID -> "Property-TypeForm-IsString"]
 
-VerificationTest[
-    MatchQ[$filtered["LeanLink.Examples.Vec.head"]["Term"], _LeanLam | _LeanApp | _LeanConst],
-    True,
-    TestID -> "Property-Term-HasExpression"
-]
+VerificationTest[MatchQ[$filtered["LeanLink.Examples.Vec.head"]["Term"], _LeanLam | _LeanApp | _LeanConst], True, TestID -> "Property-Term-HasExpression"]
 
 VerificationTest[
     With[{g = $filtered["LeanLink.Examples.modus_ponens"]["ExprGraph"]},
@@ -435,22 +286,12 @@ VerificationTest[
     TestID -> "Property-ExprGraph-IsGraph"
 ]
 
-VerificationTest[
-    GraphQ[$filtered["LeanLink.Examples.modus_ponens"]["CallGraph"]],
-    True,
-    TestID -> "Property-CallGraph-IsGraph"
-]
+VerificationTest[GraphQ[$filtered["LeanLink.Examples.modus_ponens"]["CallGraph"]], True, TestID -> "Property-CallGraph-IsGraph"]
 
-VerificationTest[
-    StringQ[$filtered["LeanLink.Examples.Vec.head"]["TermForm"]],
-    True,
-    TestID -> "Property-TermForm-IsString"
-]
+VerificationTest[StringQ[$filtered["LeanLink.Examples.Vec.head"]["TermForm"]], True, TestID -> "Property-TermForm-IsString"]
 
 (* ================================================================ *)
-
 (* TermForm - in-process printing with the imported notation         *)
-
 (* ================================================================ *)
 
 (* A dependent if-then-else reaches the IR interpreter through the
@@ -459,7 +300,9 @@ VerificationTest[
    enabled again before every import; this import follows many others. *)
 
 VerificationTest[
-    $termEnv = LeanImportString["namespace TermDemo\ntheorem dite_proof (a b : Nat) : a = b ∨ a ≠ b := if h : a = b then Or.inl h else Or.inr h\ndef ite_def (a b : Nat) : Nat := if a = b then 1 else 0\ndef arith (n : Nat) : Nat := n - 396 + 2 * n\nend TermDemo"];
+    $termEnv = LeanImportString[
+        "namespace TermDemo\ntheorem dite_proof (a b : Nat) : a = b ∨ a ≠ b := if h : a = b then Or.inl h else Or.inr h\ndef ite_def (a b : Nat) : Nat := if a = b then 1 else 0\ndef arith (n : Nat) : Nat := n - 396 + 2 * n\nend TermDemo"
+    ];
     $termEnv["TermDemo.dite_proof"]["TermForm"]
     ,
     "fun a b => if h : a = b then Or.inl h else Or.inr h"
@@ -471,16 +314,10 @@ VerificationTest[$termEnv["TermDemo.ite_def"]["TermForm"], "fun a b => if a = b 
 
 VerificationTest[$termEnv["TermDemo.arith"]["TermForm"], "fun n => n - 396 + 2 * n", TestID -> "TermForm-Notation-Arithmetic"]
 
-VerificationTest[
-    ListQ[$filtered["LeanLink.Examples.Vec.head"]["TypeRefs"]],
-    True,
-    TestID -> "Property-TypeRefs-IsList"
-]
+VerificationTest[ListQ[$filtered["LeanLink.Examples.Vec.head"]["TypeRefs"]], True, TestID -> "Property-TypeRefs-IsList"]
 
 (* ================================================================ *)
-
 (* LeanExportString                                                    *)
-
 (* ================================================================ *)
 
 VerificationTest[StringQ[LeanExportString[$filtered]], True, TestID -> "LeanExportString-Returns-String"]
@@ -500,11 +337,7 @@ VerificationTest[StringContainsQ[$expSrc, "sorry"], True, TestID -> "LeanExportS
 
 (* FFI-based pretty printing *)
 
-VerificationTest[
-    StringQ[LeanExportString[$filtered["LeanLink.Examples.modus_ponens"]]],
-    True,
-    TestID -> "LeanExportString-LeanTerm-FFI"
-]
+VerificationTest[StringQ[LeanExportString[$filtered["LeanLink.Examples.modus_ponens"]]], True, TestID -> "LeanExportString-LeanTerm-FFI"]
 
 VerificationTest[
     With[{pp = LeanExportString[$filtered["LeanLink.Examples.identity"]]},
@@ -517,9 +350,7 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
-(* ProofToLean — roundtrip tests                                      *)
-
+(* ProofToLean - roundtrip tests                                      *)
 (* ================================================================ *)
 
 VerificationTest[
@@ -534,11 +365,7 @@ VerificationTest[
 
 VerificationTest[MemberQ[Keys[$ptlEnv], "FinalGoal"], True, TestID -> "ProofToLean-Has-FinalGoal"]
 
-VerificationTest[
-    Head[$ptlEnv["FinalGoal"][[1]]["_TypeExpr"]],
-    LeanForall,
-    TestID -> "ProofToLean-TypeExpr-Is-LeanForall"
-]
+VerificationTest[Head[$ptlEnv["FinalGoal"][[1]]["_TypeExpr"]], LeanForall, TestID -> "ProofToLean-TypeExpr-Is-LeanForall"]
 
 VerificationTest[
     With[{tac = $ptlEnv["FinalGoal"][[1]]["_Tactic"]},
@@ -599,9 +426,7 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
 (* LeanExportString for ProofToLean                                    *)
-
 (* ================================================================ *)
 
 VerificationTest[
@@ -615,54 +440,23 @@ VerificationTest[
 
 VerificationTest[StringContainsQ[$ptlExportSrc, "axiom"], True, TestID -> "LeanExportString-ProofToLean-HasAxiom"]
 
-VerificationTest[
-    StringContainsQ[$ptlExportSrc, "theorem"] && StringLength[$ptlExportSrc] > 100,
-    True,
-    TestID -> "LeanExportString-ProofToLean-HasTheorem"
-]
+VerificationTest[StringContainsQ[$ptlExportSrc, "theorem"] && StringLength[$ptlExportSrc] > 100, True, TestID -> "LeanExportString-ProofToLean-HasTheorem"]
 
 VerificationTest[StringContainsQ[$ptlExportSrc, "intro"], True, TestID -> "LeanExportString-ProofToLean-HasIntro"]
 
-VerificationTest[
-    StringContainsQ[$ptlExportSrc, "rfl"] || StringContainsQ[$ptlExportSrc, "exact"],
-    True,
-    TestID -> "LeanExportString-ProofToLean-HasExact"
-]
+VerificationTest[StringContainsQ[$ptlExportSrc, "rfl"] || StringContainsQ[$ptlExportSrc, "exact"], True, TestID -> "LeanExportString-ProofToLean-HasExact"]
 
 (* ================================================================ *)
-
 (* LeanTerm properties                                                 *)
-
 (* ================================================================ *)
 
-VerificationTest[
-    StringQ[$filtered["LeanLink.Examples.modus_ponens"]["Term"]],
-    False,
-    TestID -> "LeanExportString-Term-NotString"
-]
+VerificationTest[StringQ[$filtered["LeanLink.Examples.modus_ponens"]["Term"]], False, TestID -> "LeanExportString-Term-NotString"]
 
-VerificationTest[
-    MatchQ[$filtered["LeanLink.Examples.modus_ponens"]["Type"], _LeanForall | _LeanApp | _LeanConst],
-    True,
-    TestID -> "LeanExportString-Type-HasExpression"
-]
+VerificationTest[MatchQ[$filtered["LeanLink.Examples.modus_ponens"]["Type"], _LeanForall | _LeanApp | _LeanConst], True, TestID -> "LeanExportString-Type-HasExpression"]
 
-VerificationTest[
-    StringQ[$filtered["LeanLink.Examples.modus_ponens"]["TypeForm"]],
-    True,
-    TestID -> "LeanExportString-TypeForm-IsString"
-]
+VerificationTest[StringQ[$filtered["LeanLink.Examples.modus_ponens"]["TypeForm"]], True, TestID -> "LeanExportString-TypeForm-IsString"]
 
-VerificationTest[
-    MatchQ[
-        $filtered["LeanLink.Examples.modus_ponens"]["Term"],
-        _LeanLam | _LeanApp | _LeanConst | LeanNoValue[]
-    ]
-    ,
-    True
-    ,
-    TestID -> "LeanExportString-Term-HasProp"
-]
+VerificationTest[MatchQ[$filtered["LeanLink.Examples.modus_ponens"]["Term"], _LeanLam | _LeanApp | _LeanConst | LeanNoValue[]], True, TestID -> "LeanExportString-Term-HasProp"]
 
 VerificationTest[
     $importedEnv = LeanImportString["theorem myT : Nat.succ 0 = 1 := rfl"];
@@ -688,29 +482,17 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
 (* LeanEnvironment Properties                                         *)
-
 (* ================================================================ *)
 
-VerificationTest[
-    Information[$ptlEnv, "Properties"],
-    {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"},
-    TestID -> "LeanEnvironment-Properties-List"
-]
+VerificationTest[Information[$ptlEnv, "Properties"], {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"}, TestID -> "LeanEnvironment-Properties-List"]
 
-VerificationTest[
-    Information[$ptlEnv, "Constants"], Keys[$ptlEnv], TestID -> "LeanEnvironment-Constants-EqualsKeys"
-]
+VerificationTest[Information[$ptlEnv, "Constants"], Keys[$ptlEnv], TestID -> "LeanEnvironment-Constants-EqualsKeys"]
 
-VerificationTest[
-    AssociationQ[Information[$ptlEnv, "Kinds"]], True, TestID -> "LeanEnvironment-Kinds-IsAssociation"
-]
+VerificationTest[AssociationQ[Information[$ptlEnv, "Kinds"]], True, TestID -> "LeanEnvironment-Kinds-IsAssociation"]
 
 (* ================================================================ *)
-
 (* Term Construction & Type Checking                                  *)
-
 (* ================================================================ *)
 
 (* Bare expr wrap creates valid LeanTerm *)
@@ -719,11 +501,7 @@ VerificationTest[Head[LeanTerm[LeanConst["Nat", {}]]], LeanTerm, TestID -> "Lean
 
 (* LeanTerm with env binding carries handle internally *)
 
-VerificationTest[
-    IntegerQ[LeanTerm[LeanConst["Nat", {}], $env][[1]]["_Handle"]],
-    True,
-    TestID -> "LeanTerm-WithEnv-HasHandle"
-]
+VerificationTest[IntegerQ[LeanTerm[LeanConst["Nat", {}], $env][[1]]["_Handle"]], True, TestID -> "LeanTerm-WithEnv-HasHandle"]
 
 (* Type check Nat constant via env *)
 
@@ -763,16 +541,10 @@ VerificationTest[
 
 (* TypeForm pretty-prints via type check *)
 
-VerificationTest[
-    StringQ[LeanTerm[LeanConst["Nat", {}], $env]["TypeForm"]],
-    True,
-    TestID -> "LeanTerm-TypeForm-Works"
-]
+VerificationTest[StringQ[LeanTerm[LeanConst["Nat", {}], $env]["TypeForm"]], True, TestID -> "LeanTerm-TypeForm-Works"]
 
 (* ================================================================ *)
-
 (* Environment Creation & Roundtrips                                   *)
-
 (* ================================================================ *)
 
 (* Compile simple def and access term *)
@@ -804,11 +576,7 @@ VerificationTest[
 
 VerificationTest[
     Module[{env = LeanImportString["theorem myThm : 1 + 1 = 2 := rfl"]},
-        Head[env] === LeanEnvironment
-        &&
-        env["myThm"]["Kind"] === "theorem"
-        &&
-        StringQ[env["myThm"]["TypeForm"]]
+        Head[env] === LeanEnvironment && env["myThm"]["Kind"] === "theorem" && StringQ[env["myThm"]["TypeForm"]]
     ]
     ,
     True
@@ -883,9 +651,7 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
 (* BooleanAxioms roundtrip                                            *)
-
 (* ================================================================ *)
 
 VerificationTest[
@@ -895,17 +661,12 @@ VerificationTest[
         env = Quiet[ProofToLean[proof], ProofToLean::sorry];
         src = LeanExportString[env];
         rt = Quiet @ LeanImportString[src];
-(* Allow at most 2 errors — 1 known: commutative Ax3 loop in SL8 
-    *)
+        (* Allow at most 2 errors - 1 known: commutative Ax3 loop in SL8 *)
         If[ Head[rt] === LeanEnvironment,
             True
             ,
             (* Fallback: check source quality *)
-            StringQ[src]
-            &&
-            StringContainsQ[src, "theorem FinalGoal"]
-            &&
-            StringContainsQ[src, "Ax4 a b (OverBar a)"]
+            StringQ[src] && StringContainsQ[src, "theorem FinalGoal"] && StringContainsQ[src, "Ax4 a b (OverBar a)"]
         ]
     ]
     ,
@@ -914,7 +675,7 @@ VerificationTest[
     TestID -> "BooleanAxioms-Absorption-Roundtrip"
 ]
 
-(* DoubleNegation — end-to-end LeanState test *)
+(* DoubleNegation - end-to-end LeanState test *)
 
 VerificationTest[
     Module[{env, state},
@@ -929,13 +690,9 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
-(* Mathlib import — Fundamental Theorem of Algebra                    *)
-
+(* Mathlib import - Fundamental Theorem of Algebra                    *)
 (* Requires: /tmp/mathlib_test with prebuilt Mathlib cache            *)
-
 (* Run: lake init MathlibTest math && lake exe cache get              *)
-
 (* ================================================================ *)
 
 $mathlibDir = "/tmp/mathlib_test";
@@ -950,11 +707,7 @@ VerificationTest[
         ,
         Module[{env},
             env = LeanImport["Mathlib.FieldTheory.IsAlgClosed.Basic", "ProjectDir" -> $mathlibDir, "Filter" -> "IsAlgClosed"];
-            Head[env] === LeanEnvironment
-            &&
-            Length[env] > 0
-            &&
-            AnyTrue[Keys[env], StringContainsQ[#, "IsAlgClosed"]&]
+            Head[env] === LeanEnvironment && Length[env] > 0 && AnyTrue[Keys[env], StringContainsQ[#, "IsAlgClosed"]&]
         ]
     ]
     ,
@@ -989,9 +742,7 @@ VerificationTest[
         ,
         Module[{env},
             env = LeanImport["Mathlib.Analysis.Complex.Polynomial.Basic", "ProjectDir" -> $mathlibDir, "Filter" -> "Complex"];
-            Head[env] === LeanEnvironment
-            &&
-            AnyTrue[Keys[env], StringContainsQ[#, "isAlgClosed" | "IsAlgClosed"]&]
+            Head[env] === LeanEnvironment && AnyTrue[Keys[env], StringContainsQ[#, "isAlgClosed" | "IsAlgClosed"]&]
         ]
     ]
     ,
@@ -1001,9 +752,7 @@ VerificationTest[
 ]
 
 (* ================================================================ *)
-
 (* LeanToFunction / LeanCompile                                       *)
-
 (* ================================================================ *)
 
 (* Simple def: n + 1 *)
@@ -1079,15 +828,18 @@ VerificationTest[
 
 VerificationTest[
     Module[{env, compiled},
-        env = LeanImportString[{
-            "def natSub (a b : Nat) : Nat := a - b", "def natDiv (a b : Nat) : Nat := a / b", "def natMod (a b : Nat) : Nat := a % b",
-            "def intDiv (a b : Int) : Int := a / b", "def intMod (a b : Int) : Int := a % b", "def half (x : Float) : Float := x / 2"
-        }];
+        env = LeanImportString[
+            {
+                "def natSub (a b : Nat) : Nat := a - b",
+                "def natDiv (a b : Nat) : Nat := a / b",
+                "def natMod (a b : Nat) : Nat := a % b",
+                "def intDiv (a b : Int) : Int := a / b",
+                "def intMod (a b : Int) : Int := a % b",
+                "def half (x : Float) : Float := x / 2"
+            }
+        ];
         compiled = AssociationMap[LeanCompile[env[#]]&, {"natSub", "natDiv", "natMod", "intDiv", "intMod", "half"}];
-        {
-            compiled["natSub"][2, 5], compiled["natDiv"][5, 0], compiled["natMod"][5, 0],
-            compiled["intDiv"][7, -2], compiled["intMod"][7, -2], compiled["half"][3.]
-        }
+        {compiled["natSub"][2, 5], compiled["natDiv"][5, 0], compiled["natMod"][5, 0], compiled["intDiv"][7, -2], compiled["intMod"][7, -2], compiled["half"][3.]}
     ]
     ,
     {0, 0, 5, -3, 1, 1.5}
@@ -1097,16 +849,29 @@ VerificationTest[
 
 VerificationTest[
     Module[{env, compiled},
-        env = LeanImportString[{
-            "def differ (a b : Nat) : Bool := a != b", "def pick (c : Bool) (a b : Nat) : Nat := bif c then a else b",
-            "def same (a b : Nat) : Nat := if a = b then 1 else 0", "def mixed (a b : Nat) : Bool := a == b && a < 3 || !(b ≤ a)",
-            "def other (a b : Int) : Bool := decide (a ≠ b ∧ ¬ a < 0)", "def either (a b : Bool) : Bool := xor a b",
-            "def spread (a b : Nat) : Nat := max a b - min a b", "def power (a b : Nat) : Nat := a ^ b"
-        }];
+        env = LeanImportString[
+            {
+                "def differ (a b : Nat) : Bool := a != b",
+                "def pick (c : Bool) (a b : Nat) : Nat := bif c then a else b",
+                "def same (a b : Nat) : Nat := if a = b then 1 else 0",
+                "def mixed (a b : Nat) : Bool := a == b && a < 3 || !(b ≤ a)",
+                "def other (a b : Int) : Bool := decide (a ≠ b ∧ ¬ a < 0)",
+                "def either (a b : Bool) : Bool := xor a b",
+                "def spread (a b : Nat) : Nat := max a b - min a b",
+                "def power (a b : Nat) : Nat := a ^ b"
+            }
+        ];
         compiled = AssociationMap[LeanCompile[env[#]]&, {"differ", "pick", "same", "mixed", "other", "either", "spread", "power"}];
         {
-            compiled["differ"][3, 4], compiled["pick"][False, 3, 4], compiled["same"][3, 3], compiled["mixed"][3, 4],
-            compiled["other"][-1, 2], compiled["either"][True, True], compiled["spread"][3, 7], compiled["power"][0, 0], compiled["power"][2, 10]
+            compiled["differ"][3, 4],
+            compiled["pick"][False, 3, 4],
+            compiled["same"][3, 3],
+            compiled["mixed"][3, 4],
+            compiled["other"][-1, 2],
+            compiled["either"][True, True],
+            compiled["spread"][3, 7],
+            compiled["power"][0, 0],
+            compiled["power"][2, 10]
         }
     ]
     ,
@@ -1117,10 +882,14 @@ VerificationTest[
 
 VerificationTest[
     Module[{env, compiled},
-        env = LeanImportString[{
-            "def half (n : Nat) : Float := n.toFloat / 2", "def scale (x : Float) : Float := x * 2.5 - 1.25e-1",
-            "def widen (n : Nat) (k : Int) : Int := n - k", "def back (a : Int) : Nat := a.toNat + a.natAbs + Nat.pred 0"
-        }];
+        env = LeanImportString[
+            {
+                "def half (n : Nat) : Float := n.toFloat / 2",
+                "def scale (x : Float) : Float := x * 2.5 - 1.25e-1",
+                "def widen (n : Nat) (k : Int) : Int := n - k",
+                "def back (a : Int) : Nat := a.toNat + a.natAbs + Nat.pred 0"
+            }
+        ];
         compiled = AssociationMap[LeanCompile[env[#]]&, {"half", "scale", "widen", "back"}];
         {compiled["half"][3], compiled["scale"][2.], compiled["widen"][3, 5], compiled["back"][-4]}
     ]
@@ -1159,10 +928,8 @@ VerificationTest[
 ]
 
 VerificationTest[
-    Wolfram`LeanLink`Private`isInternalName /@ {"Char.reduceEq._@.Lean.Meta.Simp.4145659166._hygCtx._hyg.27", "Nat.add_comm", "List.rec"}
-    ,
-    {True, False, True}
-    ,
+    Wolfram`LeanLink`Private`isInternalName /@ {"Char.reduceEq._@.Lean.Meta.Simp.4145659166._hygCtx._hyg.27", "Nat.add_comm", "List.rec"},
+    {True, False, True},
     TestID -> "LeanImport-names-with-macro-scopes-are-internal"
 ]
 
@@ -1177,10 +944,8 @@ VerificationTest[
 ]
 
 VerificationTest[
-    Sort[Keys[LeanImportString[{"def f1 (n : Nat) : Nat := n + 1", "theorem f1_zero : f1 0 = 1 := rfl"}]]]
-    ,
-    {"f1", "f1_zero"}
-    ,
+    Sort[Keys[LeanImportString[{"def f1 (n : Nat) : Nat := n + 1", "theorem f1_zero : f1 0 = 1 := rfl"}]]],
+    {"f1", "f1_zero"},
     TestID -> "LeanImportString-list-of-sources-is-joined-with-newlines"
 ]
 
@@ -1214,17 +979,28 @@ VerificationTest[
 
 VerificationTest[
     Module[{env, back},
-        env = LeanImportString[{
-            "structure Point where", "  x : Nat", "  y : Nat",
-            "class Shape (α : Type) where", "  area : α → Nat",
-            "def fib : Nat → Nat", "  | 0 => 0", "  | 1 => 1", "  | n + 2 => fib n + fib (n + 1)",
-            "axiom unit : 1 = 1",
-            "theorem shadow (a : Nat) (b : Nat) : ∀ a : Nat, a + b = b + a := fun a => Nat.add_comm a b",
-            "universe u v",
-            "def pairUp {α : Sort u} {β : Sort v} (a : α) (b : β) : PProd α β := ⟨a, b⟩",
-            "theorem area_zero (p : Point) (h : p.x = 0) : p.x * p.y = 0 := by simp [h]",
-            "mutual", "inductive Tree where | node : Forest → Tree", "inductive Forest where | nil : Forest | cons : Tree → Forest → Forest", "end"
-        }];
+        env = LeanImportString[
+            {
+                "structure Point where",
+                "  x : Nat",
+                "  y : Nat",
+                "class Shape (α : Type) where",
+                "  area : α → Nat",
+                "def fib : Nat → Nat",
+                "  | 0 => 0",
+                "  | 1 => 1",
+                "  | n + 2 => fib n + fib (n + 1)",
+                "axiom unit : 1 = 1",
+                "theorem shadow (a : Nat) (b : Nat) : ∀ a : Nat, a + b = b + a := fun a => Nat.add_comm a b",
+                "universe u v",
+                "def pairUp {α : Sort u} {β : Sort v} (a : α) (b : β) : PProd α β := ⟨a, b⟩",
+                "theorem area_zero (p : Point) (h : p.x = 0) : p.x * p.y = 0 := by simp [h]",
+                "mutual",
+                "inductive Tree where | node : Forest → Tree",
+                "inductive Forest where | nil : Forest | cons : Tree → Forest → Forest",
+                "end"
+            }
+        ];
         back = LeanImportString[LeanExportString[env]];
         {Sort[Keys[back]] === Sort[Keys[env]], Select[Keys[env], env[#]["TypeForm"] =!= back[#]["TypeForm"]&]}
     ]
@@ -1266,13 +1042,7 @@ VerificationTest[
 (* KernelCheck imports the module's imports again, with the search path of its
    environment, after the kernel's LEAN_PATH came back *)
 
-VerificationTest[
-    MatchQ[LeanImportString["theorem kernelCheckedAfter : 3 = 3 := rfl"]["kernelCheckedAfter"]["KernelCheck"], _Success]
-    ,
-    True
-    ,
-    TestID -> "KernelCheck-After-LEAN_PATH-Restored"
-]
+VerificationTest[MatchQ[LeanImportString["theorem kernelCheckedAfter : 3 = 3 := rfl"]["kernelCheckedAfter"]["KernelCheck"], _Success], True, TestID -> "KernelCheck-After-LEAN_PATH-Restored"]
 
 (* The olean an import compiled lives in a folder of its own, deleted with its environment *)
 
@@ -1280,7 +1050,12 @@ VerificationTest[
     Block[{handle, dir},
         handle = First[LeanImportString["theorem temporaryFolderFreed : 1 = 1 := rfl"]]["_Handle"];
         dir = Wolfram`LeanLink`Private`handleInfo[handle, "TemporaryDirectory"];
-        {DirectoryQ[dir], LeanFreeEnvironment[handle]; DirectoryQ[dir]}
+        {
+            DirectoryQ[dir]
+            ,
+            LeanFreeEnvironment[handle];
+            DirectoryQ[dir]
+        }
     ]
     ,
     {True, False}
@@ -1307,10 +1082,8 @@ VerificationTest[
    LeanImport of a file falls back on it when that toolchain's folder is missing *)
 
 VerificationTest[
-    StringTrim[Import[FileNameJoin[{Wolfram`LeanLink`Private`$PacletRoot, "lean-toolchain"}], "Text"]]
-    ,
-    "leanprover/lean4:" <> Wolfram`LeanLink`Private`$LeanToolchainVersion
-    ,
+    StringTrim[Import[FileNameJoin[{Wolfram`LeanLink`Private`$PacletRoot, "lean-toolchain"}], "Text"]],
+    "leanprover/lean4:" <> Wolfram`LeanLink`Private`$LeanToolchainVersion,
     TestID -> "Paclet-Toolchain-Pin"
 ]
 
@@ -1335,12 +1108,6 @@ VerificationTest[
 (* Outside any Lake project, a module of Lean's own library imports from the
    toolchain the shim is built against *)
 
-VerificationTest[
-    Length[LeanImport["Init.Prelude", "ProjectDir" -> CreateDirectory[]]] > 1000
-    ,
-    True
-    ,
-    TestID -> "Import-Module-Outside-Projects"
-]
+VerificationTest[Length[LeanImport["Init.Prelude", "ProjectDir" -> CreateDirectory[]]] > 1000, True, TestID -> "Import-Module-Outside-Projects"]
 
 EndTestSection[]

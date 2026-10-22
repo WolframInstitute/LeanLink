@@ -11,14 +11,15 @@ under `docs/paclet/en/`, see [docs/paclet/en/DOC_GUIDE.md](docs/paclet/en/DOC_GU
 ## Formatting
 
 This style is produced mechanically by `CodeFormatter`CodeFormat` with a set of
-compact-multiline options. Format a source file with:
+compact-multiline options, followed by a few layout passes. Format a source file
+with:
 
 ```wl
 Needs["CodeFormatter`"]
 
 CodeFormat[Import["LeanLink/Kernel/Lean.wl", "Text"],
     "BreakLinesMethod" -> "LineBreakerV2",
-    "LineWidth" -> 100,
+    "LineWidth" -> 200,
     "KeepBindingsInline" -> True,
     "SpaceAfterControlOpener" -> True,
     "GlueAssignmentRHS" -> True,
@@ -38,15 +39,40 @@ the end of a single-line element; leave a short control structure inline
 (`x_ ? NumericQ`). The rest of this guide describes the resulting conventions so
 they can be followed (and reviewed) by hand.
 
+The formatter puts the body of every `Function`, `Block`, `Module` and `With` on
+lines of its own, short ones included, so one short `Function` breaks the calls
+around it into a staircase. The layout passes after it move only whitespace (the
+parsed expressions stay the same):
+
+- a group that fits on one line within the width goes on one line, unless it
+  holds a comment, a multi-line string, statements, a `Block`, `Module` or
+  `With` (their bodies keep lines of their own), or a broken `Which` or `Switch`
+  (a line per case);
+- a broken group whose elements are each one line ends each element with its
+  comma;
+- a call whose one argument is a broken call shares its first and last lines,
+  `First[Last[Reap[` ... `]]]`, unless that argument is a control structure; so
+  does the right side of `@`, `/@`, `@@` and `@@@`: `Quiet @ With[{r = ...},`;
+- `While[cond,` keeps a one-line condition on its first line, as `For` does;
+- a broken group's closer is indented as the line of its opener;
+- a comment right above code is on lines of its own, indented as that code (the
+  formatter glues a `Switch` case to the comment above it), and the rule, title
+  and rule lines of a section banner stay together;
+- the group that closes a line still over the width gets a line per element (the
+  formatter measures an assignment's right side without its left side).
+
+Agents format with the `wl-format` skill, which runs the formatter and these
+passes and refuses to write a file whose parsed expressions would change.
+
 These options are not in the released CodeFormatter; they come from
 [WolframResearch/codeformatter#7](https://github.com/WolframResearch/codeformatter/pull/7).
-A patched build is installed locally as **CodeFormatter 1.14** (with CodeParser
-bumped to 1.14 so the version-match check passes), so a plain
-`Needs["CodeFormatter`"]` picks it up. To reinstall it after a Wolfram update,
-copy the bundled paclet, overlay `Kernel/CodeFormatter.wl` and
-`Kernel/Indent.wl` from that branch, bump `Version` in `PacletInfo.wl`, then
-`CreatePacletArchive` + `PacletInstall` (do the same version bump for
-CodeParser).
+Use them without installing anything, since an installed patched paclet is gone
+after every Wolfram update: copy the bundled `CodeFormatter` and `CodeParser`
+paclets (`SystemFiles/Components` of `$InstallationDirectory`) to a scratch
+folder, overlay `Kernel/CodeFormatter.wl` and `Kernel/Indent.wl` from that
+branch, set `Version` in both `PacletInfo.wl` files to 1.14 (CodeFormatter
+checks that CodeParser's version matches its own), and `PacletDirectoryLoad`
+both folders before `Needs["CodeFormatter`"]`.
 
 ## Rules the user has explicitly called out
 
@@ -232,7 +258,7 @@ incrementally building an `Association`: use `AssociationMap`,
 A closing `]` (or `}`, `|>`, `)`) is in exactly one of two places:
 
 1. **On the same line** as its content, when the whole call fits on one
-   line (and there is no line-length limit forcing a break - see below), or
+   line (see Line length below), or
 2. **On its own line**, indented to the column of the *first letter* of the
    opening head - under the `f` of `func[`, not under the `[`.
 
@@ -254,15 +280,17 @@ res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"
     ]]
 ```
 
-### No line-length limit
+### Line length
 
-Do not break an expression across lines to satisfy a character budget -
-there is no column limit. A line breaks only for a *structural* reason
-(one statement per line in a `CompoundExpression`, one branch/case per line
-in `If` / `Switch` / `Which`, one binding per line in a long option or
-`Association` list), never merely because it grew wide. The IDE formatter is
-configured with `"LineWidth" -> Infinity` for this paclet; keep that whole
-expressions stay on one line and only structure introduces newlines.
+The formatter's width is 200 characters, and it is a recommendation, not a
+rule: readability decides. A line breaks for a *structural* reason (one
+statement per line in a `CompoundExpression`, one branch or case per line in a
+broken `If` / `Switch` / `Which`, one binding per line in a long option or
+`Association` list) or because it is too long to read, and then a whole group
+breaks, one element per line - never a wrap in the middle of an expression (see
+Bracket alignment). A long line that reads well as one expression, such as a
+usage message or a long pattern, can stay; a dense line that is hard to read is
+restructured (a helper, a named intermediate) even when it fits.
 
 ## Composition
 

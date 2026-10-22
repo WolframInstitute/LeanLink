@@ -28,19 +28,14 @@ Clear[LeanToTypeTheory, TypeTheoryToLean]
 
 (* === Failures === *)
 
-bridgeFailure[tag_String, template_String, parameters_List] := Throw[
-    Failure[tag, <|"MessageTemplate" -> template, "MessageParameters" -> parameters|>],
-    $bridgeTag
-]
+bridgeFailure[tag_String, template_String, parameters_List] := Throw[Failure[tag, <|"MessageTemplate" -> template, "MessageParameters" -> parameters|>], $bridgeTag]
 
 SetAttributes[catchBridgeFailure, HoldFirst]
 
 catchBridgeFailure[expr_] := Catch[expr, $bridgeTag]
 
 (* ============================================================================ *)
-
 (* From Lean                                                                    *)
-
 (* ============================================================================ *)
 
 Options[LeanToTypeTheory] = {"Environment" -> Automatic}
@@ -67,43 +62,60 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
    TypeTheory 0.13; before, a cone with them is imported, by default, under rules that allow their
    computation as rewrite rules. *)
 
-importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ Block[
-    {$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
-    cone = coneOrder[roots];
-    baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
-    order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
-    declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
-    environment = TypeTheoryEnvironment[baseEnvironment, declarations];
-    If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
-    Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]];
-    environment
+importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
+    Block[{$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
+        cone = coneOrder[roots];
+        baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
+        order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
+        declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
+        environment = TypeTheoryEnvironment[baseEnvironment, declarations];
+        If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
+        Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]];
+        environment
+    ]
 ]
 
 (* Lean's quotient types are declared at once, as the kernel's own where the rules have them, and
    otherwise as axioms, their computation rewrite rules where the rules allow those *)
-importedDeclarations[environment_, "Quot"] /; quotientsQ[environment] := With[{names = $quotientConstants}, {TypeTheoryQuotients["Eq", names]}]
+importedDeclarations[environment_, "Quot"] /; quotientsQ[environment] := With[{names = $quotientConstants},
+    {TypeTheoryQuotients["Eq", names]}
+]
+
 importedDeclarations[environment_, "Quot"] := Join[Catenate[leanDeclarations /@ $quotientConstants], quotientComputation[environment, "Quot.lift"], quotientComputation[environment, "Quot.ind"]]
+
 importedDeclarations[environment_, name_String] := leanDeclarations[name]
 
 (* TypeTheory's own failure, introduced by the Lean constant it rejects *)
 
-rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure["RejectedByTypeTheory", Join[data, <|
-    "MessageTemplate" -> StringJoin[
-        "TypeTheory rejects the Lean constant ", name, ": ", Lookup[data, "MessageTemplate", tag],
-        If[quotientsQ, " It depends on Lean's quotient types, whose computation needs an environment whose rules have quotients.", ""]
-    ],
-    "Constant" -> name,
-    "TypeTheoryFailure" -> tag
-|>]]
+rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure[
+    "RejectedByTypeTheory"
+    ,
+    Join[
+        data
+        ,
+        <|
+            "MessageTemplate" -> StringJoin[
+                "TypeTheory rejects the Lean constant ",
+                name,
+                ": ",
+                Lookup[data, "MessageTemplate", tag],
+                If[quotientsQ, " It depends on Lean's quotient types, whose computation needs an environment whose rules have quotients.", ""]
+            ]
+            ,
+            "Constant" -> name
+            ,
+            "TypeTheoryFailure" -> tag
+        |>
+    ]
+]
 
 locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = baseEnvironment},
     Scan[
         Function[name,
             environment = TypeTheoryEnvironment[environment, importedDeclarations[environment, name]];
-            If[ FailureQ[environment],
-                Throw[rejection[name, environment, AnyTrue[order, quotientConstantQ] && ! quotientsQ[baseEnvironment] && ! rewriteRulesAllowedQ[baseEnvironment]], $bridgeTag]
-            ]
-        ],
+            If[FailureQ[environment], Throw[rejection[name, environment, AnyTrue[order, quotientConstantQ] && ! quotientsQ[baseEnvironment] && ! rewriteRulesAllowedQ[baseEnvironment]], $bridgeTag]]
+        ]
+        ,
         order
     ];
     Throw[failure, $bridgeTag]
@@ -131,23 +143,44 @@ quotientRules[] := TypeTheoryRules["CalculusOfInductiveConstructions", "RewriteR
 rewriteRulesAllowedQ[environment_] := TrueQ[Information[environment, "Rules"]["RewriteRules"]]
 
 quotientComputation[environment_, "Quot.lift"] /; rewriteRulesAllowedQ[environment] := {
-    TypeTheoryRewriteRule["Quot.lift computes", ForAll[
-        {
-            Typed["α", TypeUniverse["u"]], Typed["r", TypeSpecifier[{"α", "α"} -> TypeUniverse[0]]], Typed["β", TypeUniverse["v"]], Typed["f", TypeSpecifier[{"α"} -> "β"]],
-            Typed["h", ForAll[{Typed["a", "α"], Typed["b", "α"]}, Implies["r"["a", "b"], Construct[Subscript["Eq", "v"], "β", "f"["a"], "f"["b"]]]]], Typed["a", "α"]
-        },
-        Construct[Subscript["Quot.lift", "u", "v"], "α", "r", "β", "f", "h", Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]] -> "f"["a"]
-    ], "UniverseParameters" -> {"u", "v"}]
+    TypeTheoryRewriteRule[
+        "Quot.lift computes"
+        ,
+        ForAll[
+            {
+                Typed["α", TypeUniverse["u"]],
+                Typed["r", TypeSpecifier[{"α", "α"} -> TypeUniverse[0]]],
+                Typed["β", TypeUniverse["v"]],
+                Typed["f", TypeSpecifier[{"α"} -> "β"]],
+                Typed["h", ForAll[{Typed["a", "α"], Typed["b", "α"]}, Implies["r"["a", "b"], Construct[Subscript["Eq", "v"], "β", "f"["a"], "f"["b"]]]]],
+                Typed["a", "α"]
+            }
+            ,
+            Construct[Subscript["Quot.lift", "u", "v"], "α", "r", "β", "f", "h", Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]] -> "f"["a"]
+        ]
+        ,
+        "UniverseParameters" -> {"u", "v"}
+    ]
 }
 
 quotientComputation[environment_, "Quot.ind"] /; rewriteRulesAllowedQ[environment] := {
-    TypeTheoryRewriteRule["Quot.ind computes", ForAll[
-        {
-            Typed["α", TypeUniverse["u"]], Typed["r", TypeSpecifier[{"α", "α"} -> TypeUniverse[0]]], Typed["β", TypeSpecifier[{Construct[Subscript["Quot", "u"], "α", "r"]} -> TypeUniverse[0]]],
-            Typed["mk", ForAll[{Typed["a", "α"]}, "β"[Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]]]], Typed["a", "α"]
-        },
-        Construct[Subscript["Quot.ind", "u"], "α", "r", "β", "mk", Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]] -> "mk"["a"]
-    ], "UniverseParameters" -> {"u"}]
+    TypeTheoryRewriteRule[
+        "Quot.ind computes"
+        ,
+        ForAll[
+            {
+                Typed["α", TypeUniverse["u"]],
+                Typed["r", TypeSpecifier[{"α", "α"} -> TypeUniverse[0]]],
+                Typed["β", TypeSpecifier[{Construct[Subscript["Quot", "u"], "α", "r"]} -> TypeUniverse[0]]],
+                Typed["mk", ForAll[{Typed["a", "α"]}, "β"[Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]]]],
+                Typed["a", "α"]
+            }
+            ,
+            Construct[Subscript["Quot.ind", "u"], "α", "r", "β", "mk", Construct[Subscript["Quot.mk", "u"], "α", "r", "a"]] -> "mk"["a"]
+        ]
+        ,
+        "UniverseParameters" -> {"u"}
+    ]
 }
 
 quotientComputation[_, _String] := {}
@@ -160,28 +193,42 @@ quotientComputation[_, _String] := {}
 
 coneOrder[roots_List] := Block[{visited = <||>, stack = CreateDataStructure["Stack"], order = CreateDataStructure["DynamicArray"]},
     Scan[Function[root, stack["Push", {root, False}]], Reverse[roots]];
-    While[ ! stack["EmptyQ"],
-        Replace[stack["Pop"], {
-            {primary_, True} :> order["Append", primary],
-            {name_, False} :> With[{primary = primaryName[name]},
-                If[ ! KeyExistsQ[visited, primary],
-                    visited[primary] = True;
-                    stack["Push", {primary, True}];
-                    Scan[Function[dependency, stack["Push", {dependency, False}]], Reverse[DeleteCases[constantDependencies[primary], Alternatives @@ ownNames[primary]]]]
+    While[! stack["EmptyQ"],
+        Replace[
+            stack["Pop"]
+            ,
+            {
+                {primary_, True} :> order["Append", primary]
+                ,
+                {name_, False} :> With[{primary = primaryName[name]},
+                    If[ ! KeyExistsQ[visited, primary],
+                        visited[primary] = True;
+                        stack["Push", {primary, True}];
+                        Scan[Function[dependency, stack["Push", {dependency, False}]], Reverse[DeleteCases[constantDependencies[primary], Alternatives @@ ownNames[primary]]]]
+                    ]
                 ]
-            ]
-        }]
+            }
+        ]
     ];
     Normal[order]
 ]
 
 (* the types of a block come with its first type, as their constructors and recursors do *)
-primaryName[name_String] := Switch[constantKind[name],
-    "constructor", First[inductiveInformation[constructorInductive[name]]["Block"]],
-    "recursor", First[inductiveInformation[recursorInductive[name]]["Block"]],
-    "inductive", First[inductiveInformation[name]["Block"]],
-    "quot", "Quot",
-    _, name
+primaryName[name_String] := Switch[ constantKind[name],
+    "constructor",
+        First[inductiveInformation[constructorInductive[name]]["Block"]]
+    ,
+    "recursor",
+        First[inductiveInformation[recursorInductive[name]]["Block"]]
+    ,
+    "inductive",
+        First[inductiveInformation[name]["Block"]]
+    ,
+    "quot",
+        "Quot"
+    ,
+    _,
+        name
 ]
 
 (* X.rec, and X.rec_k on the k-th type nested in X's block *)
@@ -191,11 +238,17 @@ recursorInductive[name_String] := StringReplace[name, RegularExpression["\\.rec(
    mentions; a string literal is written with the constants that Lean's kernel reads it as *)
 
 constantDependencies[name_String] := DeleteDuplicates @ Join[
-    Switch[constantKind[name],
-        "inductive", Catenate[usedConstants /@ blockMembers[name]],
-        "quot", Catenate[usedConstants /@ $quotientConstants],
-        _, usedConstants[name]
-    ],
+    Switch[ constantKind[name],
+        "inductive",
+            Catenate[usedConstants /@ blockMembers[name]]
+        ,
+        "quot",
+            Catenate[usedConstants /@ $quotientConstants]
+        ,
+        _,
+            usedConstants[name]
+    ]
+    ,
     If[stringLiteralQ[name], $stringLiteralConstants, {}]
 ]
 
@@ -210,17 +263,26 @@ stringLiteralQ[name_String] := AnyTrue[
 ]
 
 stringLiteralReadQ[name_String] := ! FreeQ[
-    Switch[constantKind[name],
-        "def" | "theorem" | "opaque", {leanExpression[name, "Type"], leanExpression[name, "Term"]},
-        _, {leanExpression[name, "Type"]}
-    ],
+    Switch[ constantKind[name],
+        "def" | "theorem" | "opaque",
+            {leanExpression[name, "Type"], leanExpression[name, "Term"]}
+        ,
+        _,
+            {leanExpression[name, "Type"]}
+    ]
+    ,
     _LeanLitStr
 ]
 
-ownNames[name_String] := Switch[constantKind[name],
-    "inductive", Join[blockMembers[name], blockRecursors[name]],
-    "quot", $quotientConstants,
-    _, {name}
+ownNames[name_String] := Switch[ constantKind[name],
+    "inductive",
+        Join[blockMembers[name], blockRecursors[name]]
+    ,
+    "quot",
+        $quotientConstants
+    ,
+    _,
+        {name}
 ]
 
 (* the types declared with an inductive type, and all their constructors *)
@@ -231,14 +293,17 @@ blockRecursors[name_String] := With[{block = inductiveInformation[name]["Block"]
     Join[Function[type, type <> ".rec"] /@ block, Table[First[block] <> ".rec_" <> ToString[index], {index, inductiveInformation[name]["Nested"]}]]
 ]
 
-usedConstants[name_String] := With[{used = usedInformation[name]}, Join[Lookup[used, "type", {}], Lookup[used, "value", {}]]]
+usedConstants[name_String] := With[{used = usedInformation[name]},
+    Join[Lookup[used, "type", {}], Lookup[used, "value", {}]]
+]
 
 usedInformation[name_String] := Replace[Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]], Except[_Association] -> <||>]
 
-constantKind[name_String] := Lookup[$kinds, name, $kinds[name] = Replace[Quiet[decodeWXF[$getConstantFn[$handle, name]]], {
-    LeanConstant[_, kind_String, ___] :> kind,
-    _ :> bridgeFailure["UnknownConstant", "Lean has no constant `1`.", {name}]
-}]]
+constantKind[name_String] := Lookup[
+    $kinds,
+    name,
+    $kinds[name] = Replace[Quiet[decodeWXF[$getConstantFn[$handle, name]]], {LeanConstant[_, kind_String, ___] :> kind, _ :> bridgeFailure["UnknownConstant", "Lean has no constant `1`.", {name}]}]
+]
 
 $bridgeDepth = 1000000
 
@@ -248,15 +313,15 @@ leanExpression[name_String, field : "Type" | "Term"] := Replace[
     If[ sharedFetchQ[],
         Quiet[sharedExpression[decodeWXF[If[field === "Type", $getTypeSharedFn, $getValueSharedFn][$handle, name]]]],
         Quiet[decodeWXF[If[field === "Type", $getTypeFn, $getValueFn][$handle, name, $bridgeDepth]]]
-    ],
-    result_ /; isFFIError[result] || (! sharedFetchQ[] && ! FreeQ[result, _LeanTruncated]) :>
-        bridgeFailure["LeanExpression", "The `2` of `1` could not be read from Lean.", {name, ToLowerCase[field]}]
+    ]
+    ,
+    result_ /; isFFIError[result] || (! sharedFetchQ[] && ! FreeQ[result, _LeanTruncated]) :> bridgeFailure["LeanExpression", "The `2` of `1` could not be read from Lean.", {name, ToLowerCase[field]}]
 ]
 
-constructorInductive[name_String] := Replace[First[leanSpine[Last[forallTelescope[leanExpression[name, "Type"]]]]], {
-    LeanConst[inductive_String, _] :> inductive,
-    _ :> bridgeFailure["Constructor", "The type of the constructor `1` does not end in its inductive type.", {name}]
-}]
+constructorInductive[name_String] := Replace[
+    First[leanSpine[Last[forallTelescope[leanExpression[name, "Type"]]]]],
+    {LeanConst[inductive_String, _] :> inductive, _ :> bridgeFailure["Constructor", "The type of the constructor `1` does not end in its inductive type.", {name}]}
+]
 
 (* === Inductive types === *)
 
@@ -268,14 +333,13 @@ constructorInductive[name_String] := Replace[First[leanSpine[Last[forallTelescop
 
 inductiveInformation[name_String] := Lookup[$inductives, name, $inductives[name] = readInductiveInformation[name]]
 
-readInductiveInformation[name_String] := Block[
-    {typeBinders, recursorBinders, conclusion, motivePosition, numberOfParameters, motiveTypes, block, numberOfMinors, constructors},
+readInductiveInformation[name_String] := Block[{typeBinders, recursorBinders, conclusion, motivePosition, numberOfParameters, motiveTypes, block, numberOfMinors, constructors},
     typeBinders = First[forallTelescope[leanExpression[name, "Type"]]];
     {recursorBinders, conclusion} = forallTelescope[leanExpression[name <> ".rec", "Type"]];
-    motivePosition = Replace[First[leanSpine[conclusion]], {
-        LeanBVar[index_Integer] :> Length[recursorBinders] - index,
-        _ :> bridgeFailure["Recursor", "The recursor of `1` does not end in a motive.", {name}]
-    }];
+    motivePosition = Replace[
+        First[leanSpine[conclusion]],
+        {LeanBVar[index_Integer] :> Length[recursorBinders] - index, _ :> bridgeFailure["Recursor", "The recursor of `1` does not end in a motive.", {name}]}
+    ];
     (* the parameters are as many as the motive of X takes X applied to; fewer would fit too *)
     numberOfParameters = Replace[
         SelectFirst[Range[motivePosition - 1, 0, -1], Function[count, blockTypeOfMotive[Last[recursorBinders[[motivePosition]]], count, motivePosition - count] === {name}], None],
@@ -297,21 +361,19 @@ readInductiveInformation[name_String] := Block[
 (* {type} when the motive at that position takes a term of a type of the block: one applied to exactly the
    parameters, bound outside the motive and the motives before it, and then the motive's own indices; {}
    for a container, whose parameters mention the block *)
-blockTypeOfMotive[motiveType_, numberOfParameters_Integer, position_Integer] := With[
-    {binders = First[forallTelescope[motiveType]], numberOfIndices = Length[First[forallTelescope[motiveType]]] - 1},
-    Replace[leanSpine[Last[Last[binders]]], {
-        {LeanConst[type_String, _], arguments_} /; arguments === Join[
-            Table[LeanBVar[numberOfParameters - parameter + position - 1 + numberOfIndices], {parameter, numberOfParameters}],
-            Table[LeanBVar[numberOfIndices - index], {index, numberOfIndices}]
-        ] :> {type},
-        _ :> {}
-    }]
+blockTypeOfMotive[motiveType_, numberOfParameters_Integer, position_Integer] := Block[{binders = First[forallTelescope[motiveType]], numberOfIndices, expected},
+    numberOfIndices = Length[binders] - 1;
+    expected = Join[
+        Table[LeanBVar[numberOfParameters - parameter + position - 1 + numberOfIndices], {parameter, numberOfParameters}],
+        Table[LeanBVar[numberOfIndices - index], {index, numberOfIndices}]
+    ];
+    Replace[leanSpine[Last[Last[binders]]], {{LeanConst[type_String, _], expected} :> {type}, _ :> {}}]
 ]
 
-minorConstructor[{_, minorType_}] := Replace[First[leanSpine[Last[Last[leanSpine[Last[forallTelescope[minorType]]]]]]], {
-    LeanConst[constructor_String, _] :> constructor,
-    _ :> bridgeFailure["Recursor", "A minor premise of a recursor does not name its constructor.", {}]
-}]
+minorConstructor[{_, minorType_}] := Replace[
+    First[leanSpine[Last[Last[leanSpine[Last[forallTelescope[minorType]]]]]]],
+    {LeanConst[constructor_String, _] :> constructor, _ :> bridgeFailure["Recursor", "A minor premise of a recursor does not name its constructor.", {}]}
+]
 
 forallTelescope[LeanForall[binderName_, type_, body_, _]] := Block[{rest = forallTelescope[body]},
     {Prepend[First[rest], {binderName, type}], Last[rest]}
@@ -319,7 +381,9 @@ forallTelescope[LeanForall[binderName_, type_, body_, _]] := Block[{rest = foral
 
 forallTelescope[expression_] := {{}, expression}
 
-leanSpine[LeanApp[function_, argument_]] := Block[{spine = leanSpine[function]}, {First[spine], Append[Last[spine], argument]}]
+leanSpine[LeanApp[function_, argument_]] := Block[{spine = leanSpine[function]},
+    {First[spine], Append[Last[spine], argument]}
+]
 
 leanSpine[expression_] := {expression, {}}
 
@@ -334,20 +398,21 @@ readUniverseParameters[name_String] := Block[{count, raw, instantiated, pairs, m
     raw = Cases[fetchField[$handle, name, "Type"], LeanLevelParam[parameter_] :> parameter, Infinity];
     (* a shim before LeanLink 1.1.6 cannot type-check a constant whose type Lean fails to print, such as
        Fin.isLt; a single parameter, or none, is then the one in the type *)
-    If[ count === None && Length[DeleteDuplicates[raw]] <= 1,
-        Return[DeleteDuplicates[raw], Block]
-    ];
+    If[count === None && Length[DeleteDuplicates[raw]] <= 1, Return[DeleteDuplicates[raw], Block]];
     If[ count === None,
-        bridgeFailure["UniverseParameters", "The universe parameters of `1` could not be read from Lean: `2`", {name, typeCheckError[LeanConst[name, placeholderLevels[Length[DeleteDuplicates[raw]]]]]}]
+        bridgeFailure[
+            "UniverseParameters",
+            "The universe parameters of `1` could not be read from Lean: `2`",
+            {name, typeCheckError[LeanConst[name, placeholderLevels[Length[DeleteDuplicates[raw]]]]]}
+        ]
     ];
     If[ count === 0,
-        {},
+        {}
+        ,
         instantiated = Cases[typeCheck[LeanConst[name, placeholderLevels[count]], $handle]["Type"], LeanLevelParam[parameter_] :> parameter, Infinity];
         If[Length[raw] =!= Length[instantiated], bridgeFailure["UniverseParameters", "The universe parameters of `1` could not be matched up.", {name}]];
         mapping = Association[Function[pair, Last[pair] -> First[pair]] /@ DeleteDuplicates[Transpose[{raw, instantiated}]]];
-        Function[placeholder,
-            Lookup[mapping, placeholder, bridgeFailure["UniverseParameters", "A universe parameter of `1` does not occur in its type.", {name}]]
-        ] /@ placeholderNames[count]
+        Function[placeholder, Lookup[mapping, placeholder, bridgeFailure["UniverseParameters", "A universe parameter of `1` does not occur in its type.", {name}]]] /@ placeholderNames[count]
     ]
 ]
 
@@ -364,51 +429,61 @@ placeholderLevels[n_Integer] := LeanLevelParam /@ placeholderNames[n]
 
 constantName[name_String] := If[constantKind[name] === "recursor", recursorConstantName[name], name]
 
-recursorConstantName[name_String] := Replace[StringCases[name, RegularExpression["^(.*)\\.rec_(\\d+)$"] :> {"$1", "$2"}], {
-    {{type_, index_}} :> InductiveRecursor[type, ToExpression[index]],
-    _ :> InductiveRecursor[StringDrop[name, -4]]
-}]
+recursorConstantName[name_String] := Replace[
+    StringCases[name, RegularExpression["^(.*)\\.rec_(\\d+)$"] :> {"$1", "$2"}],
+    {{{type_, index_}} :> InductiveRecursor[type, ToExpression[index]], _ :> InductiveRecursor[StringDrop[name, -4]]}
+]
 
 leanDeclarations[name_String] := Block[{$currentConstant = name, universes = universeParameters[name]},
-    Switch[constantKind[name],
+    Switch[ constantKind[name],
         "inductive",
-            inductiveDeclarations[name, universes],
+            inductiveDeclarations[name, universes]
+        ,
         "def",
             With[{value = declarationTerm[leanExpression[name, "Term"]], type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
                 Prepend[natOperationRegistration[name], TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels]]
-            ],
+            ]
+        ,
         "theorem",
             With[{statement = declarationTerm[leanExpression[name, "Type"]], proof = declarationTerm[leanExpression[name, "Term"]], levels = universes},
                 {TypeTheoryTheorem[name, statement, proof, "UniverseParameters" -> levels]}
-            ],
+            ]
+        ,
         (* an opaque constant's value is checked, as Lean's kernel checks it, and never unfolds *)
         "opaque" /; opaqueDefinitionsQ[],
             With[{value = declarationTerm[leanExpression[name, "Term"]], type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
                 {TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels, "Opaque" -> True]}
-            ],
+            ]
+        ,
         (* with a TypeTheory before 0.14 an opaque constant is an axiom; the quotient types are axioms only under rules without them *)
         "axiom" | "opaque" | "quot",
-            With[{type = declarationTerm[leanExpression[name, "Type"]], levels = universes}, {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}],
+            With[{type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
+                {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}
+            ]
+        ,
         _,
             bridgeFailure["UnsupportedConstant", "`1` is a `2`, which the bridge cannot translate.", {name, constantKind[name]}]
     ]
 ]
 
-(* the natural numbers of Lean become TypeTheory's natural numbers, so literals mean the same *)
+(* the natural numbers of Lean become TypeTheory's natural numbers, so literals mean the same; a type nested in a container is
+   declared alone, and TypeTheory finds the nesting as Lean's kernel does *)
 
 inductiveDeclarations[name_String, universes_List] := Block[{information = inductiveInformation[name]},
-    With[
-        {
-            types = Function[type, type -> declarationTerm[leanExpression[type, "Type"]]] /@ information["Block"],
-            constructors = Function[constructor, constructor -> declarationTerm[leanExpression[constructor, "Type"]]] /@ information["BlockConstructors"],
-            parameters = information["Parameters"]
-        },
+    With[{
+        types = Function[type, type -> declarationTerm[leanExpression[type, "Type"]]] /@ information["Block"],
+        constructors = Function[constructor, constructor -> declarationTerm[leanExpression[constructor, "Type"]]] /@ information["BlockConstructors"],
+        parameters = information["Parameters"]
+    },
         Join[
-            (* a type nested in a container is declared alone: TypeTheory finds the nesting as Lean's kernel does *)
             If[ Length[types] == 1,
-                With[{type = Last[First[types]]}, {TypeTheoryInductiveType[name, type, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}],
+                With[{type = Last[First[types]]},
+                    {TypeTheoryInductiveType[name, type, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
+                ]
+                ,
                 {TypeTheoryInductiveType[types, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
-            ],
+            ]
+            ,
             If[name === "Nat" && information["BlockConstructors"] === {"Nat.zero", "Nat.succ"}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ"]}, {}]
         ]
     ]
@@ -436,7 +511,10 @@ $leanNatOperations = <|
 |>
 
 natOperationRegistration[name_String] := If[ KeyExistsQ[$leanNatOperations, name] && natOperationsQ[],
-    With[{role = $leanNatOperations[name]}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ", Association[role -> name]]}],
+    With[{role = $leanNatOperations[name]},
+        {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ", Association[role -> name]]}
+    ]
+    ,
     {}
 ]
 
@@ -454,20 +532,17 @@ checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecurso
    it checks every declaration, and nothing elaborates the type, which for a structure of many fields is
    large. *)
 
-checkRecursorType[environment_, name_String, recursor_String] := Block[
-    {levels, leanType, probe},
+checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, leanType, probe},
     levels = placeholderLevels[Length[universeParameters[recursor]]];
-    leanType = Replace[typeCheck[LeanConst[recursor, levels], $handle], {
-        result_Association :> result["Type"],
-        _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]
-    }];
+    leanType = Replace[
+        typeCheck[LeanConst[recursor, levels], $handle],
+        {result_Association :> result["Type"], _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]}
+    ];
     (* a declaration holds its arguments, so the core terms go in evaluated *)
     probe = With[{value = leanCore[LeanConst[recursor, levels]], type = leanCore[leanType], parameters = placeholderNames[Length[levels]]},
         TypeTheoryEnvironment[environment, {TypeTheoryDefinition["LeanLink recursor check", Typed[value, type], "UniverseParameters" -> parameters]}]
     ];
-    If[ ! MatchQ[probe, _TypeTheoryEnvironment],
-        bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
-    ];
+    If[! MatchQ[probe, _TypeTheoryEnvironment], bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]];
     (* an environment lives for the session, so the probe is removed *)
     Remove @@ {First[probe]}
 ]
@@ -499,8 +574,11 @@ coreHead[name_String] := coreHead[name] = Symbol["WolframInstitute`TypeTheory`Pa
 
 (* each distinct subterm once, for the length of an import *)
 leanCore[expression_] := If[ AssociationQ[$coreTerms],
-    Lookup[$coreTerms, Key[expression], $coreTerms[expression] = leanCoreNode[expression]],
-    Block[{$coreTerms = <||>}, leanCore[expression]]
+    Lookup[$coreTerms, Key[expression], $coreTerms[expression] = leanCoreNode[expression]]
+    ,
+    Block[{$coreTerms = <||>},
+        leanCore[expression]
+    ]
 ]
 
 $coreTerms = None
@@ -513,9 +591,19 @@ leanCoreNode[LeanConst[name_String, levels_List]] := coreHead["constantReference
 
 leanCoreNode[LeanApp[function_, argument_]] := coreHead["application"][leanCore[function], leanCore[argument]]
 
-leanCoreNode[LeanLam[binderName_String, type_, body_, binder_String]] := coreHead["lambdaAbstraction"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[body], coreBinder[binder]]
+leanCoreNode[LeanLam[binderName_String, type_, body_, binder_String]] := coreHead["lambdaAbstraction"][
+    HoldComplete @@ {cleanBinderName[binderName]},
+    leanCore[type],
+    leanCore[body],
+    coreBinder[binder]
+]
 
-leanCoreNode[LeanForall[binderName_String, type_, body_, binder_String]] := coreHead["dependentFunctionType"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[body], coreBinder[binder]]
+leanCoreNode[LeanForall[binderName_String, type_, body_, binder_String]] := coreHead["dependentFunctionType"][
+    HoldComplete @@ {cleanBinderName[binderName]},
+    leanCore[type],
+    leanCore[body],
+    coreBinder[binder]
+]
 
 leanCoreNode[LeanLet[binderName_String, type_, value_, body_]] := coreHead["localDefinition"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[value], leanCore[body]]
 
@@ -525,11 +613,22 @@ leanCoreNode[LeanProj[structure_String, index_Integer, term_]] := coreHead["proj
 
 (* a string literal is String.ofList of its characters, as in the surface syntax below *)
 leanCoreNode[LeanLitStr[string_String]] := With[{application = coreHead["application"], char = coreConstant["Char"]},
-    application[coreConstant["String.ofList"], Fold[
-        Function[{list, code}, application[application[application[coreHead["constantReference"][HoldComplete["List.cons"], {0}], char], application[coreConstant["Char.ofNat"], coreHead["naturalLiteral"][code]]], list]],
-        application[coreHead["constantReference"][HoldComplete["List.nil"], {0}], char],
-        Reverse[ToCharacterCode[string]]
-    ]]
+    application[
+        coreConstant["String.ofList"]
+        ,
+        Fold[
+            Function[{list, code},
+                application[
+                    application[application[coreHead["constantReference"][HoldComplete["List.cons"], {0}], char], application[coreConstant["Char.ofNat"], coreHead["naturalLiteral"][code]]],
+                    list
+                ]
+            ]
+            ,
+            application[coreHead["constantReference"][HoldComplete["List.nil"], {0}], char]
+            ,
+            Reverse[ToCharacterCode[string]]
+        ]
+    ]
 ]
 
 leanCoreNode[other_] := bridgeFailure["UnsupportedExpression", "`1` contains `2`, which the bridge cannot translate.", {$currentConstant, Short[other]}]
@@ -594,11 +693,15 @@ leanSurface[LeanProj[_, index_Integer, structure_], scope_List] := surfacePart[l
 
 (* Lean's kernel reads a string literal as String.ofList applied to the list of its characters, each
    Char.ofNat of its code point, so it is written that way; the list is built from its end *)
-leanSurface[LeanLitStr[string_String], _] := surfaceConstruct["String.ofList", Fold[
-    Function[{list, code}, surfaceConstruct[surfaceSubscript["List.cons", 0], "Char", surfaceConstruct["Char.ofNat", code], list]],
-    surfaceConstruct[surfaceSubscript["List.nil", 0], "Char"],
-    Reverse[ToCharacterCode[string]]
-]]
+leanSurface[LeanLitStr[string_String], _] := surfaceConstruct[
+    "String.ofList"
+    ,
+    Fold[
+        Function[{list, code}, surfaceConstruct[surfaceSubscript["List.cons", 0], "Char", surfaceConstruct["Char.ofNat", code], list]],
+        surfaceConstruct[surfaceSubscript["List.nil", 0], "Char"],
+        Reverse[ToCharacterCode[string]]
+    ]
+]
 
 leanSurface[other_, _] := bridgeFailure["UnsupportedExpression", "`1` contains `2`, which the bridge cannot translate.", {$currentConstant, Short[other]}]
 
@@ -612,7 +715,10 @@ constantSurface[LeanConst[name_String, levels_List]] := surfaceSubscript @@ Prep
 
 binderSurface[name_String, type_, "default"] := surfaceTyped[name, type]
 
-binderSurface[name_String, type_, binder_String] := surfaceAnnotation[surfaceTyped[name, type], Replace[binder, {"implicit" -> "Implicit", "instImplicit" -> "InstanceImplicit", "strictImplicit" -> "StrictImplicit", _ -> "Implicit"}]]
+binderSurface[name_String, type_, binder_String] := surfaceAnnotation[
+    surfaceTyped[name, type],
+    Replace[binder, {"implicit" -> "Implicit", "instImplicit" -> "InstanceImplicit", "strictImplicit" -> "StrictImplicit", _ -> "Implicit"}]
+]
 
 levelSurface[LeanLevelZero[]] := 0
 
@@ -625,10 +731,7 @@ levelSurface[LeanLevelIMax[first_, second_]] := surfaceImpredicativeMaximum[leve
 levelSurface[LeanLevelParam[name_String]] := name
 
 freshBinderName[binderName_String, scope_List] := Block[{base = cleanBinderName[binderName]},
-    If[ freeBinderNameQ[base, scope],
-        base,
-        First[Select[Table[base <> ToString[i], {i, 1, Length[scope] + 2}], Function[candidate, freeBinderNameQ[candidate, scope]]]]
-    ]
+    If[freeBinderNameQ[base, scope], base, First[Select[Table[base <> ToString[i], {i, 1, Length[scope] + 2}], Function[candidate, freeBinderNameQ[candidate, scope]]]]]
 ]
 
 freeBinderNameQ[name_String, scope_List] := ! MemberQ[scope, name] && ! KeyExistsQ[$kinds, name]
@@ -636,9 +739,7 @@ freeBinderNameQ[name_String, scope_List] := ! MemberQ[scope, name] && ! KeyExist
 cleanBinderName[binderName_String] := Replace[First[StringSplit[binderName, "._@."], binderName], "" | "_" -> "x"]
 
 (* ============================================================================ *)
-
 (* To Lean                                                                      *)
-
 (* ============================================================================ *)
 
 (* TypeTheory's prelude constants that Lean has in Init, with the same definitions, except Plus, which
@@ -647,78 +748,168 @@ cleanBinderName[binderName_String] := Replace[First[StringSplit[binderName, "._@
    quotient types are Lean's; FunctionExtensionality is proved from them, as Lean proves funext. *)
 
 $preludeLeanNames = <|
-    HoldComplete[True] -> "True",
-    HoldComplete[TrueIntroduction] -> "True.intro",
-    HoldComplete[InductiveRecursor[True]] -> "True.rec",
-    HoldComplete[False] -> "False",
-    HoldComplete[InductiveRecursor[False]] -> "False.rec",
-    HoldComplete[Not] -> "Not",
-    HoldComplete[And] -> "And",
-    HoldComplete[AndIntroduction] -> "And.intro",
-    HoldComplete[InductiveRecursor[And]] -> "And.rec",
-    HoldComplete[Or] -> "Or",
-    HoldComplete[OrIntroductionLeft] -> "Or.inl",
-    HoldComplete[OrIntroductionRight] -> "Or.inr",
-    HoldComplete[InductiveRecursor[Or]] -> "Or.rec",
-    HoldComplete[Equivalent] -> "Iff",
-    HoldComplete[EquivalentIntroduction] -> "Iff.intro",
-    HoldComplete[InductiveRecursor[Equivalent]] -> "Iff.rec",
-    HoldComplete[Equal] -> "Eq",
-    HoldComplete[EqualityReflexivity] -> "Eq.refl",
-    HoldComplete[InductiveRecursor[Equal]] -> "Eq.rec",
-    HoldComplete[Exists] -> "Exists",
-    HoldComplete[ExistsIntroduction] -> "Exists.intro",
-    HoldComplete[InductiveRecursor[Exists]] -> "Exists.rec",
-    HoldComplete[NonNegativeIntegers] -> "Nat",
-    HoldComplete[NaturalNumberZero] -> "Nat.zero",
-    HoldComplete[NaturalNumberSuccessor] -> "Nat.succ",
-    HoldComplete[InductiveRecursor[NonNegativeIntegers]] -> "Nat.rec",
-    HoldComplete[Plus] -> "Nat.add",
-    HoldComplete[Booleans] -> "Bool",
-    HoldComplete["false"] -> "Bool.false",
-    HoldComplete["true"] -> "Bool.true",
-    HoldComplete[InductiveRecursor[Booleans]] -> "Bool.rec",
-    HoldComplete["not"] -> "Bool.not",
-    HoldComplete["and"] -> "Bool.and",
-    HoldComplete["or"] -> "Bool.or",
+    HoldComplete[True] -> "True"
+    ,
+    HoldComplete[TrueIntroduction] -> "True.intro"
+    ,
+    HoldComplete[InductiveRecursor[True]] -> "True.rec"
+    ,
+    HoldComplete[False] -> "False"
+    ,
+    HoldComplete[InductiveRecursor[False]] -> "False.rec"
+    ,
+    HoldComplete[Not] -> "Not"
+    ,
+    HoldComplete[And] -> "And"
+    ,
+    HoldComplete[AndIntroduction] -> "And.intro"
+    ,
+    HoldComplete[InductiveRecursor[And]] -> "And.rec"
+    ,
+    HoldComplete[Or] -> "Or"
+    ,
+    HoldComplete[OrIntroductionLeft] -> "Or.inl"
+    ,
+    HoldComplete[OrIntroductionRight] -> "Or.inr"
+    ,
+    HoldComplete[InductiveRecursor[Or]] -> "Or.rec"
+    ,
+    HoldComplete[Equivalent] -> "Iff"
+    ,
+    HoldComplete[EquivalentIntroduction] -> "Iff.intro"
+    ,
+    HoldComplete[InductiveRecursor[Equivalent]] -> "Iff.rec"
+    ,
+    HoldComplete[Equal] -> "Eq"
+    ,
+    HoldComplete[EqualityReflexivity] -> "Eq.refl"
+    ,
+    HoldComplete[InductiveRecursor[Equal]] -> "Eq.rec"
+    ,
+    HoldComplete[Exists] -> "Exists"
+    ,
+    HoldComplete[ExistsIntroduction] -> "Exists.intro"
+    ,
+    HoldComplete[InductiveRecursor[Exists]] -> "Exists.rec"
+    ,
+    HoldComplete[NonNegativeIntegers] -> "Nat"
+    ,
+    HoldComplete[NaturalNumberZero] -> "Nat.zero"
+    ,
+    HoldComplete[NaturalNumberSuccessor] -> "Nat.succ"
+    ,
+    HoldComplete[InductiveRecursor[NonNegativeIntegers]] -> "Nat.rec"
+    ,
+    HoldComplete[Plus] -> "Nat.add"
+    ,
+    HoldComplete[Booleans] -> "Bool"
+    ,
+    HoldComplete["false"] -> "Bool.false"
+    ,
+    HoldComplete["true"] -> "Bool.true"
+    ,
+    HoldComplete[InductiveRecursor[Booleans]] -> "Bool.rec"
+    ,
+    HoldComplete["not"] -> "Bool.not"
+    ,
+    HoldComplete["and"] -> "Bool.and"
+    ,
+    HoldComplete["or"] -> "Bool.or"
+    ,
     (* the names the Booleans' constants had before TypeTheory 0.9 *)
-    HoldComplete[BooleanFalse] -> "Bool.false",
-    HoldComplete[BooleanTrue] -> "Bool.true",
-    HoldComplete[BooleanNot] -> "Bool.not",
-    HoldComplete[BooleanAnd] -> "Bool.and",
-    HoldComplete[BooleanOr] -> "Bool.or",
-    HoldComplete[Nonempty] -> "Nonempty",
-    HoldComplete[NonemptyIntroduction] -> "Nonempty.intro",
-    HoldComplete[InductiveRecursor[Nonempty]] -> "Nonempty.rec",
-    HoldComplete[Subtype] -> "Subtype",
-    HoldComplete[SubtypeIntroduction] -> "Subtype.mk",
-    HoldComplete[InductiveRecursor[Subtype]] -> "Subtype.rec",
-    HoldComplete[QuotientType] -> "Quot",
-    HoldComplete[QuotientIntroduction] -> "Quot.mk",
-    HoldComplete[QuotientLift] -> "Quot.lift",
-    HoldComplete[QuotientInduction] -> "Quot.ind",
-    HoldComplete[QuotientSoundness] -> "Quot.sound",
-    HoldComplete[PropositionalExtensionality] -> "propext",
-    HoldComplete[FunctionExtensionality] -> "funext",
+    HoldComplete[BooleanFalse] -> "Bool.false"
+    ,
+    HoldComplete[BooleanTrue] -> "Bool.true"
+    ,
+    HoldComplete[BooleanNot] -> "Bool.not"
+    ,
+    HoldComplete[BooleanAnd] -> "Bool.and"
+    ,
+    HoldComplete[BooleanOr] -> "Bool.or"
+    ,
+    HoldComplete[Nonempty] -> "Nonempty"
+    ,
+    HoldComplete[NonemptyIntroduction] -> "Nonempty.intro"
+    ,
+    HoldComplete[InductiveRecursor[Nonempty]] -> "Nonempty.rec"
+    ,
+    HoldComplete[Subtype] -> "Subtype"
+    ,
+    HoldComplete[SubtypeIntroduction] -> "Subtype.mk"
+    ,
+    HoldComplete[InductiveRecursor[Subtype]] -> "Subtype.rec"
+    ,
+    HoldComplete[QuotientType] -> "Quot"
+    ,
+    HoldComplete[QuotientIntroduction] -> "Quot.mk"
+    ,
+    HoldComplete[QuotientLift] -> "Quot.lift"
+    ,
+    HoldComplete[QuotientInduction] -> "Quot.ind"
+    ,
+    HoldComplete[QuotientSoundness] -> "Quot.sound"
+    ,
+    HoldComplete[PropositionalExtensionality] -> "propext"
+    ,
+    HoldComplete[FunctionExtensionality] -> "funext"
+    ,
     HoldComplete[Choice] -> "Classical.choice"
 |>
 
 $leanKeywords = {
-    "fun", "let", "have", "show", "from", "at", "by", "do", "then", "else", "if", "match", "with", "Type", "Prop", "Sort",
-    "theorem", "def", "axiom", "inductive", "where", "in", "end", "namespace", "open", "forall", "exists", "structure",
-    "class", "instance", "variable", "universe", "section", "mutual", "deriving", "calc", "suffices", "this"
+    "fun",
+    "let",
+    "have",
+    "show",
+    "from",
+    "at",
+    "by",
+    "do",
+    "then",
+    "else",
+    "if",
+    "match",
+    "with",
+    "Type",
+    "Prop",
+    "Sort",
+    "theorem",
+    "def",
+    "axiom",
+    "inductive",
+    "where",
+    "in",
+    "end",
+    "namespace",
+    "open",
+    "forall",
+    "exists",
+    "structure",
+    "class",
+    "instance",
+    "variable",
+    "universe",
+    "section",
+    "mutual",
+    "deriving",
+    "calc",
+    "suffices",
+    "this"
 }
 
 TypeTheoryToLean[environment_TypeTheoryEnvironment, name : Except[_List], opts : OptionsPattern[]] := TypeTheoryToLean[environment, {name}, opts]
 
-TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPattern[]] := catchBridgeFailure @ Block[
-    {
-        declarations = Normal[environment],
-        prelude = TypeTheoryEnvironment["Prelude"],
-        $environment = environment,
-        $typeTheoryPrelude = TypeTheoryEnvironment["Prelude"],
-        $declarationIndex, $constructorOwners, $blockOwners, $leanClasses, needed
-    },
+TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPattern[]] := catchBridgeFailure @ Block[{
+    declarations = Normal[environment],
+    prelude = TypeTheoryEnvironment["Prelude"],
+    $environment = environment,
+    $typeTheoryPrelude = TypeTheoryEnvironment["Prelude"],
+    $declarationIndex,
+    $constructorOwners,
+    $blockOwners,
+    $leanClasses,
+    needed
+},
     checkLeanRules[environment];
     If[FailureQ[declarations], Throw[declarations, $bridgeTag]];
     $declarationIndex = Association[Function[declaration, declarationKey[declaration] -> declaration] /@ declarations];
@@ -729,14 +920,15 @@ TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPa
     needed = exportOrder[Function[name, ownerKey[HoldComplete[name]]] /@ names];
     (* a prelude constant is written as Lean's only if it is the prelude's own *)
     Scan[
-        Function[key, If[ environment @@ key =!= prelude @@ key, bridgeFailure["PreludeChanged", "`1` is not the prelude's, so it cannot be written as Lean's.", {HoldForm @@ key}]]],
-        Select[DeleteDuplicates[Catenate[Function[key, mentionedConstants[$declarationIndex[key]]] /@ needed]], Function[key, KeyExistsQ[$preludeLeanNames, ownerKey[key]] && FreeQ[key, InductiveRecursor]]]
+        Function[key, If[environment @@ key =!= prelude @@ key, bridgeFailure["PreludeChanged", "`1` is not the prelude's, so it cannot be written as Lean's.", {HoldForm @@ key}]]]
+        ,
+        Select[
+            DeleteDuplicates[Catenate[Function[key, mentionedConstants[$declarationIndex[key]]] /@ needed]],
+            Function[key, KeyExistsQ[$preludeLeanNames, ownerKey[key]] && FreeQ[key, InductiveRecursor]]
+        ]
     ];
     StringRiffle[
-        Join[
-            {"-- Generated by LeanLink's TypeTheoryToLean: TypeTheory declarations, for Lean's kernel to check."},
-            Function[key, declarationText[$declarationIndex[key]]] /@ needed
-        ],
+        Join[{"-- Generated by LeanLink's TypeTheoryToLean: TypeTheory declarations, for Lean's kernel to check."}, Function[key, declarationText[$declarationIndex[key]]] /@ needed],
         "\n\n"
     ] <> "\n"
 ]
@@ -746,26 +938,30 @@ TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPa
    rules, so the computation an environment's rewrite rules give would be lost; only the quotient rules the
    import adds are Lean's own. *)
 
-checkLeanRules[environment_TypeTheoryEnvironment] := Block[
-    {rules = Information[environment, "Rules"], rewriteRules = DeleteCases[Information[environment, "RewriteRules"], Alternatives @@ $quotientRuleNames]},
-    If[ rules["Prop"] === False, bridgeFailure["UnsupportedRules", "The environment follows the rules `1`, which have no Prop, and Lean's kernel follows the calculus of inductive constructions.", {rules["Name"]}]];
-    If[ MatchQ[rewriteRules, {__}], bridgeFailure["UnsupportedRules", "The environment has the rewrite rules `1`, which Lean's kernel does not have.", {rewriteRules}]]
+checkLeanRules[environment_TypeTheoryEnvironment] := Block[{rules = Information[environment, "Rules"], rewriteRules = DeleteCases[Information[environment, "RewriteRules"], Alternatives @@ $quotientRuleNames]},
+    If[ rules["Prop"] === False,
+        bridgeFailure["UnsupportedRules", "The environment follows the rules `1`, which have no Prop, and Lean's kernel follows the calculus of inductive constructions.", {rules["Name"]}]
+    ];
+    If[MatchQ[rewriteRules, {__}], bridgeFailure["UnsupportedRules", "The environment has the rewrite rules `1`, which Lean's kernel does not have.", {rewriteRules}]]
 ]
 
 (* the name a declaration introduces, held, the first type's for a block of mutually inductive types; an
    inductive type's constructors and recursors belong to it, and the other types of its block to the first *)
 
-declarationKey[declaration_] := Replace[declaration, {
-    TypeTheoryInductiveType[{(Rule | RuleDelayed)[first_, _], ___}, _List, ___] :> HoldComplete[first],
-    (TypeTheoryAxiom | TypeTheoryDefinition | TypeTheoryTheorem | TypeTheoryInductiveType)[name_, ___] :> HoldComplete[name]
-}]
+declarationKey[declaration_] := Replace[
+    declaration
+    ,
+    {
+        TypeTheoryInductiveType[{(Rule | RuleDelayed)[first_, _], ___}, _List, ___] :> HoldComplete[first],
+        (TypeTheoryAxiom | TypeTheoryDefinition | TypeTheoryTheorem | TypeTheoryInductiveType)[name_, ___] :> HoldComplete[name]
+    }
+]
 
 declarationKey[declaration_TypeTheoryNaturalNumbers] := None
 
 declarationKey[declaration_TypeTheoryQuotients] := None
 
-constructorOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, {constructors___}, ___]] := With[
-    {names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},
+constructorOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed)..}, {constructors___}, ___]] := With[{names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},
     Join[
         Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> (HoldComplete[constructor] -> resultHead[HoldComplete[constructorType]])],
         Function[name, Replace[name, HoldComplete[type_] :> (HoldComplete[InductiveRecursor[type]] -> name)]] /@ names
@@ -779,8 +975,7 @@ constructorOwners[TypeTheoryInductiveType[name_, _, {constructors___}, ___]] := 
 
 constructorOwners[_] := {}
 
-blockOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, _List, ___]] := With[
-    {names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},
+blockOwners[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed)..}, _List, ___]] := With[{names = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}]},
     Function[name, name -> First[names]] /@ Rest[names]
 ]
 
@@ -788,17 +983,23 @@ blockOwners[_] := {}
 
 (* the type a constructor's type ends in *)
 resultHead[HoldComplete[(ForAll | Function)[_, body_]]] := resultHead[HoldComplete[body]]
+
 resultHead[HoldComplete[Implies[_, codomain_]]] := resultHead[HoldComplete[codomain]]
+
 resultHead[HoldComplete[TypeSpecifier[_ -> codomain_]]] := resultHead[HoldComplete[codomain]]
+
 resultHead[HoldComplete[Construct[head_, ___]]] := resultHead[HoldComplete[head]]
+
 resultHead[HoldComplete[Subscript[head_, ___]]] := HoldComplete[head]
+
 resultHead[HoldComplete[Subscript[head_, ___][___]]] := HoldComplete[head]
+
 resultHead[HoldComplete[head_[___]]] := HoldComplete[head]
+
 resultHead[HoldComplete[head_]] := HoldComplete[head]
 
 (* the recursor on a type nested in X's block, InductiveRecursor[X, k], belongs where X's does *)
-ownerKey[key_HoldComplete] := With[
-    {owner = Lookup[$constructorOwners, Replace[key, HoldComplete[InductiveRecursor[type_, _Integer]] :> HoldComplete[InductiveRecursor[type]]], key]},
+ownerKey[key_HoldComplete] := With[{owner = Lookup[$constructorOwners, Replace[key, HoldComplete[InductiveRecursor[type_, _Integer]] :> HoldComplete[InductiveRecursor[type]]], key]},
     Lookup[$blockOwners, owner, owner]
 ]
 
@@ -851,26 +1052,37 @@ mentionedConstants[declaration_] := DeleteDuplicates[Cases[
 
 leanName[key_HoldComplete] := Which[
     KeyExistsQ[$preludeLeanNames, key],
-        $preludeLeanNames[key],
+        $preludeLeanNames[key]
+    ,
     MatchQ[key, HoldComplete[_String]] && ! preludeStringNameQ[key],
-        First[key],
+        First[key]
+    ,
     MatchQ[key, HoldComplete[InductiveRecursor[_]]],
-        leanName[Replace[key, HoldComplete[InductiveRecursor[inductive_]] :> HoldComplete[inductive]]] <> ".rec",
+        leanName[Replace[key, HoldComplete[InductiveRecursor[inductive_]] :> HoldComplete[inductive]]] <> ".rec"
+    ,
     MatchQ[key, HoldComplete[InductiveRecursor[_, _Integer]]],
-        Replace[key, HoldComplete[InductiveRecursor[inductive_, index_]] :> leanName[HoldComplete[inductive]] <> ".rec_" <> ToString[index]],
+        Replace[key, HoldComplete[InductiveRecursor[inductive_, index_]] :> leanName[HoldComplete[inductive]] <> ".rec_" <> ToString[index]]
+    ,
     KeyExistsQ[$constructorOwners, key],
-        leanName[$constructorOwners[key]] <> "." <> identifierBase[key],
+        leanName[$constructorOwners[key]] <> "." <> identifierBase[key]
+    ,
     True,
         "TypeTheory." <> identifierBase[key]
 ]
 
 $formalLetters = Association[Join[
-    Table[ToExpression["HoldComplete[\\[Formal" <> letter <> "]]"] -> ToLowerCase[letter], {letter, CharacterRange["A", "Z"]}],
-    Table[ToExpression["HoldComplete[\\[FormalCapital" <> letter <> "]]"] -> letter, {letter, CharacterRange["A", "Z"]}],
-    Table[ToExpression["HoldComplete[\\[Formal" <> greek <> "]]"] -> ToLowerCase[ToExpression["\"\\[" <> greek <> "]\""]], {greek, {"Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Lambda", "Mu", "Sigma", "Tau", "Phi", "Psi", "Omega"}}]
+    Table[ToExpression["HoldComplete[\\[Formal" <> letter <> "]]"] -> ToLowerCase[letter], {letter, CharacterRange["A", "Z"]}]
+    ,
+    Table[ToExpression["HoldComplete[\\[FormalCapital" <> letter <> "]]"] -> letter, {letter, CharacterRange["A", "Z"]}]
+    ,
+    Table[
+        ToExpression["HoldComplete[\\[Formal" <> greek <> "]]"] -> ToLowerCase[ToExpression["\"\\[" <> greek <> "]\""]],
+        {greek, {"Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Lambda", "Mu", "Sigma", "Tau", "Phi", "Psi", "Omega"}}
+    ]
 ]]
 
-identifierBase[key_HoldComplete] := Block[{text = Replace[key, {held_ /; KeyExistsQ[$formalLetters, held] :> $formalLetters[held], HoldComplete[symbol_Symbol] :> SymbolName[Unevaluated[symbol]], HoldComplete[name_String] :> name, _ :> "x"}]},
+identifierBase[key_HoldComplete] := Block[
+    {text = Replace[key, {held_ /; KeyExistsQ[$formalLetters, held] :> $formalLetters[held], HoldComplete[symbol_Symbol] :> SymbolName[Unevaluated[symbol]], HoldComplete[name_String] :> name, _ :> "x"}]},
     Replace[StringReplace[text, Except[WordCharacter | "_" | "'" | "."] -> "_"], {"" -> "x", word_ /; DigitQ[StringTake[word, 1]] :> "x" <> word}]
 ]
 
@@ -888,10 +1100,10 @@ declarationText[TypeTheoryAxiom[name_, type_, options___]] := Block[{$universeNa
 
 (* an instance of a class is Lean's instance too, and an opaque definition Lean's opaque *)
 
-declarationText[TypeTheoryDefinition[name_, Typed[value_, type_], options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
-    If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Instance", True]] && leanClassQ[resultHead[HoldComplete[type]]], "@[instance] ", ""] <>
-        If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Opaque", True]], "noncomputable opaque ", "noncomputable def "] <>
-        leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " :=\n  " <> leanText[value, <||>]
+declarationText[TypeTheoryDefinition[name_, Typed[value_, type_], options___]] := Block[{$universeNames = universeNames[HoldComplete[options]], attribute, keyword},
+    attribute = If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Instance", True]] && leanClassQ[resultHead[HoldComplete[type]]], "@[instance] ", ""];
+    keyword = If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Opaque", True]], "noncomputable opaque ", "noncomputable def "];
+    attribute <> keyword <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " :=\n  " <> leanText[value, <||>]
 ]
 
 declarationText[TypeTheoryTheorem[name_, statement_, proof_, options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
@@ -901,24 +1113,23 @@ declarationText[TypeTheoryTheorem[name_, statement_, proof_, options___]] := Blo
 (* in its constructors' types the inductive type is a local of Lean's, named without universe levels, as
    every type of a mutual block is in all of its constructors *)
 
-declarationText[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed) ..}, {constructors___}, options___]] := Block[
-    {
-        $universeNames = universeNames[HoldComplete[options]],
-        $declaredInductive = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}],
-        owned = Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> {HoldComplete[constructor], HoldComplete[constructorType]}]
-    },
+declarationText[TypeTheoryInductiveType[types : {(_Rule | _RuleDelayed)..}, {constructors___}, options___]] := Block[{
+    $universeNames = universeNames[HoldComplete[options]],
+    $declaredInductive = Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, _] :> HoldComplete[name], {2}],
+    owned = Cases[HoldComplete[constructors], (Rule | RuleDelayed)[constructor_, constructorType_] :> {HoldComplete[constructor], HoldComplete[constructorType]}]
+},
     "mutual\n" <> StringRiffle[
-        Cases[HoldComplete @@ {types}, (Rule | RuleDelayed)[name_, type_] :> inductiveText[
-            HoldComplete[name],
-            HoldComplete[type],
-            Select[owned, Function[constructor, resultHead[Last[constructor]] === HoldComplete[name]]]
-        ], {2}],
+        Cases[
+            HoldComplete @@ {types},
+            (Rule | RuleDelayed)[name_, type_] :> inductiveText[HoldComplete[name], HoldComplete[type], Select[owned, Function[constructor, resultHead[Last[constructor]] === HoldComplete[name]]]],
+            {2}
+        ]
+        ,
         "\n"
     ] <> "\nend"
 ]
 
-declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options___]] := Block[
-    {$universeNames = universeNames[HoldComplete[options]], $declaredInductive = {HoldComplete[name]}},
+declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options___]] := Block[{$universeNames = universeNames[HoldComplete[options]], $declaredInductive = {HoldComplete[name]}},
     inductiveText[
         HoldComplete[name],
         HoldComplete[type],
@@ -926,17 +1137,19 @@ declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options
     ]
 ]
 
-inductiveText[name_HoldComplete, type_HoldComplete, constructors_List] :=
-    If[leanClassQ[name] && Length[$declaredInductive] === 1, "class inductive ", "inductive "] <> leanName[name] <> universeSuffix[] <> " : " <> heldLeanText[type, <||>] <> " where" <> StringJoin[
-        Function[constructor, "\n  | " <> identifierBase[First[constructor]] <> " : " <> heldLeanText[Last[constructor], <||>]] /@ constructors
-    ]
+inductiveText[name_HoldComplete, type_HoldComplete, constructors_List] := Block[{keyword, header},
+    keyword = If[leanClassQ[name] && Length[$declaredInductive] === 1, "class inductive ", "inductive "];
+    header = keyword <> leanName[name] <> universeSuffix[] <> " : " <> heldLeanText[type, <||>] <> " where";
+    header <> StringJoin[Function[constructor, "\n  | " <> identifierBase[First[constructor]] <> " : " <> heldLeanText[Last[constructor], <||>]] /@ constructors]
+]
 
 declarationText[other_] := bridgeFailure["UnsupportedDeclaration", "`1` cannot be written as Lean source.", {Short[other]}]
 
-universeNames[HoldComplete[options___]] := Association[Function[parameter, parameter -> identifierBase[parameter]] /@ Catenate[Cases[
-    HoldComplete[options],
-    (Rule | RuleDelayed)["UniverseParameters", {parameters___}] :> (HoldComplete /@ Unevaluated[{parameters}])
-]]]
+universeNames[HoldComplete[options___]] := Association[
+    Function[parameter,
+        parameter -> identifierBase[parameter]
+    ] /@ Catenate[Cases[HoldComplete[options], (Rule | RuleDelayed)["UniverseParameters", {parameters___}] :> (HoldComplete /@ Unevaluated[{parameters}])]]
+]
 
 universeSuffix[] := If[Length[$universeNames] === 0, "", ".{" <> StringRiffle[Values[$universeNames], ", "] <> "}"]
 
@@ -956,7 +1169,9 @@ leanText[Function[{binders___}, body_], scope_Association] := binderChain[HoldCo
 
 leanText[Implies[domain_, codomain_], scope_Association] := "(" <> leanText[domain, scope] <> " -> " <> leanText[codomain, scope] <> ")"
 
-leanText[TypeSpecifier[{domains___} -> codomain_], scope_Association] := "(" <> StringJoin[Function[domain, heldLeanText[domain, scope] <> " -> "] /@ (HoldComplete /@ Unevaluated[{domains}])] <> leanText[codomain, scope] <> ")"
+leanText[TypeSpecifier[{domains___} -> codomain_], scope_Association] := Block[{domainTexts = Function[domain, heldLeanText[domain, scope] <> " -> "] /@ (HoldComplete /@ Unevaluated[{domains}])},
+    "(" <> StringJoin[domainTexts] <> leanText[codomain, scope] <> ")"
+]
 
 leanText[Typed[term_, type_], scope_Association] := "(" <> leanText[term, scope] <> " : " <> leanText[type, scope] <> ")"
 
@@ -994,7 +1209,10 @@ applicationText[head_HoldComplete, arguments_List, scope_Association] := "(" <> 
 
 argumentText[argument_HoldComplete, scope_Association] := Replace[heldLeanText[argument, scope], text_String /; StringStartsQ[text, "Sort "] :> "(" <> text <> ")"]
 
-headText[HoldComplete[Subscript[constant_, levels___]], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> constantLevelSuffix[HoldComplete[constant], HoldComplete /@ Unevaluated[{levels}]]
+headText[HoldComplete[Subscript[constant_, levels___]], scope_Association] := "@" <> leanName[HoldComplete[constant]] <> constantLevelSuffix[
+    HoldComplete[constant],
+    HoldComplete /@ Unevaluated[{levels}]
+]
 
 headText[HoldComplete[name : (_Symbol | _String | InductiveRecursor[_])], scope_Association] := Lookup[scope, HoldComplete[name], "@" <> leanName[HoldComplete[name]]]
 
@@ -1002,8 +1220,7 @@ headText[head_HoldComplete, scope_Association] := "(" <> heldLeanText[head, scop
 
 (* (x : A) -> (y : B) -> body, or fun (x : A) (y : B) => body, with each binder named in turn *)
 
-binderChain[binders_List, body_HoldComplete, scope_Association, separator_String, opener_String, arrow_String] := Block[
-    {folded = Fold[addBinderText, {{}, scope}, binders]},
+binderChain[binders_List, body_HoldComplete, scope_Association, separator_String, opener_String, arrow_String] := Block[{folded = Fold[addBinderText, {{}, scope}, binders]},
     "(" <> opener <> StringRiffle[First[folded], separator] <> " " <> arrow <> " " <> heldLeanText[body, Last[folded]] <> ")"
 ]
 
@@ -1054,7 +1271,11 @@ levelText[Max[level_]] := levelText[level]
 
 levelText[ImpredicativeMaximum[first_, second_]] := "(imax " <> levelText[first] <> " " <> levelText[second] <> ")"
 
-levelText[name : (_Symbol | _String)] := Lookup[$universeNames, HoldComplete[name], bridgeFailure["UnsupportedLevel", "The universe level `1` is not a parameter of the declaration.", {HoldForm[name]}]]
+levelText[name : (_Symbol | _String)] := Lookup[
+    $universeNames,
+    HoldComplete[name],
+    bridgeFailure["UnsupportedLevel", "The universe level `1` is not a parameter of the declaration.", {HoldForm[name]}]
+]
 
 levelText[other_] := bridgeFailure["UnsupportedLevel", "`1` cannot be written as a Lean universe level.", {HoldForm[other]}]
 

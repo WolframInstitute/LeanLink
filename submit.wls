@@ -30,8 +30,7 @@ If[ ! FileExistsQ[nbFile],
 
 shimSource = FileNameJoin[{repoDir, "Native", "shim", "leanlink_shim.c"}]
 
-libs = FileNames["libLeanLinkShim.*",
-    FileNameJoin[{repoDir, "LeanLink", "LibraryResources"}], 2]
+libs = FileNames["libLeanLinkShim.*", FileNameJoin[{repoDir, "LeanLink", "LibraryResources"}], 2]
 
 If[ libs === {},
     Print["FATAL: no LibraryResources/*/libLeanLinkShim.* found; run ./build.sh first."];
@@ -39,17 +38,14 @@ If[ libs === {},
 ]
 
 Print["native libraries:"]
-Scan[
-    Print["  ", FileNameTake[DirectoryName[#]], "  ",
-        DateString[FileDate[#], {"ISODate", " ", "Hour", ":", "Minute"}]] &,
-    Sort[libs]
-]
 
-stale = If[FileExistsQ[shimSource], Select[libs, FileDate[#] < FileDate[shimSource] &], {}]
+Scan[Print["  ", FileNameTake[DirectoryName[#]], "  ", DateString[FileDate[#], {"ISODate", " ", "Hour", ":", "Minute"}]]&, Sort[libs]]
+
+stale = If[FileExistsQ[shimSource], Select[libs, FileDate[#] < FileDate[shimSource]&], {}]
 
 If[ stale =!= {},
     Print["WARNING: built before the current shim source, so they carry whatever bug it fixed:"];
-    Scan[Print["  ", FileNameTake[DirectoryName[#]]] &, Sort[stale]];
+    Scan[Print["  ", FileNameTake[DirectoryName[#]]]&, Sort[stale]];
     Print["  rebuild with ./build.sh (cross-compiles every platform) to ship the fix."]
 ]
 
@@ -61,8 +57,7 @@ If[ stale =!= {},
    provisioned on the user's machine at load, so strip it here, before the file
    tree below is refreshed - that tree is what gets packed. *)
 
-runtime = FileNames[{"libleanshared*", "libInit_shared*", "libLake_shared*"},
-    FileNameJoin[{repoDir, "LeanLink", "LibraryResources"}], 2]
+runtime = FileNames[{"libleanshared*", "libInit_shared*", "libLake_shared*"}, FileNameJoin[{repoDir, "LeanLink", "LibraryResources"}], 2]
 
 If[ runtime =!= {},
     Print["stripping the provisioned Lean runtime from LibraryResources (", Length[runtime], " files)"];
@@ -97,10 +92,8 @@ UsingFrontEnd @ Block[{nb},
    and a kernel carrying a cached connection from other work will happily try as
    the wrong identity. WOLFRAM_ID / WOLFRAM_PASSWORD override it explicitly. *)
 With[{id = Environment["WOLFRAM_ID"], pw = Environment["WOLFRAM_PASSWORD"]},
-    If[ StringQ[id] && id =!= $WolframID, CloudDisconnect[]];
-    If[ ! TrueQ[$CloudConnected],
-        If[ StringQ[id] && StringQ[pw], CloudConnect[id, pw],
-            If[StringQ[id], CloudConnect[id], CloudConnect[]]]]
+    If[StringQ[id] && id =!= $WolframID, CloudDisconnect[]];
+    If[! TrueQ[$CloudConnected], If[StringQ[id] && StringQ[pw], CloudConnect[id, pw], If[StringQ[id], CloudConnect[id], CloudConnect[]]]]
 ]
 
 If[ ! TrueQ[$CloudConnected],
@@ -108,8 +101,7 @@ If[ ! TrueQ[$CloudConnected],
     Exit[1]
 ]
 
-Print["submitting as ", $WolframID,
-    " (publisher ", Lookup[PacletObject[File[FileNameJoin[{repoDir, "LeanLink"}]]]["PacletInfo"], "PublisherID", "?"], ")"]
+Print["submitting as ", $WolframID, " (publisher ", Lookup[PacletObject[File[FileNameJoin[{repoDir, "LeanLink"}]]]["PacletInfo"], "PublisherID", "?"], ")"]
 
 (* The pre-submission check first: a submission with outstanding errors is
    rejected by the repository anyway, so failing here is strictly cheaper.
@@ -124,14 +116,14 @@ check = UsingFrontEnd @ Block[{nb, r},
 
 issues = Normal[check]
 
-Scan[Print["  [", #Level, "] ", #Tag] &, issues]
+Scan[Print["  [", #Level, "] ", #Tag]&, issues]
 
 If[ MemberQ[issues[[All, "Level"]], "Error"],
     Print["FATAL: the definition notebook has errors; fix them before submitting."];
     Exit[1]
 ]
 
-result = UsingFrontEnd @ Block[{nb, r, DefinitionNotebookClient`ConfirmIssuesDialog = (True &)},
+result = UsingFrontEnd @ Block[{nb, r, DefinitionNotebookClient`ConfirmIssuesDialog = (True&)},
     nb = NotebookOpen[nbFile, Visible -> False];
     r = DefinitionNotebookClient`SubmitRepository[nb];
     NotebookClose[nb];
@@ -142,7 +134,8 @@ submission = FirstCase[result, _Success, Missing["NotFound"], Infinity]
 
 If[ MatchQ[submission, _Success],
     Print["submitted:"];
-    KeyValueMap[Print["  ", #1, ": ", #2] &, KeyDrop[Last[submission], "Message"]],
+    KeyValueMap[Print["  ", #1, ": ", #2]&, KeyDrop[Last[submission], "Message"]]
+    ,
     Print["SUBMISSION DID NOT SUCCEED:"];
     Print[result];
     Exit[1]

@@ -9,14 +9,9 @@
 
 BeginPackage["Wolfram`LeanLink`"];
 
-LeanToTypeTheory::usage = "LeanToTypeTheory[env, name] imports the Lean constant name from the LeanEnvironment env, with every constant it depends on, \
-into a TypeTheoryEnvironment, where TypeTheory's kernel checks each declaration again.\n\
-LeanToTypeTheory[env, {name1, name2, ...}] imports several constants.\n\
-LeanToTypeTheory[term] imports the constant of the LeanTerm term."
+LeanToTypeTheory::usage = "LeanToTypeTheory[env, name] imports the Lean constant name from the LeanEnvironment env, with every constant it depends on, into a TypeTheoryEnvironment, where TypeTheory's kernel checks each declaration again.\nLeanToTypeTheory[env, {name1, name2, ...}] imports several constants.\nLeanToTypeTheory[term] imports the constant of the LeanTerm term."
 
-TypeTheoryToLean::usage = "TypeTheoryToLean[env, name] gives Lean source declaring the constant name of the TypeTheoryEnvironment env, \
-with every constant it depends on that Lean does not have, for LeanImportString to compile and Lean's kernel to check.\n\
-TypeTheoryToLean[env, {name1, name2, ...}] gives the source for several constants."
+TypeTheoryToLean::usage = "TypeTheoryToLean[env, name] gives Lean source declaring the constant name of the TypeTheoryEnvironment env, with every constant it depends on that Lean does not have, for LeanImportString to compile and Lean's kernel to check.\nTypeTheoryToLean[env, {name1, name2, ...}] gives the source for several constants."
 
 Begin["`Private`"];
 
@@ -31,17 +26,23 @@ TypeTheoryToLean[arguments___] := withTypeTheoryBridge[TypeTheoryToLean[argument
 SetAttributes[withTypeTheoryBridge, HoldFirst]
 
 withTypeTheoryBridge[call_] := If[ TrueQ[loadTypeTheoryBridge[]],
-    call,
-    Failure["TypeTheoryMissing", <|
-        "MessageTemplate" -> "The bridge needs the paclet WolframInstitute/TypeTheory. Install it with `1`.",
-        "MessageParameters" -> {"PacletInstall[ResourceObject[\"https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/TypeTheory\"]]"}
-    |>]
+    call
+    ,
+    Failure[
+        "TypeTheoryMissing"
+        ,
+        <|
+            "MessageTemplate" -> "The bridge needs the paclet WolframInstitute/TypeTheory. Install it with `1`.",
+            "MessageParameters" -> {"PacletInstall[ResourceObject[\"https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/TypeTheory\"]]"}
+        |>
+    ]
 ]
 
 (* TypeTheory goes on $ContextPath, since the bridge's results are TypeTheory objects *)
 
 loadTypeTheoryBridge[] := If[ PacletFind["WolframInstitute/TypeTheory"] === {},
-    False,
+    False
+    ,
     Needs["WolframInstitute`TypeTheory`"];
     Get[$typeTheoryTranslationFile];
     True

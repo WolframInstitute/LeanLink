@@ -143,26 +143,22 @@ ptlBuildArgs[name_, assoc_Association, targetTag_String, lemmaVars_] := Block[{v
     vars = ptlLVLookup[lemmaVars, name];
     targetVars = ptlLVLookup[lemmaVars, targetTag];
     vals = First[
-        Last[
-            Reap[
-                If[ Length[vars] == 0,
-                    keys = Sort[Keys[assoc]];
-                    Do[Sow[ptlToStr[ptlCleanExpr[assoc[k]]]], {k, keys}]
+        Last[Reap[
+            If[ Length[vars] == 0,
+                keys = Sort[Keys[assoc]];
+                Do[Sow[ptlToStr[ptlCleanExpr[assoc[k]]]], {k, keys}]
+                ,
+                Do[
+                    k = vars[[i]];
+                    v = Null;
+                    KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToStr[ptlCleanExpr[#2]]]&, assoc];
+                    If[v === Null, If[MemberQ[targetVars, k], v = k, v = If[Length[targetVars] > 0, targetVars[[1]], "_"]]];
+                    Sow[v];
                     ,
-                    Do[
-                        k = vars[[i]];
-                        v = Null;
-                        KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToStr[ptlCleanExpr[#2]]]&, assoc];
-                        If[ v === Null,
-                            If[MemberQ[targetVars, k], v = k, v = If[Length[targetVars] > 0, targetVars[[1]], "_"]]
-                        ];
-                        Sow[v];
-                        ,
-                        {i, 1, Length[vars]}
-                    ]
+                    {i, 1, Length[vars]}
                 ]
             ]
-        ]
+        ]]
         ,
         {}
     ];
@@ -175,66 +171,51 @@ ptlBuildSrcExpr[name_, assoc_Association, targetTag_String, lemmaVars_] := Block
     vars = ptlLVLookup[lemmaVars, name];
     targetVars = ptlLVLookup[lemmaVars, targetTag];
     argExprs = First[
-        Last[
-            Reap[
-                If[ Length[vars] == 0,
-(* Unknown lemma vars: use target vars as base, substitute from assoc,
-    
-    
-    
-    
-   then append any extra assoc entries not yet used *)
-                    usedKeys = First[
-                        Last[
-                            Reap[
-                                If[ Length[targetVars] > 0,
-                                    Do[
-                                        v = Null;
-                                        KeyValueMap[
-                                            If[ ptlKeyToStr[#1] == tv,
-                                                v = ptlToExprI[ptlCleanExpr[#2]];
-                                                Sow[#1, "used"]
-                                            ]&
-                                            ,
-                                            assoc
-                                        ];
-                                        Sow[If[v === Null, LeanConst[tv, {}], v], "arg"];
-                                        ,
-                                        {tv, targetVars}
-                                    ]
-                                ]
+        Last[Reap[
+            If[ Length[vars] == 0,
+                (* Unknown lemma vars: use target vars as base, substitute from assoc, then append any extra assoc
+                   entries not yet used *)
+                usedKeys = First[
+                    Last[Reap[
+                        If[ Length[targetVars] > 0,
+                            Do[
+                                v = Null;
+                                KeyValueMap[
+                                    If[ ptlKeyToStr[#1] == tv,
+                                        v = ptlToExprI[ptlCleanExpr[#2]];
+                                        Sow[#1, "used"]
+                                    ]&
+                                    ,
+                                    assoc
+                                ];
+                                Sow[If[v === Null, LeanConst[tv, {}], v], "arg"];
                                 ,
-                                "used"
+                                {tv, targetVars}
                             ]
                         ]
                         ,
-                        {}
-                    ];
-(* Add remaining assoc entries not matched by target vars 
-    *)
-                    keys = Select[Sort[Keys[assoc]], ! MemberQ[usedKeys, #]&];
-                    Do[Sow[ptlToExprI[ptlCleanExpr[assoc[k]]], "arg"], {k, keys}]
+                        "used"
+                    ]]
                     ,
-                    Do[
-                        k = vars[[i]];
-                        v = Null;
-                        KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToExprI[ptlCleanExpr[#2]]]&, assoc];
-                        If[ v === Null,
-                            If[ MemberQ[targetVars, k],
-                                v = LeanConst[k, {}]
-                                ,
-                                v = LeanConst[If[Length[targetVars] > 0, targetVars[[1]], "_"], {}]
-                            ]
-                        ];
-                        Sow[v, "arg"];
-                        ,
-                        {i, 1, Length[vars]}
-                    ]
-                ]
+                    {}
+                ];
+                (* Add remaining assoc entries not matched by target vars *)
+                keys = Select[Sort[Keys[assoc]], ! MemberQ[usedKeys, #]&];
+                Do[Sow[ptlToExprI[ptlCleanExpr[assoc[k]]], "arg"], {k, keys}]
                 ,
-                "arg"
+                Do[
+                    k = vars[[i]];
+                    v = Null;
+                    KeyValueMap[If[ptlKeyToStr[#1] == k, v = ptlToExprI[ptlCleanExpr[#2]]]&, assoc];
+                    If[v === Null, If[MemberQ[targetVars, k], v = LeanConst[k, {}], v = LeanConst[If[Length[targetVars] > 0, targetVars[[1]], "_"], {}]]];
+                    Sow[v, "arg"];
+                    ,
+                    {i, 1, Length[vars]}
+                ]
             ]
-        ]
+            ,
+            "arg"
+        ]]
         ,
         {}
     ];
@@ -323,9 +304,7 @@ ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[src_, assoc_Association]]],
 
 ptlProcessStep[HoldComplete[Set[tag_[n_], ReplacePart[src_, _, pos_List]]], st_] := (
     st["pendingPos"] = pos;
-    If[ st["pendingSource"] === None,
-        st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> <||>|>
-    ];
+    If[st["pendingSource"] === None, st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> <||>|>];
     Nothing
 )
 
@@ -334,7 +313,7 @@ ptlProcessStep[HoldComplete[Set[tag_[n_], ReplacePart[src_, _, pos_List]]], st_]
 SetAttributes[ptlExtractRule, HoldFirst];
 
 ptlExtractRule[rule_, st_] := Block[{held = HoldComplete[rule]},
-    Which[ 
+    Which[
         MatchQ[held, HoldComplete[Apply[Rule, Reverse[_[_Integer]]]]],
             With[{ref = held[[1, 2, 1]]},
                 st["currentSR"] = <|"name" -> ptlLeanRef[ref], "reversed" -> True, "assoc" -> <||>|>
@@ -373,10 +352,7 @@ ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAt[src_, rule_, pos_List]]], st
 
 (* ReplaceAt with Reverse and ReplaceAll *)
 
-ptlProcessStep[
-    HoldComplete[Set[tag_[n_], ReplaceAll[ReplaceAt[Reverse[src_], rule_, pos_List], assoc_Association]]],
-    st_
-] := (
+ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[ReplaceAt[Reverse[src_], rule_, pos_List], assoc_Association]]], st_] := (
     st["pendingPos"] = pos;
     st["pendingSource"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> assoc|>;
     Nothing
@@ -392,19 +368,7 @@ ptlProcessStep[HoldComplete[Set[tag_[n_], ReplaceAll[ReplaceAt[src_, rule_, pos_
 
 (* ConfirmAssert: EMIT THEOREM with expression tree type + structured tactic *)
 
-ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq : Inactive[Equal][_, _]]], st_] := Block[{
-    tag,
-    vars,
-    tactic,
-    srcExpr,
-    rwRuleExpr,
-    tacSteps,
-    convNav,
-    nonTrivial,
-    assocKeys,
-    allCovered,
-    typeExpr
-},
+ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq : Inactive[Equal][_, _]]], st_] := Block[{tag, vars, tactic, srcExpr, rwRuleExpr, tacSteps, convNav, nonTrivial, assocKeys, allCovered, typeExpr},
     tag = ptlAbbrev[Head[lhs], lhs[[1]]];
     vars = ptlGetVarsFromEq[eq, st["sharedConstants"]];
     st["lv", tag] = vars;
@@ -415,14 +379,8 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq : Inactive[Equal][_, _]]],
         (* Build srcExpr: lemma applied to args *)
         srcExpr = ptlBuildSrcExpr[st["pendingSource"]["name"], st["pendingSource"]["assoc"], tag, st];
         srcReversed = TrueQ[st["pendingSource"]["reversed"]];
-(* Enrich bare-const srcExpr with target vars for universally-quantified proofs 
-    
-    
-    
-    *)
-        If[ MatchQ[srcExpr, _LeanConst] && Length[vars] > 0,
-            srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}]& /@ vars]
-        ];
+        (* Enrich bare-const srcExpr with target vars for universally-quantified proofs *)
+        If[MatchQ[srcExpr, _LeanConst] && Length[vars] > 0, srcExpr = Fold[LeanApp, srcExpr, LeanConst[#, {}]& /@ vars]];
         (* Wrap reversed source with .symm *)
         If[srcReversed, srcExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srcExpr]];
         (* Build rewrite rule expression *)
@@ -432,104 +390,57 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq : Inactive[Equal][_, _]]],
                 rev = st["currentSR"]["reversed"];
                 assoc = st["currentSR"]["assoc"];
                 srcVars = ptlLVLookup[st, name];
-(* Check if ALL source vars are explicitly mapped in the assoc 
-    *)
+                (* Check if ALL source vars are explicitly mapped in the assoc *)
                 assocKeys = ptlKeyToStr /@ Keys[assoc];
                 allCovered = Length[srcVars] > 0 && ContainsAll[assocKeys, srcVars];
                 If[ allCovered,
-(* All vars covered: instantiate via have sr, but validate scope 
-    *)
+                    (* All vars covered: instantiate via have sr, but validate scope *)
                     srExpr = ptlBuildSrcExpr[name, assoc, tag, st];
-(* Check all assoc values reference in-scope vars only 
-    *)
+                    (* Check all assoc values reference in-scope vars only *)
                     Block[{assocVals, inScope = True},
                         assocVals = ptlToStr[ptlCleanExpr[#]]& /@ Values[assoc];
                         inScope = AllTrue[assocVals, (StringLength[#] <= 1 && MemberQ[vars, #]) || StringLength[#] > 1&];
                         If[ ! inScope,
-(* Out-of-scope var in assoc: bare name + simp only 
-    *)
-                            {
-                                If[ rev,
-                                    LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]]
-                                    ,
-                                    LeanConst[name, {}]
-                                ]
-                                ,
-                                {}
-                            }
+                            (* Out-of-scope var in assoc: bare name + simp only *)
+                            {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]], LeanConst[name, {}]], {}}
                             ,
                             If[rev, srExpr = LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], srExpr]];
                             {LeanConst["sr", {}], {LeanTactic["have", "sr", srExpr]}}
                         ]
                     ]
                     ,
-(* Partial/empty assoc: bare name for simp only 
-    *)
-                    {
-                        If[ rev,
-                            LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]]
-                            ,
-                            LeanConst[name, {}]
-                        ]
-                        ,
-                        {}
-                    }
+                    (* Partial/empty assoc: bare name for simp only *)
+                    {If[rev, LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[name, {}]], LeanConst[name, {}]], {}}
                 ]
             ]
             ,
             {None, {}}
         ];
-(* Build body tactic:
-   case 1: pos + rwRule -> conv at h => nav; simp only [name]
-   case 2: no pos + preamble -> rw [sr] at h
-   case 3: no pos + bare     -> nth_rewrite 1 [rwRule] at h
-   case 4: no rwRule -> exact srcExpr *)
+        (* Build body tactic:
+           case 1: pos + rwRule -> conv at h => nav; simp only [name]
+           case 2: no pos + preamble -> rw [sr] at h
+           case 3: no pos + bare     -> nth_rewrite 1 [rwRule] at h
+           case 4: no rwRule -> exact srcExpr *)
         Block[{bodyTac, srName},
             bodyTac = If[ rwRuleExpr =!= None && st["pendingPos"] =!= None,
-(* Case 1: conv + simp only with bare name for positional rewrite 
-    *)
+                (* Case 1: conv + simp only with bare name for positional rewrite *)
                 srName = st["currentSR"]["name"];
                 Block[{
-                    convNav = ptlPosToConvList[st["pendingPos"]]
-                    ,
-                    nameExpr = If[ st["currentSR"]["reversed"],
-                        LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[srName, {}]]
-                        ,
-                        LeanConst[srName, {}]
-                    ]
+                    convNav = ptlPosToConvList[st["pendingPos"]], nameExpr = If[st["currentSR"]["reversed"], LeanApp[LeanConst["Eq.symm", {LeanLevelSucc[LeanLevelZero[]]}], LeanConst[srName, {}]], LeanConst[srName, {}]]
                 },
-                    {
-                        LeanTactic["have", "h", srcExpr],
-                        LeanTactic["conv", "h", convNav, LeanTactic["simp", {nameExpr}]],
-                        LeanTactic["exact", LeanConst["h", {}]]
-                    }
+                    {LeanTactic["have", "h", srcExpr], LeanTactic["conv", "h", convNav, LeanTactic["simp", {nameExpr}]], LeanTactic["exact", LeanConst["h", {}]]}
                 ]
                 ,
                 If[ rwRuleExpr =!= None,
                     If[ Length[tacSteps] > 0,
-(* Case 2: preamble, no position -> rw [sr] at h 
-    *)
-                        Join[
-                            tacSteps
-                            ,
-                            {
-                                LeanTactic["have", "h", srcExpr],
-                                LeanTactic["rw", {rwRuleExpr}, "h"],
-                                LeanTactic["exact", LeanConst["h", {}]]
-                            }
-                        ]
+                        (* Case 2: preamble, no position -> rw [sr] at h *)
+                        Join[tacSteps, {LeanTactic["have", "h", srcExpr], LeanTactic["rw", {rwRuleExpr}, "h"], LeanTactic["exact", LeanConst["h", {}]]}]
                         ,
-(* Case 3: bare, no position -> nth_rewrite 1 [rwRule] at h 
-    *)
-                        {
-                            LeanTactic["have", "h", srcExpr],
-                            LeanTactic["nth_rewrite", 1, {rwRuleExpr}, "h"],
-                            LeanTactic["exact", LeanConst["h", {}]]
-                        }
+                        (* Case 3: bare, no position -> nth_rewrite 1 [rwRule] at h *)
+                        {LeanTactic["have", "h", srcExpr], LeanTactic["nth_rewrite", 1, {rwRuleExpr}, "h"], LeanTactic["exact", LeanConst["h", {}]]}
                     ]
                     ,
-(* Case 4: no rwRule -> exact srcExpr 
-    *)
+                    (* Case 4: no rwRule -> exact srcExpr *)
                     {LeanTactic["exact", srcExpr]}
                 ]
             ];
@@ -561,16 +472,12 @@ ptlProcessStep[HoldComplete[ConfirmAssert[lhs_ === eq : Inactive[Equal][_, _]]],
 (* ConfirmAssert with Extract *)
 
 ptlProcessStep[HoldComplete[ConfirmAssert[Extract[_, _] === Part[src_, 1]]], st_] := (
-    If[ st["currentSR"] === None,
-        st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> <||>|>
-    ];
+    If[st["currentSR"] === None, st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> False, "assoc" -> <||>|>];
     Nothing
 )
 
 ptlProcessStep[HoldComplete[ConfirmAssert[Extract[_, _] === Part[src_, 2]]], st_] := (
-    If[ st["currentSR"] === None,
-        st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> <||>|>
-    ];
+    If[st["currentSR"] === None, st["currentSR"] = <|"name" -> ptlLeanRef[src], "reversed" -> True, "assoc" -> <||>|>];
     Nothing
 )
 
@@ -583,6 +490,14 @@ ptlProcessStep[x_HoldComplete, _] := Nothing
 (* ====== MAIN PUBLIC FUNCTION ====== *)
 
 ProofToLean::sorry = "The proofs of `1` are sorry: the steps of the proof object that give them have no translation to Lean yet."
+
+(* the arity of each operator applied in the terms, into the opArities of ProofToLean: an applied symbol that is
+   not excluded, and not a one-letter System symbol *)
+recordOperatorArities[terms_List, excluded_List] := Cases[
+    terms,
+    f_Symbol[args___] /; ! MemberQ[excluded, ToString[f]] && (StringLength[ToString[f]] > 1 || Context[f] =!= "System`") :> (opArities[ToString[f]] = Length[{args}]),
+    Infinity
+]
 
 ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstants, finalGoalType, envData, src, env},
     pf = proof["ProofFunction"];
@@ -598,18 +513,13 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
     st["finalVars"] = {};
     st["decls"] = {};
     (* Check if UnformalizeSymbols is available *)
-    $ptlHasUnformalize = Quiet @
-        Check[
-            ResourceFunction["UnformalizeSymbols"];
-            True
-            ,
-            False
-        ];
-(* Detect operators -- any applied symbol that's not a Lean/WL builtin 
-    
-    
-    
-    *)
+    $ptlHasUnformalize = Quiet @ Check[
+        ResourceFunction["UnformalizeSymbols"];
+        True
+        ,
+        False
+    ];
+    (* Detect operators: any applied symbol that is not a Lean or Wolfram Language builtin *)
     opArities = Association[];
     hasCenterDot = Length[Cases[pf, _CenterDot, Infinity]] > 0;
     With[{
@@ -632,61 +542,44 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
             "Repeated"
         }
     },
-        Cases[
-            pf
-            ,
-            Inactive[Equal][lhs_, rhs_] :>
-                Cases[
-                    {lhs, rhs}
-                    ,
-                    f_Symbol[args___] /; ! MemberQ[excluded, ToString[f]] && (StringLength[ToString[f]] > 1 || Context[f] =!= "System`")
-                    :>
-                    (opArities[ToString[f]] = Length[{args}])
-                    ,
-                    Infinity
-                ]
-            ,
-            Infinity
-        ]
+        Cases[pf, Inactive[Equal][lhs_, rhs_] :> recordOperatorArities[{lhs, rhs}, excluded], Infinity]
     ];
     (* Shared constants *)
     allConstants = Association[];
     Cases[
         pf
         ,
-        Inactive[Equal][lhs_, rhs_] :>
-            Cases[
-                {lhs, rhs}
+        Inactive[Equal][lhs_, rhs_] :> Cases[
+            {lhs, rhs}
+            ,
+            s_Symbol /; ! MemberQ[
+                {
+                    "Blank",
+                    "Pattern",
+                    "Inactive",
+                    "Equal",
+                    "ReplaceAll",
+                    "Rule",
+                    "Module",
+                    "Set",
+                    "CompoundExpression",
+                    "List",
+                    "Condition",
+                    "HoldComplete",
+                    "Hold",
+                    "Alternatives",
+                    "Optional",
+                    "Repeated",
+                    "True",
+                    "False",
+                    "Null"
+                }
                 ,
-                s_Symbol /;
-                        ! MemberQ[
-                                {
-                                    "Blank",
-                                    "Pattern",
-                                    "Inactive",
-                                    "Equal",
-                                    "ReplaceAll",
-                                    "Rule",
-                                    "Module",
-                                    "Set",
-                                    "CompoundExpression",
-                                    "List",
-                                    "Condition",
-                                    "HoldComplete",
-                                    "Hold",
-                                    "Alternatives",
-                                    "Optional",
-                                    "Repeated",
-                                    "True",
-                                    "False",
-                                    "Null"
-                                }
-                                ,
-                                ToString[s]
-                            ] && ! KeyExistsQ[opArities, ToString[s]] :> (allConstants[ToString[s]] = True)
-                ,
-                Infinity
-            ]
+                ToString[s]
+            ] && ! KeyExistsQ[opArities, ToString[s]] :> (allConstants[ToString[s]] = True)
+            ,
+            Infinity
+        ]
         ,
         Infinity
     ];
@@ -700,11 +593,7 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
         {i, 500}
     ];
     (* Add FinalGoal theorem *)
-    finalGoalType = If[ st["finalLemmaTypeExpr"] =!= None,
-        st["finalLemmaTypeExpr"]
-        ,
-        ptlWrapForall[st["finalLemmaVars"], st["finalTypeExpr"]]
-    ];
+    finalGoalType = If[st["finalLemmaTypeExpr"] =!= None, st["finalLemmaTypeExpr"], ptlWrapForall[st["finalLemmaVars"], st["finalTypeExpr"]]];
     AppendTo[st["decls"], "FinalGoal"];
     st["term", "FinalGoal"] = <|
         "Name" -> "FinalGoal"
@@ -713,18 +602,8 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
         ,
         "_TypeExpr" -> finalGoalType
         ,
-        "_Tactic"
-        ->
-        With[{
-            exactTac = LeanTactic[
-                "exact", Fold[LeanApp, LeanConst[st["finalLemma"], {}], LeanConst[#, {}]& /@ st["finalLemmaVars"]]
-            ]
-        },
-            If[ Length[st["finalLemmaVars"]] > 0,
-                LeanTactic[{LeanTactic["intro", st["finalLemmaVars"]], exactTac}]
-                ,
-                LeanTactic[{exactTac}]
-            ]
+        "_Tactic" -> With[{exactTac = LeanTactic["exact", Fold[LeanApp, LeanConst[st["finalLemma"], {}], LeanConst[#, {}]& /@ st["finalLemmaVars"]]]},
+            If[Length[st["finalLemmaVars"]] > 0, LeanTactic[{LeanTactic["intro", st["finalLemmaVars"]], exactTac}], LeanTactic[{exactTac}]]
         ]
     |>;
     (* a step that has no translation yet leaves its theorem proved by sorry, which the user must hear of *)
@@ -735,23 +614,13 @@ ProofToLean[proof_] := Block[{pf, step, st, opArities, hasCenterDot, allConstant
     envData = <||>;
     Do[envData[name] = LeanTerm[st["term", name]];, {name, st["decls"]}];
     (* Store metadata *)
-    envData["_Preamble"] = <|
-        "Imports" -> {},
-        "TypeAxiom" -> "U",
-        "Operators" -> opArities,
-        "CenterDot" -> hasCenterDot,
-        "SharedConstants" -> Sort[st["sharedConstants"]]
-    |>;
+    envData["_Preamble"] = <|"Imports" -> {}, "TypeAxiom" -> "U", "Operators" -> opArities, "CenterDot" -> hasCenterDot, "SharedConstants" -> Sort[st["sharedConstants"]]|>;
     envData["_DeclOrder"] = st["decls"];
     (* Generate source and compile *)
     env = LeanEnvironment[envData];
     src = LeanExportString[env];
     envData["_Source"] = src;
-(* Source is stored -- native compilation deferred to LeanState on demand 
-    
-    
-    
-    *)
+    (* Source is stored -- native compilation deferred to LeanState on demand *)
     LeanEnvironment[envData]
 ]
 

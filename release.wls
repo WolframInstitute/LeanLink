@@ -31,9 +31,7 @@ dryRun = MemberQ[$ScriptCommandLine, "--dry-run"]
 
 With[{id = Environment["WOLFRAM_ID"], pw = Environment["WOLFRAM_PASSWORD"]},
     If[StringQ[id] && id =!= $WolframID, CloudDisconnect[]];
-    If[ ! TrueQ[$CloudConnected] && (StringQ[id] || ! dryRun),
-        If[StringQ[id] && StringQ[pw], CloudConnect[id, pw], If[StringQ[id], CloudConnect[id], CloudConnect[]]]
-    ]
+    If[! TrueQ[$CloudConnected] && (StringQ[id] || ! dryRun), If[StringQ[id] && StringQ[pw], CloudConnect[id, pw], If[StringQ[id], CloudConnect[id], CloudConnect[]]]]
 ]
 
 Print["PacletPage ", loadPacletPage[], If[dryRun, ", dry run", ", publishing as " <> ToString[$WolframID]]]
@@ -45,7 +43,9 @@ If[ ! dryRun && $WolframID =!= $siteAccount,
 
 buildDocumentation[]
 
-result = PublishPacletPage[$leanlinkDir, "LeanLink",
+result = PublishPacletPage[
+    $leanlinkDir,
+    "LeanLink",
     "Build" -> False,
     "DryRun" -> dryRun,
     "Account" -> $siteAccount,

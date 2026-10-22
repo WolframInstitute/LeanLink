@@ -12,48 +12,12 @@ Begin["`Private`"];
 
 Options[ImportDOT] = Options[Graph]
 
-ImportDOT[file_String, opts : OptionsPattern[]] := Block[{
-    raw,
-    lines,
-    nodeLines,
-    edgeLines,
-    parseAttrs,
-    parseNode,
-    parseEdge,
-    nodes,
-    edges,
-    hexToRGB,
-    vNames,
-    edgeObjs,
-    eStyles,
-    eLabels,
-    allNames,
-    edgeNodes,
-    nodeAttrs,
-    getColor,
-    getLabel,
-    getType
-},
+ImportDOT[file_String, opts : OptionsPattern[]] := Block[{raw, lines, nodeLines, edgeLines, parseAttrs, parseNode, parseEdge, nodes, edges, hexToRGB, vNames, edgeObjs, eStyles, eLabels, allNames, edgeNodes, nodeAttrs, getColor, getLabel, getType},
     raw = Import[file, "Text"];
     lines = StringSplit[raw, "\n"];
     hexToRGB[hex_String] := RGBColor @@ (IntegerDigits[FromDigits[StringDrop[hex, 1], 16], 256, 3] / 255.);
-    parseAttrs[attrStr_String] := Association[
-        Rule @@@
-            StringCases[
-                attrStr
-                ,
-                RegularExpression["(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|([^,\\]\\s]+))"]
-                :>
-                {"$1", If["$2" =!= "", "$2", "$3"]}
-            ]
-    ];
-    nodeLines = Select[
-        lines
-        ,
-        StringMatchQ[#, Whitespace... ~~ "\"" ~~ __ ~~ "\"" ~~ Whitespace... ~~ "[" ~~ __ ~~ "]" ~~ ___]
-        &&
-        ! StringContainsQ[#, "->"]&
-    ];
+    parseAttrs[attrStr_String] := Association[Rule @@@ StringCases[attrStr, RegularExpression["(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|([^,\\]\\s]+))"] :> {"$1", If["$2" =!= "", "$2", "$3"]}]];
+    nodeLines = Select[lines, StringMatchQ[#, Whitespace... ~~ "\"" ~~ __ ~~ "\"" ~~ Whitespace... ~~ "[" ~~ __ ~~ "]" ~~ ___] && ! StringContainsQ[#, "->"]&];
     edgeLines = Select[lines, StringContainsQ[#, "->"]&];
     parseNode[line_String] := Block[{name, attrStr},
         name = First[StringCases[line, "\"" ~~ n : Shortest[__] ~~ "\"" ~~ Whitespace... ~~ "[" :> n], ""];
@@ -61,31 +25,7 @@ ImportDOT[file_String, opts : OptionsPattern[]] := Block[{
         <|"name" -> name, "attrs" -> parseAttrs[attrStr]|>
     ];
     parseEdge[line_String] := Block[{parts, attrStr},
-        parts = First[
-            StringCases[
-                line
-                ,
-                "\""
-                    ~~
-                    s : Shortest[__]
-                    ~~
-                    "\""
-                    ~~
-                    Whitespace...
-                    ~~
-                    "->"
-                    ~~
-                    Whitespace...
-                    ~~
-                    "\""
-                    ~~
-                    t : Shortest[__]
-                    ~~
-                    "\"" :> {s, t}
-            ]
-            ,
-            {"?", "?"}
-        ];
+        parts = First[StringCases[line, "\"" ~~ s : Shortest[__] ~~ "\"" ~~ Whitespace... ~~ "->" ~~ Whitespace... ~~ "\"" ~~ t : Shortest[__] ~~ "\"" :> {s, t}], {"?", "?"}];
         attrStr = First[StringCases[line, "[" ~~ a : Shortest[__] ~~ "]" :> a], ""];
         <|"src" -> parts[[1]], "tgt" -> parts[[2]], "attrs" -> parseAttrs[attrStr]|>
     ];
@@ -93,13 +33,7 @@ ImportDOT[file_String, opts : OptionsPattern[]] := Block[{
     edges = parseEdge /@ edgeLines;
     allNames = #["name"]& /@ nodes;
     edgeNodes = Union[#["src"]& /@ edges, #["tgt"]& /@ edges];
-    nodes = Join[
-        nodes
-        ,
-        <|"name" -> #, "attrs" -> <|"fillcolor" -> "#e0e0e0", "label" -> #|>|>&
-        /@
-        Complement[edgeNodes, allNames]
-    ];
+    nodes = Join[nodes, <|"name" -> #, "attrs" -> <|"fillcolor" -> "#e0e0e0", "label" -> #|>|>& /@ Complement[edgeNodes, allNames]];
     nodeAttrs = Association[#["name"] -> #["attrs"]& /@ nodes];
     getColor[n_] := Block[{fc = Lookup[Lookup[nodeAttrs, n, <||>], "fillcolor", ""]},
         If[StringQ[fc] && StringMatchQ[fc, "#" ~~ __], hexToRGB[fc], GrayLevel[0.55]]
@@ -117,13 +51,12 @@ ImportDOT[file_String, opts : OptionsPattern[]] := Block[{
             tag = Lookup[e["attrs"], "tactic", None];
             pw = Interpreter["Number"][Lookup[e["attrs"], "penwidth", "1"]];
             rgb = hexToRGB[color];
-            DirectedEdge[e["src"], e["tgt"], tag] ->
-                Directive[
-                    LightDarkSwitched[rgb, Lighter[rgb, 0.4]],
-                    AbsoluteThickness[pw],
-                    Arrowheads[0.01],
-                    If[style === "dashed", Dashing[{Small, Small}], Sequence @@ {}]
-                ]
+            DirectedEdge[e["src"], e["tgt"], tag] -> Directive[
+                LightDarkSwitched[rgb, Lighter[rgb, 0.4]],
+                AbsoluteThickness[pw],
+                Arrowheads[0.01],
+                If[style === "dashed", Dashing[{Small, Small}], Sequence @@ {}]
+            ]
         ]
         ,
         {e, edges}
@@ -134,15 +67,12 @@ ImportDOT[file_String, opts : OptionsPattern[]] := Block[{
             color = Lookup[e["attrs"], "fontcolor", Lookup[e["attrs"], "color", "#666666"]];
             tag = Lookup[e["attrs"], "tactic", None];
             If[ StringQ[lbl] && lbl =!= "",
-                DirectedEdge[e["src"], e["tgt"], tag]
-                ->
-                Style[
+                DirectedEdge[e["src"], e["tgt"], tag] -> Style[
                     lbl,
                     FontSize -> 5,
                     FontFamily -> "Menlo",
                     LightDarkSwitched[If[StringMatchQ[color, "#" ~~ __], hexToRGB[color], GrayLevel[0.4]], GrayLevel[0.7]]
-                ]
-                ,
+                ],
                 Nothing
             ]
         ]
@@ -150,65 +80,16 @@ ImportDOT[file_String, opts : OptionsPattern[]] := Block[{
         {e, edges}
     ];
     Graph[
-        vNames
-        ,
-        edgeObjs
-        ,
-        opts
-        ,
-        VertexShapeFunction ->
-            Map[
-                With[{bg = getColor[#], lbl = getLabel[#], tp = getType[#]},
-                    # ->
-                        Function[
-                            Inset[
-                                Framed[
-                                    Style[
-                                        Tooltip[lbl, tp]
-                                        ,
-                                        "Text"
-                                        ,
-                                        FontSize -> 7
-                                        ,
-                                        LightDarkSwitched[
-                                            If[ColorDistance[bg, White] > 0.4, White, Black],
-                                            If[ColorDistance[bg, Black] > 0.4, White, GrayLevel[0.9]]
-                                        ]
-                                        ,
-                                        Bold
-                                    ]
-                                    ,
-                                    Background -> LightDarkSwitched[bg]
-                                    ,
-                                    RoundingRadius -> 3
-                                    ,
-                                    FrameStyle -> LightDarkSwitched[GrayLevel[0.4], GrayLevel[0.6]]
-                                    ,
-                                    FrameMargins -> {{3, 3}, {1, 1}}
-                                ]
-                                ,
-                                #1
-                                ,
-                                #3
-                            ]
-                        ]
-                ]&
-                ,
-                vNames
-            ]
-        ,
-        GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top}
-        ,
-        EdgeStyle -> eStyles
-        ,
-        EdgeLabels -> eLabels
-        ,
-        VertexSize -> If[Length[vNames] <= 10, 0.3, 0.05]
-        ,
-        ImageSize -> Max[300, Min[1200, 40 * Length[vNames]]]
-        ,
-        AspectRatio -> 1/2
-        ,
+        vNames,
+        edgeObjs,
+        opts,
+        VertexShapeFunction -> Map[# -> framedVertex[getLabel[#], getType[#], getColor[#]]&, vNames],
+        GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Top},
+        EdgeStyle -> eStyles,
+        EdgeLabels -> eLabels,
+        VertexSize -> If[Length[vNames] <= 10, 0.3, 0.05],
+        ImageSize -> Max[300, Min[1200, 40 * Length[vNames]]],
+        AspectRatio -> 1/2,
         PerformanceGoal -> "Quality"
     ]
 ]
