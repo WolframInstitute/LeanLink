@@ -14,6 +14,21 @@ $lean = LeanImportString["theorem bridgeProbe (n : Nat) : 0 + n = n := Nat.zero_
 
 (* ================================================================ *)
 
+(* each subterm Lean shares sent once, as the bridge reads terms: the table decodes to the very term the
+   full export writes out *)
+VerificationTest[
+    With[{handle = Wolfram`LeanLink`Private`extractHandle[$lean]},
+        Function[{name, field}, SameQ[
+            Wolfram`LeanLink`Private`sharedExpression[Wolfram`LeanLink`Private`decodeWXF[
+                If[field === "Type", Wolfram`LeanLink`Private`$getTypeSharedFn, Wolfram`LeanLink`Private`$getValueSharedFn][handle, name]
+            ]],
+            Wolfram`LeanLink`Private`decodeWXF[If[field === "Type", Wolfram`LeanLink`Private`$getTypeFn, Wolfram`LeanLink`Private`$getValueFn][handle, name, 1000000]]
+        ]] @@@ {{"Nat.zero_add", "Type"}, {"Nat.zero_add", "Term"}, {"bridgeProbe", "Term"}, {"List.foldl", "Term"}, {"Nat.rec", "Type"}}
+    ],
+    {True, True, True, True, True},
+    TestID -> "Shared-export-is-the-full-term"
+]
+
 VerificationTest[
     Keys[LeanToTypeTheory[$lean, "Eq.symm"]],
     {"Eq", "Eq.refl", InductiveRecursor["Eq"], "rfl", "Eq.symm"},

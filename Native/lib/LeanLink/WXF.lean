@@ -113,6 +113,9 @@ def wlAssociation (entries : Array (ByteArray × ByteArray)) : ByteArray :=
 
 def ctx := "Wolfram`LeanLink"
 
+/-- The context of the heads only the package itself reads, as those of a shared term -/
+def privateCtx := "Wolfram`LeanLink`Private"
+
 /-- Serialize a Lean Name to WXF string -/
 def nameToWXF (n : Lean.Name) : ByteArray :=
   string n.toString
@@ -205,6 +208,60 @@ partial def exprToWXF (e : Lean.Expr) (depth : Nat := 100) : ByteArray :=
       exprToWXF struct (depth - 1)]
   | .mdata _ e =>
     exprToWXF e (depth - 1)  -- skip metadata
+
+/-- The table a shared serialization builds: the position of each subterm already
+    written, by its address, and the nodes written so far. -/
+structure SharedNodes where
+  positions : Std.HashMap USize Nat := {}
+  nodes : Array ByteArray := #[]
+
+/-- The position (1-based) of `e`'s node in the table, written after its children's.
+    A subterm that Lean shares is written once, and every parent names it by position. -/
+unsafe def sharedNode (e : Lean.Expr) : StateM SharedNodes Nat := do
+  match e with
+  | .mdata _ inner => sharedNode inner  -- skip metadata
+  | _ =>
+    let address := ptrAddrUnsafe e
+    match (← get).positions[address]? with
+    | some position => return position
+    | none =>
+      let node ← match e with
+        | .app fn arg => do
+          let f ← sharedNode fn
+          let a ← sharedNode arg
+          pure (wlFunction (wlSymbol privateCtx "LeanSharedApp") #[integer f, integer a])
+        | .lam name ty body bi => do
+          let t ← sharedNode ty
+          let b ← sharedNode body
+          pure (wlFunction (wlSymbol privateCtx "LeanSharedLam") #[nameToWXF name, integer t, integer b, string (binderInfoStr bi)])
+        | .forallE name ty body bi => do
+          let t ← sharedNode ty
+          let b ← sharedNode body
+          pure (wlFunction (wlSymbol privateCtx "LeanSharedForall") #[nameToWXF name, integer t, integer b, string (binderInfoStr bi)])
+        | .letE name ty val body _ => do
+          let t ← sharedNode ty
+          let v ← sharedNode val
+          let b ← sharedNode body
+          pure (wlFunction (wlSymbol privateCtx "LeanSharedLet") #[nameToWXF name, integer t, integer v, integer b])
+        | .proj typeName idx struct => do
+          let s ← sharedNode struct
+          pure (wlFunction (wlSymbol privateCtx "LeanSharedProj") #[nameToWXF typeName, integer idx, integer s])
+        -- terminals, written in full as exprToWXF writes them
+        | _ => pure (exprToWXF e 1)
+      modify fun s => { positions := s.positions.insert address (s.nodes.size + 1), nodes := s.nodes.push node }
+      return (← get).nodes.size
+
+unsafe def exprToSharedWXFUnsafe (e : Lean.Expr) : ByteArray :=
+  let (_, table) := (sharedNode e).run {}
+  wlFunction (wlSymbol privateCtx "LeanShared") #[wlList table.nodes]
+
+/-- Serialize a Lean Expr to WXF as the table of its distinct subterms,
+    LeanShared[{node, ...}]: each node after its children, which it names by their
+    positions in the table (1-based), and the last node the whole expression. A proof
+    that shares subterms many times over, as omega's do, is written in the size of its
+    distinct subterms, where exprToWXF writes every copy out. -/
+@[implemented_by exprToSharedWXFUnsafe]
+opaque exprToSharedWXF (e : Lean.Expr) : ByteArray
 
 /-- Serialize a ConstantInfo kind string -/
 def constantKind (ci : Lean.ConstantInfo) : String := match ci with

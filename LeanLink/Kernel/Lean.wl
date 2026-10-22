@@ -324,6 +324,11 @@ $getValueFn := $getValueFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_valu
 
 $getConstantFn := $getConstantFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_constant", {Integer, "UTF8String"}, {Integer, 1}]
 
+(* a type or a value as the table of its distinct subterms; $Failed with a shim older than 1.2.2 *)
+$getTypeSharedFn := $getTypeSharedFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_type_shared", {Integer, "UTF8String"}, {Integer, 1}]]
+
+$getValueSharedFn := $getValueSharedFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_value_shared", {Integer, "UTF8String"}, {Integer, 1}]]
+
 $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_used_constants", {Integer, "UTF8String"}, {Integer, 1}]
 
 $collectAxiomsFn := $collectAxiomsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_collect_axioms", {Integer, "UTF8String"}, {Integer, 1}]
@@ -359,6 +364,28 @@ $openGoalExprFn := $openGoalExprFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_
 $ppExprFn := $ppExprFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_pp_expr", {Integer, {Integer, 1}}, {Integer, 1}]
 
 decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]]
+
+(* A term as the table of its distinct subterms, LeanShared[{node, ...}] (the shim's exprToSharedWXF): each
+   node after its children, which it names by their positions, and the last node the whole term. It is
+   rebuilt with each subterm one expression however often it occurs, so a proof that shares a few thousand
+   subterms millions of times over, as omega's do, stays the size of its distinct subterms. *)
+sharedExpression[LeanShared[nodes_List]] := Module[{built = ConstantArray[Null, Length[nodes]]},
+    Do[
+        built[[position]] = Replace[nodes[[position]], {
+            LeanSharedApp[function_Integer, argument_Integer] :> LeanApp[built[[function]], built[[argument]]],
+            LeanSharedLam[name_, type_Integer, body_Integer, binder_] :> LeanLam[name, built[[type]], built[[body]], binder],
+            LeanSharedForall[name_, type_Integer, body_Integer, binder_] :> LeanForall[name, built[[type]], built[[body]], binder],
+            LeanSharedLet[name_, type_Integer, value_Integer, body_Integer] :> LeanLet[name, built[[type]], built[[value]], built[[body]]],
+            LeanSharedProj[structure_, index_Integer, term_Integer] :> LeanProj[structure, index, built[[term]]]
+        }],
+        {position, Length[nodes]}
+    ];
+    Last[built]
+]
+
+sharedExpression[other_] := other
+
+sharedFetchQ[] := MatchQ[{$getTypeSharedFn, $getValueSharedFn}, {_LibraryFunction, _LibraryFunction}]
 
 (* ============================================================================ *)
 

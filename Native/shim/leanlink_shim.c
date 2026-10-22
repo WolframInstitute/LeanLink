@@ -66,6 +66,8 @@ extern lean_object* leanlink_free_env(uint64_t handle);
 extern lean_object* leanlink_list_theorems(uint64_t handle, lean_object* filter);
 extern lean_object* leanlink_get_type(uint64_t handle, lean_object* name, uint32_t depth);
 extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint32_t depth);
+extern lean_object* leanlink_get_type_shared(uint64_t handle, lean_object* name);
+extern lean_object* leanlink_get_value_shared(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_collect_axioms(uint64_t handle, lean_object* name);
@@ -358,6 +360,46 @@ DLLEXPORT int leanlink_wl_get_value(
 
     lean_object* io_res = leanlink_get_value(handle, name, depth);
     /* name consumed by leanlink_get_value */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * getTypeShared(handle, name) -> MTensor (WXF bytes): the type as the table of its
+ * distinct subterms, LeanShared[{node, ...}], each subterm Lean shares written once
+ */
+DLLEXPORT int leanlink_wl_get_type_shared(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_get_type_shared(handle, name);
+    /* name consumed by leanlink_get_type_shared */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * getValueShared(handle, name) -> MTensor (WXF bytes): the value or proof as the table
+ * of its distinct subterms
+ */
+DLLEXPORT int leanlink_wl_get_value_shared(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* name_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* name = lean_mk_string(name_cstr);
+
+    lean_object* io_res = leanlink_get_value_shared(handle, name);
+    /* name consumed by leanlink_get_value_shared */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 

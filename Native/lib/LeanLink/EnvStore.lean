@@ -155,6 +155,31 @@ def getValueExport (handle : UInt64) (constName : @& String) (depth : UInt32) : 
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+/-- Get the type of a constant as WXF, each subterm Lean shares written once
+    (WXF.exprToSharedWXF): the form the TypeTheory bridge reads. -/
+@[export leanlink_get_type_shared]
+def getTypeSharedExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := WXF.nameOfString constName
+  match env.find? name with
+  | some ci => return WXF.serialize (WXF.exprToSharedWXF ci.type)
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
+/-- Get the value/proof of a constant as WXF, each subterm Lean shares written once:
+    an omega proof of a few thousand distinct subterms can be tens of millions written out. -/
+@[export leanlink_get_value_shared]
+def getValueSharedExport (handle : UInt64) (constName : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let name := WXF.nameOfString constName
+  match env.find? name with
+  | some ci =>
+    match ci.value? true with -- allowOpaque := true: Lean 4.30 gates theorem/opaque proofs behind it
+    | some v => return WXF.serialize (WXF.exprToSharedWXF v)
+    | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
+  | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+
 -- ============================================================================
 -- Definition unfolding
 -- ============================================================================

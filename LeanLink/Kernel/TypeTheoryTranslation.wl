@@ -242,12 +242,15 @@ constantKind[name_String] := Lookup[$kinds, name, $kinds[name] = Replace[Quiet[d
 
 $bridgeDepth = 1000000
 
-leanExpression[name_String, field : "Type" | "Term"] := Block[
-    {result = Quiet[decodeWXF[If[field === "Type", $getTypeFn, $getValueFn][$handle, name, $bridgeDepth]]]},
-    If[ isFFIError[result] || ! FreeQ[result, _LeanTruncated],
-        bridgeFailure["LeanExpression", "The `2` of `1` could not be read from Lean.", {name, ToLowerCase[field]}],
-        result
-    ]
+(* each subterm Lean shares read once, where the shim can send the table of distinct subterms; an older
+   shim writes the term out in full, to a depth no term reaches *)
+leanExpression[name_String, field : "Type" | "Term"] := Replace[
+    If[ sharedFetchQ[],
+        Quiet[sharedExpression[decodeWXF[If[field === "Type", $getTypeSharedFn, $getValueSharedFn][$handle, name]]]],
+        Quiet[decodeWXF[If[field === "Type", $getTypeFn, $getValueFn][$handle, name, $bridgeDepth]]]
+    ],
+    result_ /; isFFIError[result] || (! sharedFetchQ[] && ! FreeQ[result, _LeanTruncated]) :>
+        bridgeFailure["LeanExpression", "The `2` of `1` could not be read from Lean.", {name, ToLowerCase[field]}]
 ]
 
 constructorInductive[name_String] := Replace[First[leanSpine[Last[forallTelescope[leanExpression[name, "Type"]]]]], {
