@@ -682,12 +682,19 @@ $leanKeywords = {
 TypeTheoryToLean[environment_TypeTheoryEnvironment, name : Except[_List], opts : OptionsPattern[]] := TypeTheoryToLean[environment, {name}, opts]
 
 TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPattern[]] := catchBridgeFailure @ Block[
-    {declarations = Normal[environment], prelude = TypeTheoryEnvironment["Prelude"], $environment = environment, $declarationIndex, $constructorOwners, $blockOwners, needed},
+    {
+        declarations = Normal[environment],
+        prelude = TypeTheoryEnvironment["Prelude"],
+        $environment = environment,
+        $typeTheoryPrelude = TypeTheoryEnvironment["Prelude"],
+        $declarationIndex, $constructorOwners, $blockOwners, $leanClasses, needed
+    },
     checkLeanRules[environment];
     If[FailureQ[declarations], Throw[declarations, $bridgeTag]];
     $declarationIndex = Association[Function[declaration, declarationKey[declaration] -> declaration] /@ declarations];
     $constructorOwners = Association[Catenate[constructorOwners /@ declarations]];
     $blockOwners = Association[Catenate[blockOwners /@ declarations]];
+    $leanClasses = classKeys[declarations];
     Scan[Function[name, If[! KeyExistsQ[environment, name], bridgeFailure["UnknownConstant", "`1` is not declared in the environment.", {name}]]], names];
     needed = exportOrder[Function[name, ownerKey[HoldComplete[name]]] /@ names];
     (* a prelude constant is written as Lean's only if it is the prelude's own *)
@@ -753,6 +760,7 @@ resultHead[HoldComplete[Implies[_, codomain_]]] := resultHead[HoldComplete[codom
 resultHead[HoldComplete[TypeSpecifier[_ -> codomain_]]] := resultHead[HoldComplete[codomain]]
 resultHead[HoldComplete[Construct[head_, ___]]] := resultHead[HoldComplete[head]]
 resultHead[HoldComplete[Subscript[head_, ___]]] := HoldComplete[head]
+resultHead[HoldComplete[Subscript[head_, ___][___]]] := HoldComplete[head]
 resultHead[HoldComplete[head_[___]]] := HoldComplete[head]
 resultHead[HoldComplete[head_]] := HoldComplete[head]
 
@@ -762,9 +770,31 @@ ownerKey[key_HoldComplete] := With[
     Lookup[$blockOwners, owner, owner]
 ]
 
-(* a constant is Lean's own when it came from Lean, as a string name, or is a prelude constant Lean has *)
+(* a constant is Lean's own when it came from Lean, as a string name the prelude does not declare, or is a
+   prelude constant Lean has; the prelude names its internal constants by strings too, as "equal" *)
 
-leanSideQ[key_HoldComplete] := MatchQ[key, HoldComplete[_String] | HoldComplete[InductiveRecursor[_String] | InductiveRecursor[_String, _Integer]]] || KeyExistsQ[$preludeLeanNames, key]
+leanSideQ[key_HoldComplete] := Or[
+    KeyExistsQ[$preludeLeanNames, key],
+    MatchQ[key, HoldComplete[_String] | HoldComplete[InductiveRecursor[_String] | InductiveRecursor[_String, _Integer]]] && ! preludeStringNameQ[key]
+]
+
+preludeStringNameQ[key_HoldComplete] := MatchQ[key, HoldComplete[name_String] /; KeyExistsQ[$typeTheoryPrelude, name]]
+
+$typeTheoryPrelude = <||>
+
+(* the types used as classes, by an instance or an instance-implicit binder, which Lean declares with class
+   inductive; Lean refuses the binder [x : T] for a T that is not a class *)
+
+classKeys[declarations_List] := DeleteDuplicates[Join[
+    Cases[declarations, TypeTheoryDefinition[_, Typed[_, type_], ___, (Rule | RuleDelayed)["Instance", True], ___] :> resultHead[HoldComplete[type]]],
+    Cases[declarations, Annotation[Typed[_, type_], "InstanceImplicit"] :> resultHead[HoldComplete[type]], Infinity]
+]]
+
+$leanClasses = {}
+
+(* a class of TypeTheory's own, or Lean's Nonempty *)
+
+leanClassQ[key_HoldComplete] := MemberQ[$leanClasses, key] && (! KeyExistsQ[$preludeLeanNames, key] || key === HoldComplete[Nonempty])
 
 exportOrder[roots_List] := Block[{$visited = <||>},
     Flatten[Last[Reap[Scan[visitDeclaration, roots], $exportTag]]]
@@ -790,7 +820,7 @@ mentionedConstants[declaration_] := DeleteDuplicates[Cases[
 leanName[key_HoldComplete] := Which[
     KeyExistsQ[$preludeLeanNames, key],
         $preludeLeanNames[key],
-    MatchQ[key, HoldComplete[_String]],
+    MatchQ[key, HoldComplete[_String]] && ! preludeStringNameQ[key],
         First[key],
     MatchQ[key, HoldComplete[InductiveRecursor[_]]],
         leanName[Replace[key, HoldComplete[InductiveRecursor[inductive_]] :> HoldComplete[inductive]]] <> ".rec",
@@ -824,8 +854,11 @@ declarationText[TypeTheoryAxiom[name_, type_, options___]] := Block[{$universeNa
     "axiom " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>]
 ]
 
+(* an instance of a class is Lean's instance too *)
+
 declarationText[TypeTheoryDefinition[name_, Typed[value_, type_], options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
-    "noncomputable def " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " :=\n  " <> leanText[value, <||>]
+    If[MemberQ[HoldComplete[options], (Rule | RuleDelayed)["Instance", True]] && leanClassQ[resultHead[HoldComplete[type]]], "@[instance] ", ""] <>
+        "noncomputable def " <> leanName[HoldComplete[name]] <> universeSuffix[] <> " : " <> leanText[type, <||>] <> " :=\n  " <> leanText[value, <||>]
 ]
 
 declarationText[TypeTheoryTheorem[name_, statement_, proof_, options___]] := Block[{$universeNames = universeNames[HoldComplete[options]]},
@@ -861,7 +894,7 @@ declarationText[TypeTheoryInductiveType[name_, type_, {constructors___}, options
 ]
 
 inductiveText[name_HoldComplete, type_HoldComplete, constructors_List] :=
-    "inductive " <> leanName[name] <> universeSuffix[] <> " : " <> heldLeanText[type, <||>] <> " where" <> StringJoin[
+    If[leanClassQ[name] && Length[$declaredInductive] === 1, "class inductive ", "inductive "] <> leanName[name] <> universeSuffix[] <> " : " <> heldLeanText[type, <||>] <> " where" <> StringJoin[
         Function[constructor, "\n  | " <> identifierBase[First[constructor]] <> " : " <> heldLeanText[Last[constructor], <||>]] /@ constructors
     ]
 
@@ -943,8 +976,13 @@ binderChain[binders_List, body_HoldComplete, scope_Association, separator_String
 
 addBinderText[{texts_List, scope_Association}, binder_HoldComplete] := Block[{parts = binderParts[binder], identifier},
     identifier = freshIdentifier[parts["Name"], scope];
-    {Append[texts, bracketed[parts["Kind"], identifier <> " : " <> heldLeanText[parts["Type"], scope]]], Append[scope, parts["Name"] -> identifier]}
+    {Append[texts, bracketed[leanBinderKind[parts], identifier <> " : " <> heldLeanText[parts["Type"], scope]]], Append[scope, parts["Name"] -> identifier]}
 ]
+
+(* every application is explicit, so an instance-implicit binder whose type Lean has as no class may be an
+   implicit one *)
+
+leanBinderKind[parts_Association] := If[parts["Kind"] === "InstanceImplicit" && ! leanClassQ[resultHead[parts["Type"]]], "Implicit", parts["Kind"]]
 
 binderParts[HoldComplete[Typed[name_, type_]]] := <|"Name" -> HoldComplete[name], "Type" -> HoldComplete[type], "Kind" -> "Explicit"|>
 

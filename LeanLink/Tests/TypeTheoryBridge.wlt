@@ -263,4 +263,24 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-the-whole-prelude-compiles"
 ]
 
+(* the prelude names its internal constants by strings, as "equal", which are its own and not Lean's; a type
+   with instances is a class, and an instance-implicit binder of a type Lean has as no class is implicit *)
+
+VerificationTest[
+    With[{source = TypeTheoryToLean[$prelude, {DecideSoundness, NaturalNumberEqualityDecidable}]},
+        {
+            StringContainsQ[source, "class inductive TypeTheory.Decidable"],
+            StringContainsQ[source, "@[instance] noncomputable def TypeTheory.NaturalNumberEqualityDecidable"],
+            StringContainsQ[source, "noncomputable def TypeTheory.equal :"],
+            StringContainsQ[source, "[d : (@TypeTheory.Decidable p)]"],
+            StringContainsQ[
+                TypeTheoryToLean[TypeTheoryEnvironment[$prelude, {TypeTheoryAxiom[Reflexive, ForAll[{TypedImplicit[n, NonNegativeIntegers], Annotation[Typed[h, n == n], "InstanceImplicit"]}, True]]}], Reflexive],
+                "{h : (@Eq.{1} @Nat n n)}"
+            ]
+        }
+    ],
+    {True, True, True, True, True},
+    TestID -> "TypeTheoryToLean-writes-the-prelude's-string-names-classes-and-instances"
+]
+
 EndTestSection[]
