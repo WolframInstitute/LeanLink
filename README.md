@@ -96,6 +96,8 @@ A standalone notebook, not part of the documentation: [TuringMachineSuccessor](h
 
 This runs `lake build` for the Lean library, then compiles the C shim with CMake into `LeanLink/LibraryResources/<platform>/`: for the machine's own platform with its compiler (clang on macOS, `cc` or `$CC` on Linux), and for each other platform whose cross compiler is on `PATH` (`x86_64-linux-gnu-gcc`, `aarch64-linux-gnu-gcc`, `x86_64-w64-mingw32-gcc`). The macOS shims build only on macOS. The script fails if the machine's own shim does not build; a release needs all five (macOS ARM64 and x86-64, Linux x86-64 and ARM64, Windows x86-64), which `submit.wls` checks.
 
+To check the Windows shim without Windows, `Native/shim/wine/test_windows_shim.sh` loads it under Wine in a Docker container, with Lean's Windows runtime next to it, and fails if any symbol it imports is missing from the DLL it names (on Windows, error 127) or if it cannot load `Init` and answer a query.
+
 ### Tests
 
 ```bash
