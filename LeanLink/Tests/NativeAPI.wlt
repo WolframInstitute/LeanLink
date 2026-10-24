@@ -572,8 +572,13 @@ VerificationTest[
 
 VerificationTest[
     Module[{export},
+        (* Earlier tests leave r, Axiom, Hypothesis, ... in Global`; making the same names
+           in a context of their own is what this test does, so their ::shdw is expected *)
         export[context_] := Block[{$Context = context, $ContextPath = {"System`", context}},
-            LeanExportString[ProofToLean[ToExpression["FindEquationalProof[p == r, {p == q, q == r}]"]]]
+            Quiet[
+                LeanExportString[ProofToLean[ToExpression["FindEquationalProof[p == r, {p == q, q == r}]"]]],
+                General::shdw
+            ]
         ];
         With[{source = export["ProofToLeanGlobal`"]},
             {source === export["ProofToLeanNotebook`"], MatchQ[LeanImportString[source], _LeanEnvironment]}
