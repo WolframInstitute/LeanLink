@@ -44,7 +44,9 @@ allPassed = True;
 
 Do[
     Print["Running: ", FileNameTake[file]];
-    report = TestReport[file];
+    (* The test files are UTF-8, with non-ASCII Lean source in them; a kernel reads a
+       file in $CharacterEncoding, which on Windows is ISO8859-1 *)
+    report = Block[{$CharacterEncoding = "UTF-8"}, TestReport[file]];
     passed = report["TestsSucceededCount"];
     failed = report["TestsFailedCount"];
     total = passed + failed;
