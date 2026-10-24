@@ -454,9 +454,10 @@ withLeanPath[searchPath_, body_] := With[{saved = Environment["LEAN_PATH"]},
 loadEnvironment[imports_String, searchPath_String] := withLeanPath[searchPath, $loadEnvFn[imports, searchPath]]
 
 (* A shim that exists but that the operating system cannot load, as on Windows one that imports a symbol
-   from a DLL that does not export it, would otherwise be reported as a failed environment load *)
-shimLoadableQ[head_] := MatchQ[$loadEnvFn, _LibraryFunction] || (
-    Message[head::nolib, "the operating system could not load " <> ToString[$ShimLib] <> "."];
+   from a DLL that does not export it, would otherwise be reported as a failed environment load. Callers that
+   load under Quiet check it first, so that the message is seen *)
+shimLoadableQ[head_] := $ShimLib =!= $Failed && MatchQ[$loadEnvFn, _LibraryFunction] || (
+    Message[head::nolib, If[$ShimLib === $Failed, $shimFailure, "the operating system could not load " <> ToString[$ShimLib] <> "."]];
     False
 )
 
@@ -2618,6 +2619,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
         oleans = FileNames["*.olean", FileNameJoin[{buildLib, module}], Infinity];
         subModules = oleanModule[#, buildLib]& /@ oleans;
         If[ subModules =!= {},
+            If[! shimLoadableQ[LeanImport], Return[$Failed, Block]];
             (* Load ALL discovered sub-modules so the full environment is available, one by one to avoid module
                clash failures. *)
             Block[{envAssoc = <||>, handles, kinds},
@@ -2764,10 +2766,7 @@ LeanImport[file_String, OptionsPattern[]] /; StringEndsQ[file, ".lean"] && ! Str
 (* When Imports is empty, auto-discover all project modules (like LeanImport[""] would) *)
 
 LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
-    If[ $ShimLib === $Failed,
-        Message[LeanImport::nolib, $shimFailure];
-        Return[$Failed]
-    ];
+    If[! shimLoadableQ[LeanImport], Return[$Failed]];
     imports = OptionValue["Imports"];
     projDir = resolveProjDir[OptionValue["ProjectDir"]];
     (* Auto-discover all project modules when no imports specified *)
