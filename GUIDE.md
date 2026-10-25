@@ -10,7 +10,7 @@ under `docs/paclet/en/`, see [docs/paclet/en/DOC_GUIDE.md](docs/paclet/en/DOC_GU
 
 ## Formatting
 
-This style is produced mechanically by `CodeFormatter`CodeFormat` with a set of
+This style is produced mechanically by `` CodeFormatter`CodeFormat `` with a set of
 compact-multiline options, followed by a few layout passes. Format a source file
 with:
 
@@ -72,7 +72,7 @@ paclets (`SystemFiles/Components` of `$InstallationDirectory`) to a scratch
 folder, overlay `Kernel/CodeFormatter.wl` and `Kernel/Indent.wl` from that
 branch, set `Version` in both `PacletInfo.wl` files to 1.14 (CodeFormatter
 checks that CodeParser's version matches its own), and `PacletDirectoryLoad`
-both folders before `Needs["CodeFormatter`"]`.
+both folders before `` Needs["CodeFormatter`"] ``.
 
 ## Rules the user has explicitly called out
 
@@ -340,14 +340,14 @@ When practical, organize a `.wl` file in this order:
 
 1. Short file comment if needed.
 2. `BeginPackage` declarations and public `::usage` strings.
-3. `Begin["`Private`"]`.
+3. `` Begin["`Private`"] ``.
 4. Small general helpers.
 5. Domain-specific helpers.
 6. Main entry-point definitions near the end.
 7. `End[]; EndPackage[];`
 
 `LeanLink/Kernel/LeanLink.wl` is the entry point (the context
-`Wolfram``LeanLink``` resolves to it); it `Get`s `Utilities.wl`,
+`` Wolfram`LeanLink` `` resolves to it); it `Get`s `Utilities.wl`,
 `Lean.wl`, `ProofToLean.wl`, and `TypeTheoryBridge.wl` in dependency order.
 
 ## Comments
