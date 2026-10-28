@@ -236,6 +236,8 @@ runCase[name_String] := Block[{root, module, constant, lean, dependencies, base,
         profiled = timedImport[lean, constant];
         profile = Association[Function[short, short -> {$calls[short], Round[$exclusive[short] - $calls[short] overhead, 0.01], Round[$outermost[short], 0.01]}] /@ Complement[$profiled, skipped]]
     ];
+    (* "Loaded" is the copy of TypeTheory that Needs loaded, which the driver checks is the one asked for: an
+       installed paclet of the same version could shadow it *)
     <|
         "Case" -> name,
         "Constant" -> constant,
@@ -254,6 +256,7 @@ runCase[name_String] := Block[{root, module, constant, lean, dependencies, base,
         "Memory" -> Round[MaxMemoryUsed[] / 2.^30, 0.1],
         "Version" -> $Version,
         "TypeTheory" -> {PacletFind["WolframInstitute/TypeTheory"][[1]]["Version"], gitCommit[ParentDirectory[$typeTheoryDirectory]]},
+        "Loaded" -> FindFile["WolframInstitute`TypeTheory`"],
         "LeanLink" -> gitCommit[$rootDirectory],
         "Mathlib" -> {gitCommit[$projectDirectory], StringTrim[Import[FileNameJoin[{$projectDirectory, "lean-toolchain"}], "Text"]]},
         "Machine" -> {$MachineName, $ProcessorType, $ProcessorCount}
@@ -267,19 +270,17 @@ If[ KeyExistsQ[optionValues, "--case"],
 
 (* Driver: each case in a kernel of its own, then Lean's replay of the same cones *)
 
+(* {cone size, its replay in ms, the root alone in ms} from ConeReplay.lean's output *)
+replayTimes[output_String] := StringCases[
+    output,
+    "cone of " ~~ size : DigitCharacter.. ~~ " constants replayed in " ~~ ms : DigitCharacter.. ~~ " ms; the root alone in " ~~ alone : DigitCharacter.. ~~ " ms" :> ToExpression[{size, ms, alone}]
+]
+
 (* Lean's fastest of 3 replays: the cone's size, its time, and the root's time alone on the rest of its cone *)
 leanReplay[name_String] := Block[{module, constant, runs},
     {module, constant} = Lookup[Join[$cases, $rootCases], name];
     runs = Table[
-        StringCases[
-            RunProcess[{"lake", "env", "lean", "--run", FileNameJoin[{$rootDirectory, "bench", "ConeReplay.lean"}], module, constant}, ProcessDirectory -> $projectDirectory]["StandardOutput"],
-            "cone of " ~~ size : DigitCharacter.. ~~ " constants replayed in " ~~ ms : DigitCharacter.. ~~ " ms; the root alone in " ~~ alone : DigitCharacter.. ~~ " ms" :> ToExpression /@ {
-                size,
-                ms,
-                alone
-            }
-        ]
-        ,
+        replayTimes[RunProcess[{"lake", "env", "lean", "--run", FileNameJoin[{$rootDirectory, "bench", "ConeReplay.lean"}], module, constant}, ProcessDirectory -> $projectDirectory]["StandardOutput"]],
         {3}
     ];
     If[ AllTrue[runs, MatchQ[{{_Integer, _Integer, _Integer}, ___}]],
@@ -310,6 +311,13 @@ failedQ[result_] := ! IntegerQ[Lookup[result, "Constants"]] || ! MatchQ[Lookup[r
 ratio[result_] := Which[
     failedQ[result],
         "FAILED"
+    ,
+    (* every worker runs the driver's engine and the TypeTheory asked for, or the comparison means nothing *)
+    Lookup[result, "Version"] =!= $Version,
+        "other engine"
+    ,
+    ! StringQ[Lookup[result, "Loaded"]] || ! StringStartsQ[result["Loaded"], $typeTheoryDirectory],
+        "other TypeTheory"
     ,
     IntegerQ[Lookup[result, "LeanConstants"]] && result["LeanConstants"] =!= result["Constants"],
         "cones differ"
