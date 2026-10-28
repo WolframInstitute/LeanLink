@@ -567,7 +567,8 @@ leanTerm[expression_] := TypeTheoryTerm @@ heldSurface[leanSurface[expression, {
    translated once: a proof that a tactic writes shares its subterms thousands of times over, and the core
    term shares them as Lean's does. TypeTheory 0.11 takes a core term in a declaration as it is, and its
    kernel checks the declaration; with an earlier TypeTheory, the declaration gets the term's surface
-   syntax. *)
+   syntax. TypeTheory's composite heads hold their parts from 0.15 on, so each node is built from its parts
+   computed first, with Construct. *)
 
 declarationTerm[expression_] := If[coreTermsQ[], leanCore[expression], leanTerm[expression]]
 
@@ -594,42 +595,46 @@ leanCoreNode[LeanSort[level_]] := coreHead["universeSort"][coreLevel[level]]
 
 leanCoreNode[LeanConst[name_String, levels_List]] := coreHead["constantReference"][HoldComplete @@ {constantName[name]}, coreLevel /@ levels]
 
-leanCoreNode[LeanApp[function_, argument_]] := coreHead["application"][leanCore[function], leanCore[argument]]
+leanCoreNode[LeanApp[function_, argument_]] := Construct[coreHead["application"], leanCore[function], leanCore[argument]]
 
-leanCoreNode[LeanLam[binderName_String, type_, body_, binder_String]] := coreHead["lambdaAbstraction"][
+leanCoreNode[LeanLam[binderName_String, type_, body_, binder_String]] := Construct[
+    coreHead["lambdaAbstraction"],
     HoldComplete @@ {cleanBinderName[binderName]},
     leanCore[type],
     leanCore[body],
     coreBinder[binder]
 ]
 
-leanCoreNode[LeanForall[binderName_String, type_, body_, binder_String]] := coreHead["dependentFunctionType"][
+leanCoreNode[LeanForall[binderName_String, type_, body_, binder_String]] := Construct[
+    coreHead["dependentFunctionType"],
     HoldComplete @@ {cleanBinderName[binderName]},
     leanCore[type],
     leanCore[body],
     coreBinder[binder]
 ]
 
-leanCoreNode[LeanLet[binderName_String, type_, value_, body_]] := coreHead["localDefinition"][HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[value], leanCore[body]]
+leanCoreNode[LeanLet[binderName_String, type_, value_, body_]] := Construct[coreHead["localDefinition"], HoldComplete @@ {cleanBinderName[binderName]}, leanCore[type], leanCore[value], leanCore[body]]
 
 leanCoreNode[LeanLitNat[n_Integer]] := coreHead["naturalLiteral"][n]
 
-leanCoreNode[LeanProj[structure_String, index_Integer, term_]] := coreHead["projection"][HoldComplete @@ {constantName[structure]}, index, leanCore[term]]
+leanCoreNode[LeanProj[structure_String, index_Integer, term_]] := Construct[coreHead["projection"], HoldComplete @@ {constantName[structure]}, index, leanCore[term]]
 
 (* a string literal is String.ofList of its characters, as in the surface syntax below *)
 leanCoreNode[LeanLitStr[string_String]] := With[{application = coreHead["application"], char = coreConstant["Char"]},
-    application[
+    Construct[
+        application,
         coreConstant["String.ofList"]
         ,
         Fold[
             Function[{list, code},
-                application[
-                    application[application[coreHead["constantReference"][HoldComplete["List.cons"], {0}], char], application[coreConstant["Char.ofNat"], coreHead["naturalLiteral"][code]]],
+                Construct[
+                    application,
+                    Construct[application, Construct[application, coreHead["constantReference"][HoldComplete["List.cons"], {0}], char], Construct[application, coreConstant["Char.ofNat"], coreHead["naturalLiteral"][code]]],
                     list
                 ]
             ]
             ,
-            application[coreHead["constantReference"][HoldComplete["List.nil"], {0}], char]
+            Construct[application, coreHead["constantReference"][HoldComplete["List.nil"], {0}], char]
             ,
             Reverse[ToCharacterCode[string]]
         ]
