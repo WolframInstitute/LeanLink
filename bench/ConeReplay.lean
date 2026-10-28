@@ -29,6 +29,8 @@ partial def cone (env : Environment) (roots : List Name) : Std.HashMap Name Cons
           next := (info.all.head! ++ Name.mkSimple s!"rec_{i}") :: next
       | .ctorInfo info => next := info.induct :: next
       | .recInfo info => next := next ++ info.all
+      -- the quotient's four constants come in one declaration, in Lean's kernel as in TypeTheory's import
+      | .quotInfo _ => next := next ++ [`Quot, `Quot.mk, `Quot.lift, `Quot.ind]
       | _ => pure ()
       todo := next ++ todo
   return seen

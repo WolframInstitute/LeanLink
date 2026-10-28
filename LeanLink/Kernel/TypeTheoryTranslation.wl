@@ -62,15 +62,20 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
    TypeTheory 0.13; before, a cone with them is imported, by default, under rules that allow their
    computation as rewrite rules. *)
 
+(* the seconds the last import spent translating Lean's terms and checking them in TypeTheory, for
+   typetheory_benchmark.wls, which compares the checking with Lean's kernel *)
+$lastImportTimings = <||>
+
 importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
-    Block[{$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, cone, order, baseEnvironment, declarations, environment},
+    Block[{$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment},
         cone = coneOrder[roots];
         baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
         declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
-        environment = TypeTheoryEnvironment[baseEnvironment, declarations];
+        {checking, environment} = AbsoluteTiming[TypeTheoryEnvironment[baseEnvironment, declarations]];
         If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
-        Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]];
+        checking += First[AbsoluteTiming[Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]]]];
+        $lastImportTimings = <|"Translating" -> SessionTime[] - start - checking, "Checking" -> checking|>;
         environment
     ]
 ]
