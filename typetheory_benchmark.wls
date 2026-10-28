@@ -49,7 +49,9 @@ $profiled = {
     "inferType",
     "inferTypeOf",
     "spineType",
+    "spineTypeFrom",
     "applicationType",
+    "typeQuery",
     "checkHasType",
     "lambdaType",
     "functionTypeSort",
@@ -68,6 +70,7 @@ $profiled = {
     "sameHeadArgumentsEqualQ",
     "argumentsEqualQ",
     "proofIrrelevantEqualQ",
+    "proofIrrelevance",
     "reducedEqualQ",
     "lazyDeltaEqualQ",
     "normalFormsEqualQ",
@@ -115,8 +118,20 @@ Needs["Wolfram`LeanLink`"];
 
 gitCommit[directory_String] := StringTrim[RunProcess[{"git", "-C", directory, "rev-parse", "--short", "HEAD"}, "StandardOutput"]] <> If[StringTrim[RunProcess[{"git", "-C", directory, "status", "--porcelain", "--untracked-files=no"}, "StandardOutput"]] === "", "", "+changes"]
 
-(* the 1-minute load average of this machine, which other sessions share *)
+(* the 1-minute load average of this machine, which other sessions share; it misleads on macOS, as after a reboot,
+   when Spotlight's indexing kept it at 36 with the CPUs 65% idle, so the memory pressure level and the idle CPU go
+   beside it *)
 loadAverage[] := Replace[StringCases[RunProcess[{"sysctl", "-n", "vm.loadavg"}, "StandardOutput"], number : NumberString :> ToExpression[number], 1], {{load_} :> load, _ -> Missing["Unknown"]}]
+
+(* 1 normal, 2 warning, 4 critical *)
+memoryPressure[] := Replace[ToExpression[StringTrim[RunProcess[{"sysctl", "-n", "kern.memorystatus_vm_pressure_level"}, "StandardOutput"]]], Except[_Integer] -> Missing["Unknown"]]
+
+(* the idle percentage of the CPUs over one second: top's second sample, as its first counts from boot; top costs
+   about 3 s of system CPU, so it runs once per case, before anything is timed *)
+cpuIdle[] := Replace[
+    StringCases[RunProcess[{"top", "-l", "2", "-n", "0", "-s", "1"}, "StandardOutput"], "CPU usage:" ~~ Shortest[___] ~~ idle : NumberString ~~ "% idle" :> ToExpression[idle]],
+    {{_, idle_} :> idle, _ -> Missing["Unknown"]}
+]
 
 (* Worker: one case in this kernel; its result is printed on one line for the driver *)
 
@@ -216,7 +231,9 @@ calibrationSeconds[] := Block[{$calls, $nesting, $exclusive, $outermost, $childS
     ]
 ]
 
-runCase[name_String] := Block[{root, module, constant, lean, dependencies, base, cold, warm, profiled = None, profile = None, overhead = None, skipped = {}, load = loadAverage[]},
+runCase[name_String] := Block[
+    {root, module, constant, lean, dependencies, base, cold, warm, profiled = None, profile = None, overhead = None, skipped = {}, load = loadAverage[], pressure = memoryPressure[], idle = cpuIdle[]}
+    ,
     root = KeyExistsQ[$rootCases, name];
     {module, constant} = If[root, $rootCases[name], $cases[name]];
     lean = LeanImport["ProjectDir" -> $projectDirectory, "Imports" -> {module}];
@@ -253,6 +270,8 @@ runCase[name_String] := Block[{root, module, constant, lean, dependencies, base,
         "ProfileOverhead" -> overhead,
         "NotProfiled" -> skipped,
         "Load" -> load,
+        "Pressure" -> pressure,
+        "Idle" -> idle,
         "Memory" -> Round[MaxMemoryUsed[] / 2.^30, 0.1],
         "Version" -> $Version,
         "TypeTheory" -> {PacletFind["WolframInstitute/TypeTheory"][[1]]["Version"], gitCommit[ParentDirectory[$typeTheoryDirectory]]},
@@ -322,8 +341,8 @@ ratio[result_] := Which[
     IntegerQ[Lookup[result, "LeanConstants"]] && result["LeanConstants"] =!= result["Constants"],
         "cones differ"
     ,
-    TrueQ[result["Root"]] && AssociationQ[result["Warm"]] && NumberQ[Lookup[result, "LeanRootMilliseconds"]] && result["LeanRootMilliseconds"] > 0,
-        ToString[Round[1000 result["Warm"]["Median"] / result["LeanRootMilliseconds"]]] <> "x"
+    TrueQ[result["Root"]] && AssociationQ[result["Checking"]] && NumberQ[Lookup[result, "LeanRootMilliseconds"]] && result["LeanRootMilliseconds"] > 0,
+        ToString[Round[1000 result["Checking"]["Median"] / result["LeanRootMilliseconds"]]] <> "x"
     ,
     AssociationQ[result["Checking"]] && NumberQ[Lookup[result, "LeanMilliseconds"]] && result["LeanMilliseconds"] > 0,
         ToString[Round[1000 result["Checking"]["Median"] / result["LeanMilliseconds"]]] <> "x"
@@ -349,28 +368,44 @@ Print[
     " warm runs, median (min-max)"
 ];
 
-Print["case             constants (Lean)     cold s   warm s                 checking s             translating s     Lean ms   checking / Lean   load"];
+Print["case             constants (Lean)     cold s   warm s                 checking s             translating s     Lean ms   checking / Lean   load  pressure  idle %"];
 
 Scan[
     Function[result,
         Print[
-            StringPadRight[result["Case"], 17],
-            StringPadRight[ToString[Lookup[result, "Constants", "-"]] <> " (" <> ToString[Lookup[result, "LeanConstants", "-"]] <> ")", 21],
-            StringPadLeft[ToString[Lookup[result, "Cold", "-"]], 7],
-            "   ",
-            StringPadRight[spread[Lookup[result, "Warm", "-"]], 23],
-            StringPadRight[spread[Lookup[result, "Checking", "-"]], 23],
-            StringPadRight[spread[Lookup[result, "Translating", "-"]], 18],
-            StringPadLeft[ToString[If[TrueQ[Lookup[result, "Root"]], Lookup[result, "LeanRootMilliseconds", "-"], Lookup[result, "LeanMilliseconds", "-"]]], 8],
-            StringPadLeft[ratio[result], 18],
+            StringPadRight[result["Case"], 17]
+            ,
+            StringPadRight[ToString[Lookup[result, "Constants", "-"]] <> " (" <> ToString[Lookup[result, "LeanConstants", "-"]] <> ")", 21]
+            ,
+            StringPadLeft[ToString[Lookup[result, "Cold", "-"]], 7]
+            ,
+            "   "
+            ,
+            StringPadRight[spread[Lookup[result, "Warm", "-"]], 23]
+            ,
+            StringPadRight[spread[Lookup[result, "Checking", "-"]], 23]
+            ,
+            StringPadRight[spread[Lookup[result, "Translating", "-"]], 18]
+            ,
+            StringPadLeft[ToString[If[TrueQ[Lookup[result, "Root"]], Lookup[result, "LeanRootMilliseconds", "-"], Lookup[result, "LeanMilliseconds", "-"]]], 8]
+            ,
+            StringPadLeft[ratio[result], 18]
+            ,
             StringPadLeft[ToString[Lookup[result, "Load", "-"]], 7]
+            ,
+            (* a row taken under memory pressure, above 1, is marked *)
+            StringPadLeft[ToString[Lookup[result, "Pressure", "-"]] <> If[MatchQ[Lookup[result, "Pressure"], _Integer ? (# > 1&)], "!", " "], 10]
+            ,
+            StringPadLeft[ToString[Lookup[result, "Idle", "-"]], 8]
         ]
     ]
     ,
     results
 ];
 
-Print["checking / Lean is TypeTheory's checking against Lean's replay; for a root case, the root alone against Lean's check of it alone."];
+Print[
+    "checking / Lean is TypeTheory's checking against Lean's replay; for a root case, the root alone against Lean's check of it alone. Pressure is the memory pressure level, 1 normal; a row marked ! was taken above it."
+];
 
 If[ MemberQ[flags, "--profile"],
     Scan[
