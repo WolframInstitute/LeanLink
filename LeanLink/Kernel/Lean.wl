@@ -340,25 +340,23 @@ decodeWXF[tensor_] := BinaryDeserialize[ByteArray[Flatten[tensor]]]
 (* A term as the table of its distinct subterms, LeanShared[{node, ...}] (the shim's exprToSharedWXF): each
    node after its children, which it names by their positions, and the last node the whole term. It is
    rebuilt with each subterm one expression however often it occurs, so a proof that shares a few thousand
-   subterms millions of times over, as omega's do, stays the size of its distinct subterms. *)
-sharedExpression[LeanShared[nodes_List]] := Module[{built = ConstantArray[Null, Length[nodes]]},
-    Do[
-        built[[position]] = Replace[
-            nodes[[position]]
-            ,
-            {
-                LeanSharedApp[function_Integer, argument_Integer] :> LeanApp[built[[function]], built[[argument]]],
-                LeanSharedLam[name_, type_Integer, body_Integer, binder_] :> LeanLam[name, built[[type]], built[[body]], binder],
-                LeanSharedForall[name_, type_Integer, body_Integer, binder_] :> LeanForall[name, built[[type]], built[[body]], binder],
-                LeanSharedLet[name_, type_Integer, value_Integer, body_Integer] :> LeanLet[name, built[[type]], built[[value]], built[[body]]],
-                LeanSharedProj[structure_, index_Integer, term_Integer] :> LeanProj[structure, index, built[[term]]]
-            }
-        ]
-        ,
-        {position, Length[nodes]}
-    ];
-    Last[built]
+   subterms millions of times over, as omega's do, stays the size of its distinct subterms. The nodes go
+   into an Association by position: on W15, a list filled in place costs its length at each node that holds
+   earlier nodes of the same list, whatever filled it first, which made a table cost the square of its size
+   (17.8 s for 40k nodes, now 0.1 s). *)
+sharedExpression[LeanShared[nodes_List]] := Block[{$sharedNodes = <||>},
+    Do[$sharedNodes[position] = sharedNode[nodes[[position]]], {position, Length[nodes]}];
+    $sharedNodes[Length[nodes]]
 ]
+
+sharedPart[position_Integer] := $sharedNodes[position]
+
+sharedNode[LeanSharedApp[function_Integer, argument_Integer]] := LeanApp[sharedPart[function], sharedPart[argument]]
+sharedNode[LeanSharedLam[name_, type_Integer, body_Integer, binder_]] := LeanLam[name, sharedPart[type], sharedPart[body], binder]
+sharedNode[LeanSharedForall[name_, type_Integer, body_Integer, binder_]] := LeanForall[name, sharedPart[type], sharedPart[body], binder]
+sharedNode[LeanSharedLet[name_, type_Integer, value_Integer, body_Integer]] := LeanLet[name, sharedPart[type], sharedPart[value], sharedPart[body]]
+sharedNode[LeanSharedProj[structure_, index_Integer, term_Integer]] := LeanProj[structure, index, sharedPart[term]]
+sharedNode[leaf_] := leaf
 
 sharedExpression[other_] := other
 
