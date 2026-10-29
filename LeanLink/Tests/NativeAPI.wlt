@@ -121,7 +121,13 @@ VerificationTest[
 
 VerificationTest[LeanEvaluate["undefinedThing + 1"]["Tag"], "LeanEvaluateFailed", TestID -> "LeanEvaluate-ErrorFailure"]
 
-VerificationTest[LeanEvaluate["(List.range 300000000).foldl (· + ·) 0", "TimeLimit" -> 2]["Tag"], "TimedOut", TestID -> "LeanEvaluate-TimeLimit"]
+(* a loop over a range allocates nothing, so it runs into the time limit at the memory it started with; the list of
+   300 million it replaces took about 10 GB in its 2 seconds *)
+VerificationTest[
+    LeanEvaluate["Id.run do\n  let mut s := 0\n  for _ in [0:3000000000] do\n    s := s + 1\n  return s", "TimeLimit" -> 2]["Tag"],
+    "TimedOut",
+    TestID -> "LeanEvaluate-TimeLimit"
+]
 
 VerificationTest[
     {LeanEvaluate["(2.5 : Float) * 2"], LeanEvaluate["(0.1 : Float) + 0.2"], LeanEvaluate["(1e300 : Float) * 1e10"], LeanEvaluate["(0 : Float) / 0"], LeanEvaluate["[(1.5 : Float), 2]"]},
