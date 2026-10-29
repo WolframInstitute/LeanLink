@@ -59,9 +59,14 @@ loadPacletPage[] := Block[{dir = Environment["PACLETPAGE_DIR"], paclet},
     paclet["Version"]
 ]
 
-(* The pages build from docs/paclet/en with PacletPage's defaults. *)
+(* The pages build from docs/paclet/en with PacletPage's defaults, on as many parallel kernels as
+   PACLETPAGE_PARALLEL says when it is set: a page that misses the cache loads its Mathlib environment in
+   a kernel of its own, several GB each, so a build sharing the machine sets a small count. *)
 
-$buildOptions = {"Source" -> $docsDir}
+$buildOptions = {
+    "Source" -> $docsDir,
+    "Parallel" -> Replace[Environment["PACLETPAGE_PARALLEL"], {count_String /; StringMatchQ[count, DigitCharacter ..] && FromDigits[count] > 0 :> FromDigits[count], _ -> Automatic}]
+}
 
 (* A build is good when every page converted and no section reads a name that
    only an earlier section gave a value. PacletPage keeps such a page out of its
