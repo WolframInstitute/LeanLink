@@ -72,13 +72,17 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
         baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
         declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
-        {checking, environment} = AbsoluteTiming[TypeTheoryEnvironment[baseEnvironment, declarations]];
+        {checking, environment} = AbsoluteTiming[TypeTheoryEnvironment[baseEnvironment, declarations, Sequence @@ batchOptions[]]];
         If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
         checking += First[AbsoluteTiming[Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]]]];
         $lastImportTimings = <|"Translating" -> SessionTime[] - start - checking, "Checking" -> checking|>;
         environment
     ]
 ]
+
+(* TypeTheory 0.16 checks a batch with its compiled kernel, after adding the declarations, where it has a library
+   for the platform; before, and without one, each declaration is checked as it is added *)
+batchOptions[] := batchOptions[] = If[KeyExistsQ[Association[Options[TypeTheoryEnvironment]], Method], {Method -> "Compiled"}, {}]
 
 (* Lean's quotient types are declared at once, as the kernel's own where the rules have them, and
    otherwise as axioms, their computation rewrite rules where the rules allow those *)
