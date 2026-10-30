@@ -449,24 +449,24 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
             inductiveDeclarations[name, universes]
         ,
         "def",
-            With[{value = declarationTerm[leanExpression[name, "Term"]], type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
+            With[{value = fieldTerm[name, "Term"], type = fieldTerm[name, "Type"], levels = universes},
                 Prepend[natOperationRegistration[name], TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels]]
             ]
         ,
         "theorem",
-            With[{statement = declarationTerm[leanExpression[name, "Type"]], proof = declarationTerm[leanExpression[name, "Term"]], levels = universes},
+            With[{statement = fieldTerm[name, "Type"], proof = fieldTerm[name, "Term"], levels = universes},
                 {TypeTheoryTheorem[name, statement, proof, "UniverseParameters" -> levels]}
             ]
         ,
         (* an opaque constant's value is checked, as Lean's kernel checks it, and never unfolds *)
         "opaque" /; opaqueDefinitionsQ[],
-            With[{value = declarationTerm[leanExpression[name, "Term"]], type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
+            With[{value = fieldTerm[name, "Term"], type = fieldTerm[name, "Type"], levels = universes},
                 {TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels, "Opaque" -> True]}
             ]
         ,
         (* with a TypeTheory before 0.14 an opaque constant is an axiom; the quotient types are axioms only under rules without them *)
         "axiom" | "opaque" | "quot",
-            With[{type = declarationTerm[leanExpression[name, "Type"]], levels = universes},
+            With[{type = fieldTerm[name, "Type"], levels = universes},
                 {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}
             ]
         ,
@@ -480,8 +480,8 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
 
 inductiveDeclarations[name_String, universes_List] := Block[{information = inductiveInformation[name]},
     With[{
-        types = Function[type, type -> declarationTerm[leanExpression[type, "Type"]]] /@ information["Block"],
-        constructors = Function[constructor, constructor -> declarationTerm[leanExpression[constructor, "Type"]]] /@ information["BlockConstructors"],
+        types = Function[type, type -> fieldTerm[type, "Type"]] /@ information["Block"],
+        constructors = Function[constructor, constructor -> fieldTerm[constructor, "Type"]] /@ information["BlockConstructors"],
         parameters = information["Parameters"]
     },
         Join[
@@ -536,24 +536,30 @@ opaqueDefinitionsQ[] := opaqueDefinitionsQ[] = KeyExistsQ[Association[Options[Ty
 
 checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecursorType[environment, name, recursor]], blockRecursors[name]]
 
-(* TypeTheory's recursor is declared again under a name no Lean constant has, with Lean's recursor type as
-   its type, as a core term: the kernel then checks that the type is a type and that the recursor has it, as
-   it checks every declaration, and nothing elaborates the type, which for a structure of many fields is
-   large. *)
+(* TypeTheory's recursor, at placeholder universe levels, must have Lean's recursor type there: the type TypeTheory's
+   kernel infers for it is compared with Lean's, as a core term, by definitional equality, so nothing elaborates the
+   type, which for a structure of many fields is large, and no probe declaration is checked and removed. *)
 
-checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, leanType, probe},
+checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, leanType},
     levels = placeholderLevels[Length[universeParameters[recursor]]];
     leanType = Replace[
         typeCheck[LeanConst[recursor, levels], $handle],
         {result_Association :> result["Type"], _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]}
     ];
-    (* a declaration holds its arguments, so the core terms go in evaluated *)
-    probe = With[{value = leanCore[LeanConst[recursor, levels]], type = leanCore[leanType], parameters = placeholderNames[Length[levels]]},
-        TypeTheoryEnvironment[environment, {TypeTheoryDefinition["LeanLink recursor check", Typed[value, type], "UniverseParameters" -> parameters]}]
-    ];
-    If[! MatchQ[probe, _TypeTheoryEnvironment], bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]];
-    (* an environment lives for the session, so the probe is removed *)
-    Remove @@ {First[probe]}
+    If[ ! recursorTypeQ[environment, leanCore[LeanConst[recursor, levels]], leanCore[leanType]],
+        bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
+    ]
+]
+
+(* TypeTheory's kernel functions hold their arguments, so they go in as symbols put in place by With *)
+recursorTypeQ[environment_, constant_, type_] := With[
+    {
+        catch = coreHead["catchKernelFailure"],
+        checked = coreHead["withCheckedTerms"],
+        equalQ = coreHead["definitionallyEqualQ"],
+        infer = coreHead["inferType"]
+    },
+    TrueQ[catch[checked[equalQ[environment, <||>, infer[environment, <||>, constant], type]]]]
 ]
 
 (* === Terms === *)
@@ -575,6 +581,52 @@ leanTerm[expression_] := TypeTheoryTerm @@ heldSurface[leanSurface[expression, {
    computed first, with Construct. *)
 
 declarationTerm[expression_] := If[coreTermsQ[], leanCore[expression], leanTerm[expression]]
+
+(* A constant's type or value as a TypeTheory term. Where the shim sends the table of a term's distinct subterms, the
+   core term is built from the table by position, each node from its parts' core terms, so that no Lean term is
+   rebuilt and no subterm is looked up by its whole structure; the leaves, few and shared across the import, go
+   through leanCore's memo. *)
+fieldTerm[name_String, field : "Type" | "Term"] := If[ coreTermsQ[] && sharedFetchQ[],
+    Replace[
+        Quiet[decodeWXF[If[field === "Type", $getTypeSharedFn, $getValueSharedFn][$handle, name]]],
+        {
+            LeanShared[nodes_List] :> sharedCore[nodes],
+            _ :> bridgeFailure["LeanExpression", "The `2` of `1` could not be read from Lean.", {name, ToLowerCase[field]}]
+        }
+    ],
+    declarationTerm[leanExpression[name, field]]
+]
+
+(* the nodes go into an Association by position, as sharedExpression's do (Lean.wl) *)
+sharedCore[nodes_List] := Block[{$sharedCores = <||>},
+    Do[$sharedCores[position] = sharedCoreNode[nodes[[position]]], {position, Length[nodes]}];
+    $sharedCores[Length[nodes]]
+]
+
+sharedCoreNode[LeanSharedApp[function_Integer, argument_Integer]] := Construct[coreHead["application"], $sharedCores[function], $sharedCores[argument]]
+
+sharedCoreNode[LeanSharedLam[binderName_String, type_Integer, body_Integer, binder_String]] := Construct[
+    coreHead["lambdaAbstraction"],
+    HoldComplete @@ {cleanBinderName[binderName]},
+    $sharedCores[type],
+    $sharedCores[body],
+    coreBinder[binder]
+]
+
+sharedCoreNode[LeanSharedForall[binderName_String, type_Integer, body_Integer, binder_String]] := Construct[
+    coreHead["dependentFunctionType"],
+    HoldComplete @@ {cleanBinderName[binderName]},
+    $sharedCores[type],
+    $sharedCores[body],
+    coreBinder[binder]
+]
+
+sharedCoreNode[LeanSharedLet[binderName_String, type_Integer, value_Integer, body_Integer]] :=
+    Construct[coreHead["localDefinition"], HoldComplete @@ {cleanBinderName[binderName]}, $sharedCores[type], $sharedCores[value], $sharedCores[body]]
+
+sharedCoreNode[LeanSharedProj[structure_String, index_Integer, term_Integer]] := Construct[coreHead["projection"], HoldComplete @@ {constantName[structure]}, index, $sharedCores[term]]
+
+sharedCoreNode[leaf_] := leanCore[leaf]
 
 coreTermsQ[] := coreTermsQ[] = With[{type = coreHead["universeSort"][1]},
     ! FailureQ[Quiet[TypeTheoryEnvironment[TypeTheoryEnvironment[], {TypeTheoryAxiom["coreTermsProbe", type]}]]]
