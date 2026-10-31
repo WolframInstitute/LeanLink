@@ -73,7 +73,7 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
             $fieldSeed = None, $handle = handle,
             start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment
         },
-        cone = coneOrder[roots];
+        cone = bridgeCone[roots];
         baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
         If[coreTermsQ[] && fieldsTableQ[], $fieldTerms = fieldTable[Catenate[fieldNames /@ order]]];
@@ -215,6 +215,21 @@ quotientComputation[_, _String] := {}
 (* Constructors and recursors come with their inductive type; the others come after what they mention.
    The walk is depth first with a stack of its own, since a cone in Mathlib is deeper than the recursion
    limit: an entry {name, False} visits name, and {primary, True} follows its dependencies. *)
+
+(* The shim walks the cone in Lean, in the order coneOrder gives (EnvStore.lean's bridgeCone), and gives the kinds and
+   universe parameters of its constants, those of the blocks' members and recursors included, which then need no more
+   reads; a shim before LeanLink 1.2.6 has no such walk, and an unknown constant is coneOrder's to report. *)
+bridgeCone[roots_List] := Replace[
+    If[bridgeConeQ[], Quiet[decodeWXF[$getBridgeConeFn[$handle, StringRiffle[roots, "\n"]]]], None],
+    {
+        KeyValuePattern[{"Order" -> order_List, "Constants" -> constants_Association}] :> (
+            $kinds = Join[$kinds, First /@ constants];
+            $universes = Join[$universes, Last /@ constants];
+            order
+        ),
+        _ :> coneOrder[roots]
+    }
+]
 
 coneOrder[roots_List] := Block[{visited = <||>, stack = CreateDataStructure["Stack"], order = CreateDataStructure["DynamicArray"]},
     Scan[Function[root, stack["Push", {root, False}]], Reverse[roots]];

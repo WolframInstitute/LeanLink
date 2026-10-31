@@ -194,6 +194,125 @@ def getFieldsTableExport (handle : UInt64) (constNames : @& String) : IO ByteArr
   return WXF.serialize (WXF.fieldsTable fields)
 
 -- ============================================================================
+-- The TypeTheory bridge's cone
+-- ============================================================================
+
+/-- The constants a constant mentions, in the order getUsedConstantsExport gives
+    them: its type's, its value's, then the others its declaration refers to. -/
+def bridgeUsed (ci : ConstantInfo) : Array Name :=
+  let typeNames := ci.type.getUsedConstants
+  let valueNames := match ci.value? true with
+    | some v => v.getUsedConstants
+    | none => #[]
+  let typeSet : NameHashSet := typeNames.foldl (fun s n => s.insert n) {}
+  let valueSet : NameHashSet := valueNames.foldl (fun s n => s.insert n) {}
+  let structural := ci.getUsedConstantsAsSet.toArray.filter fun n => !(typeSet.contains n || valueSet.contains n)
+  typeNames ++ valueNames ++ structural
+
+/-- Whether a string literal occurs, which the kernel reads as String.ofList of its characters. -/
+def bridgeHasString (ci : ConstantInfo) : Bool :=
+  let hasString (e : Expr) : Bool := (e.find? fun | .lit (.strVal _) => true | _ => false).isSome
+  hasString ci.type || (ci.value? true).any hasString
+
+def bridgeFind (env : Environment) (n : Name) : Except String ConstantInfo :=
+  match env.find? n with
+  | some ci => .ok ci
+  | none => .error s!"Lean has no constant {n}."
+
+/-- An inductive block's types, the constructors of each in order, and its recursors:
+    X.rec for each type, then X.rec_k for each type nested in the first's block. -/
+def bridgeBlock (env : Environment) (first : Name) : Except String (List Name × List Name × List Name) := do
+  let .inductInfo v ← bridgeFind env first | .error s!"{first} is not an inductive type."
+  let constructors ← v.all.mapM fun t => do
+    let .inductInfo tv ← bridgeFind env t | .error s!"{t} is not an inductive type."
+    pure tv.ctors
+  let recursors := v.all.map (Name.str · "rec") ++ (List.range v.numNested).map fun k => Name.str v.all.head! s!"rec_{k + 1}"
+  return (v.all, constructors.flatten, recursors)
+
+/-- The first type of the block a constant is declared with, for an inductive type, a
+    constructor or a recursor; Quot for the quotient constants; the constant otherwise. -/
+def bridgePrimary (env : Environment) (n : Name) : Except String Name := do
+  match ← bridgeFind env n with
+  | .inductInfo v => return v.all.head!
+  | .ctorInfo v =>
+    let .inductInfo i ← bridgeFind env v.induct | .error s!"{v.induct} is not an inductive type."
+    return i.all.head!
+  | .recInfo v => return v.all.head!
+  | .quotInfo _ => return `Quot
+  | _ => return n
+
+def bridgeQuotients : List Name := [`Quot, `Quot.mk, `Quot.lift, `Quot.ind]
+
+def bridgeStringConstants : Array Name := #[`String.ofList, `List.cons, `List.nil, `Char.ofNat, `Char]
+
+/-- The constants a block, or a constant alone, declares, which its dependencies leave
+    out, and its dependencies: what its members mention, the constants of a string
+    literal if one occurs, each once, in order. -/
+def bridgeDependencies (env : Environment) (primary : Name) : Except String (List Name × Array Name) := do
+  let (members, own, stringMembers) ← match ← bridgeFind env primary with
+    | .inductInfo _ =>
+      let (types, constructors, recursors) ← bridgeBlock env primary
+      pure (types ++ constructors, types ++ constructors ++ recursors, types ++ constructors)
+    | .quotInfo _ => pure (bridgeQuotients, bridgeQuotients, [primary])
+    | _ => pure ([primary], [primary], [primary])
+  let mut dependencies : Array Name := #[]
+  for m in members do
+    dependencies := dependencies ++ bridgeUsed (← bridgeFind env m)
+  let mut strings := false
+  for m in stringMembers do
+    strings := strings || bridgeHasString (← bridgeFind env m)
+  if strings then dependencies := dependencies ++ bridgeStringConstants
+  let mut seen : NameHashSet := {}
+  let mut unique : Array Name := #[]
+  for d in dependencies do
+    if !seen.contains d then
+      seen := seen.insert d
+      unique := unique.push d
+  return (own, unique)
+
+/-- The cone of the roots in the order the TypeTheory bridge declares it: depth first,
+    each block or constant after what it depends on, by its primary name, with each
+    constant's kind and universe parameters, those of the blocks' members and recursors
+    included. -/
+partial def bridgeCone (env : Environment) (roots : Array Name) : Except String (Array Name × Array Name) := do
+  let mut visited : NameHashSet := {}
+  let mut stack : Array (Name × Bool) := roots.reverse.map (·, false)
+  let mut order : Array Name := #[]
+  let mut constants : Array Name := #[]
+  while !stack.isEmpty do
+    let (n, done) := stack.back!
+    stack := stack.pop
+    if done then
+      order := order.push n
+    else
+      let primary ← bridgePrimary env n
+      if !visited.contains primary then
+        visited := visited.insert primary
+        stack := stack.push (primary, true)
+        let (own, dependencies) ← bridgeDependencies env primary
+        constants := constants ++ own.toArray
+        for d in (dependencies.filter fun d => !own.contains d).reverse do
+          stack := stack.push (d, false)
+  return (order, constants)
+
+/-- The TypeTheory bridge's cone of the roots, one per line (bridgeCone): <|"Order" ->
+    {name, ...}, "Constants" -> <|name -> {kind, {level parameter, ...}}, ...|>|>. -/
+@[export leanlink_get_bridge_cone]
+def getBridgeConeExport (handle : UInt64) (rootNames : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let roots := ((rootNames.splitOn "\n").filter (· ≠ "")).toArray.map WXF.nameOfString
+  match bridgeCone env roots with
+  | .error message => return WXF.serialize (WXF.string s!"ERROR: {message}")
+  | .ok (order, constants) =>
+    let entries := constants.filterMap fun n => (env.find? n).map fun ci =>
+      (WXF.string n.toString, WXF.wlList #[WXF.string (WXF.constantKind ci), WXF.wlList (ci.levelParams.toArray.map fun p => WXF.string p.toString)])
+    return WXF.serialize (WXF.wlAssociation #[
+      (WXF.string "Order", WXF.wlList (order.map fun n => WXF.string n.toString)),
+      (WXF.string "Constants", WXF.wlAssociation entries)
+    ])
+
+-- ============================================================================
 -- Definition unfolding
 -- ============================================================================
 

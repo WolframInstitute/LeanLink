@@ -305,6 +305,9 @@ $getValueSharedFn := $getValueSharedFn = Quiet[LibraryFunctionLoad[$ShimLib, "le
    from before LeanLink 1.2.6 has no such function *)
 $getFieldsTableFn := $getFieldsTableFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_fields_table", {Integer, "UTF8String"}, {Integer, 1}]]
 
+(* the TypeTheory bridge's cone of constants, walked in Lean in the bridge's order (LeanLink 1.2.6) *)
+$getBridgeConeFn := $getBridgeConeFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_bridge_cone", {Integer, "UTF8String"}, {Integer, 1}]]
+
 $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_used_constants", {Integer, "UTF8String"}, {Integer, 1}]
 
 $collectAxiomsFn := $collectAxiomsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_collect_axioms", {Integer, "UTF8String"}, {Integer, 1}]
@@ -367,6 +370,8 @@ sharedExpression[other_] := other
 sharedFetchQ[] := MatchQ[{$getTypeSharedFn, $getValueSharedFn}, {_LibraryFunction, _LibraryFunction}]
 
 fieldsTableQ[] := MatchQ[$getFieldsTableFn, _LibraryFunction]
+
+bridgeConeQ[] := MatchQ[$getBridgeConeFn, _LibraryFunction]
 
 (* ============================================================================ *)
 (* Utilities                                                                    *)
