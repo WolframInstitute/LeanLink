@@ -731,7 +731,7 @@ fieldTable[names_List] := Replace[
 
 tableFields[names_List, table_Association] := Block[
     {
-        strings = table["Names"], naturals = table["Naturals"], literals = table["Strings"], owners = names, levelOf = table["Depths"] + 1,
+        strings = table["Names"], naturals = table["Naturals"], literals = table["Strings"], owners = names, levelOf = table["Depths"] + 1, roots = table["Roots"],
         levels, levelLists, kinds, as, bs, cs, ds, order, starts, indexOf, binderNames, levelTerms,
         binders = coreBinder /@ {"default", "implicit", "strictImplicit", "instImplicit"},
         application = coreHead["application"], lambda = coreHead["lambdaAbstraction"], forall = coreHead["dependentFunctionType"],
@@ -752,12 +752,13 @@ tableFields[names_List, table_Association] := Block[
     levelTerms = {tableLeaf /@ order[[1 ;; starts[[2]]]]};
     Do[AppendTo[levelTerms, tableLevelTerms[order[[starts[[level]] + 1 ;; starts[[level + 1]]]]]], {level, 2, Length[starts] - 1}];
     $fieldSeed = tableSeed[];
-    AssociationThread[names, Function[root, <|"Type" -> tableRootTerm[First[root]], "Term" -> tableRootTerm[Last[root]]|>] /@ table["Roots"]]
+    AssociationThread[names, Function[root, <|"Type" -> tableRootTerm[First[root]], "Term" -> tableRootTerm[Last[root]]|>] /@ roots]
 ]
 
-(* the table as TypeTheory's compiled kernel takes it: the terms by depth, each node's row code there, 0 for a leaf, and the
-   positions of its parts among the terms: an application's function and argument, a binder's type and body, a let's
-   type, value and body, a projection's term *)
+(* the table as TypeTheory's compiled kernel takes it: the terms by depth, each node's row code there, 0 for a leaf, the
+   positions of its parts among the terms, an application's function and argument, a binder's type and body, a let's
+   type, value and body, a projection's term, and the positions of the fields' types and values, which the records
+   hold *)
 tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, at},
     seedPosition = ConstantArray[0, n];
     seedPosition[[order]] = Range[n];
@@ -772,7 +773,13 @@ tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, at},
     z[[at]] = seedPosition[[ds[[at]]]];
     at = Flatten[Position[kinds, 9, {1}]];
     x[[at]] = seedPosition[[cs[[at]]]];
-    <|"Terms" -> Join @@ levelTerms, "Codes" -> {0, 0, 0, 4, 5, 6, 7, 0, 0, 9, 0, 0}[[kinds[[order]] + 1]], "Parts" -> Transpose[{x, y, z}][[order]], "Starts" -> starts|>
+    <|
+        "Terms" -> Join @@ levelTerms,
+        "Codes" -> {0, 0, 0, 4, 5, 6, 7, 0, 0, 9, 0, 0}[[kinds[[order]] + 1]],
+        "Parts" -> Transpose[{x, y, z}][[order]],
+        "Starts" -> starts,
+        "Roots" -> seedPosition[[DeleteCases[Union[Flatten[roots]], 0]]]
+    |>
 ]
 
 tableLeaf[position_Integer] := Switch[ kinds[[position]],
