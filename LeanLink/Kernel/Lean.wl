@@ -324,6 +324,8 @@ $listConstantNamesFn := $listConstantNamesFn = LibraryFunctionLoad[$ShimLib, "le
 
 $listConstantKindsFn := $listConstantKindsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_kinds", {Integer, "UTF8String"}, {Integer, 1}]
 
+$listConstantKindsSplitFn := $listConstantKindsSplitFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_list_constant_kinds_split", {Integer, "UTF8String", "UTF8String"}, {Integer, 1}]]
+
 $getTypeUnfoldedFn := $getTypeUnfoldedFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_type_unfolded", {Integer, "UTF8String", Integer}, {Integer, 1}]
 
 $getValueUnfoldedFn := $getValueUnfoldedFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_value_unfolded", {Integer, "UTF8String", Integer}, {Integer, 1}]
@@ -804,6 +806,19 @@ $internalKinds = <||>;
 internalKinds[h_Integer, kinds_Association] := Block[{public = KeySelect[kinds, ! isInternalName[#]&]},
     $internalKinds[h] = Join[Lookup[$internalKinds, h, <||>], KeyComplement[{kinds, public}]];
     public
+]
+
+(* the kinds of the constants an import shows, filtered by substring, its internal ones kept apart: the shim tests the
+   names in Lean where it can, as the Wolfram Language took 7 us a name, a second for an import of Mathlib's integers *)
+shownKinds[h_Integer, filter_String] := Replace[
+    If[MatchQ[$listConstantKindsSplitFn, _LibraryFunction], Quiet[decodeWXF[$listConstantKindsSplitFn[h, filter, StringRiffle[List @@ $internalPatterns, "\n"]]]], None],
+    {
+        KeyValuePattern[{"Public" -> shown_Association, "Internal" -> internal_Association}] :> (
+            $internalKinds[h] = Join[Lookup[$internalKinds, h, <||>], internal];
+            shown
+        ),
+        _ :> Replace[Quiet[decodeWXF[$listConstantKindsFn[h, filter]]], kinds_Association :> internalKinds[h, kinds]]
+    }
 ]
 
 $typeFormCache = <||>;
@@ -2645,9 +2660,8 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
                         With[{h = Quiet[getOrLoadEnv[projDir, {imp}]]},
                             If[ IntegerQ[h] && h > 0,
                                 Sow[h];
-                                kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
+                                kinds = If[TrueQ[OptionValue["IncludeInternal"]], Quiet[decodeWXF[$listConstantKindsFn[h, filter]]], shownKinds[h, filter]];
                                 If[ AssociationQ[kinds],
-                                    If[! TrueQ[OptionValue["IncludeInternal"]], kinds = internalKinds[h, kinds]];
                                     AssociateTo[envAssoc, Association @ KeyValueMap[Function[{n, k}, n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]], kinds]];
                                 ];
                             ];
@@ -2809,9 +2823,11 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             With[{h = Quiet[getOrLoadEnv[projDir, batch]]},
                 If[ IntegerQ[h] && h > 0,
                     AppendTo[handles, h];
-                    kinds = Quiet[decodeWXF[$listConstantKindsFn[h, OptionValue["Filter"]]]];
+                    kinds = If[ TrueQ[OptionValue["IncludeInternal"]],
+                        Quiet[decodeWXF[$listConstantKindsFn[h, OptionValue["Filter"]]]],
+                        shownKinds[h, OptionValue["Filter"]]
+                    ];
                     If[ AssociationQ[kinds],
-                        If[! TrueQ[OptionValue["IncludeInternal"]], kinds = internalKinds[h, kinds]];
                         registerHandleNames[h, Keys[kinds]];
                         (* Build lazy LeanTerms: Name + Kind + _Handle. Each symbol remembers its specific handle! *)
                         AssociateTo[envAssoc, Association @ KeyValueMap[Function[{name, kind}, name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> h|>]], kinds]];

@@ -79,6 +79,7 @@ extern lean_object* leanlink_constant_module(uint64_t handle, lean_object* name)
 extern lean_object* leanlink_decl_range(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_list_constant_names(uint64_t handle, lean_object* filter);
 extern lean_object* leanlink_list_constant_kinds(uint64_t handle, lean_object* filter);
+extern lean_object* leanlink_list_constant_kinds_split(uint64_t handle, lean_object* filter, lean_object* patterns);
 extern lean_object* leanlink_get_type_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
 extern lean_object* leanlink_get_value_unfolded(uint64_t handle, lean_object* name, uint32_t unfoldLevel);
 extern lean_object* leanlink_pp_type(uint64_t handle, lean_object* name, uint32_t unfoldLevel, lean_object* opens);
@@ -322,6 +323,27 @@ DLLEXPORT int leanlink_wl_list_constant_kinds(
 
     lean_object* io_res = leanlink_list_constant_kinds(handle, filter);
     /* filter consumed by leanlink_list_constant_kinds */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * listConstantKindsSplit(handle, filter, patterns) -> MTensor (WXF bytes,
+ * <|"Public" -> name->kind assoc, "Internal" -> name->kind assoc|>, a name internal when it
+ * contains one of the patterns, given one per line)
+ */
+DLLEXPORT int leanlink_wl_list_constant_kinds_split(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    lean_object* filter = lean_mk_string(MArgument_getUTF8String(Args[1]));
+    lean_object* patterns = lean_mk_string(MArgument_getUTF8String(Args[2]));
+
+    lean_object* io_res = leanlink_list_constant_kinds_split(handle, filter, patterns);
+    /* filter and patterns passed on as leanlink_list_constant_kinds takes its filter */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 

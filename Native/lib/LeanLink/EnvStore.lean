@@ -132,6 +132,36 @@ def listConstantKindsExport (handle : UInt64) (filterStr : @& String) : IO ByteA
     else acc
   return WXF.serialize (WXF.wlAssociation entries)
 
+/-- `pattern` occurs in `bytes`, both UTF-8: for the ASCII patterns of internal names, comparing bytes is comparing
+    characters. -/
+def bytesContain (bytes pattern : ByteArray) : Bool := Id.run do
+  if pattern.size > bytes.size then return false
+  for i in [0:bytes.size - pattern.size + 1] do
+    let mut j := 0
+    while j < pattern.size && bytes.get! (i + j) == pattern.get! j do
+      j := j + 1
+    if j == pattern.size then return true
+  return false
+
+/-- The constants listConstantKinds gives, those whose names contain any of the patterns, one per line, apart:
+    <|"Public" -> <|name -> kind, ...|>, "Internal" -> <|name -> kind, ...|>|>, each in listConstantKinds' order. The
+    Wolfram Language took 7 µs a name to test them, a second for an import of Mathlib's integers. -/
+@[export leanlink_list_constant_kinds_split]
+def listConstantKindsSplitExport (handle : UInt64) (filterStr : @& String) (patternsStr : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let filter := filterStr.trimAscii.toString
+  let patterns := ((patternsStr.splitOn "\n").filter (· ≠ "")).toArray.map String.toUTF8
+  let (shown, internal) := env.constants.fold (init := ((#[] : Array (ByteArray × ByteArray)), (#[] : Array (ByteArray × ByteArray))))
+    fun (shown, internal) name ci =>
+      let nameStr := name.toString
+      if filter == "" || (nameStr.splitOn filter).length > 1 then
+        let entry := (WXF.string nameStr, WXF.string (WXF.constantKind ci))
+        let bytes := nameStr.toUTF8
+        if patterns.any (bytesContain bytes ·) then (shown, internal.push entry) else (shown.push entry, internal)
+      else (shown, internal)
+  return WXF.serialize (WXF.wlAssociation #[(WXF.string "Public", WXF.wlAssociation shown), (WXF.string "Internal", WXF.wlAssociation internal)])
+
 /-- Get the type of a constant as WXF-encoded Lean expression. -/
 @[export leanlink_get_type]
 def getTypeExport (handle : UInt64) (constName : @& String) (depth : UInt32) : IO ByteArray := do
