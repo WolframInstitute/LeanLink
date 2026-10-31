@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
 project(LeanLinkShim C)
 
+# Optimized unless asked otherwise. The Makefile generators that build.sh uses take the build type when
+# configuring, not from `cmake --build --config Release`, so without this default every shim was compiled
+# with no optimization at all, and the Lean code compiled into it (the bridge's table and cone walks, the
+# WXF writers, the hash maps they specialize) ran several times slower than Lean's own.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 # --- Lean SDK ---
 set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.35.0" CACHE PATH "Path to Lean installation")
 
