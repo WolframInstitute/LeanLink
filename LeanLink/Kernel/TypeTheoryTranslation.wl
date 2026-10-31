@@ -70,7 +70,7 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
     Block[
         {
             $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $fieldTerms = <||>,
-            $handle = handle,
+            $fieldSeed = None, $handle = handle,
             start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment
         },
         cone = coneOrder[roots];
@@ -78,12 +78,22 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
         If[coreTermsQ[] && fieldsTableQ[], $fieldTerms = fieldTable[Catenate[fieldNames /@ order]]];
         declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
-        {checking, environment} = AbsoluteTiming[TypeTheoryEnvironment[baseEnvironment, declarations, Sequence @@ batchOptions[]]];
+        {checking, environment} = AbsoluteTiming[withKernelSeed[$fieldSeed, TypeTheoryEnvironment[baseEnvironment, declarations, Sequence @@ batchOptions[]]]];
         If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
         checking += First[AbsoluteTiming[Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]]]];
         $lastImportTimings = <|"Translating" -> SessionTime[] - start - checking, "Checking" -> checking|>;
         environment
     ]
+]
+
+(* the terms of the fields table, for TypeTheory's compiled kernel to write their rows at once, as it does from 0.16.2
+   ($compiledKernelSeed), where the walk of the records finds them; the variable is read held, since coreHead would
+   give its value *)
+SetAttributes[withKernelSeed, HoldRest]
+
+withKernelSeed[seed_, body_] := Replace[
+    ToExpression["WolframInstitute`TypeTheory`PackageScope`$compiledKernelSeed", InputForm, Hold],
+    Hold[symbol_Symbol] :> Block[{symbol = seed}, body]
 ]
 
 (* TypeTheory 0.16 checks a batch with its compiled kernel, after adding the declarations, where it has a library
@@ -701,7 +711,28 @@ tableFields[names_List, table_Association] := Block[
     ];
     levelTerms = {tableLeaf /@ order[[1 ;; starts[[2]]]]};
     Do[AppendTo[levelTerms, tableLevelTerms[order[[starts[[level]] + 1 ;; starts[[level + 1]]]]]], {level, 2, Length[starts] - 1}];
+    $fieldSeed = tableSeed[];
     AssociationThread[names, Function[root, <|"Type" -> tableRootTerm[First[root]], "Term" -> tableRootTerm[Last[root]]|>] /@ table["Roots"]]
+]
+
+(* the table as TypeTheory's compiled kernel takes it: the terms by depth, each node's row code there, 0 for a leaf, and the
+   positions of its parts among the terms: an application's function and argument, a binder's type and body, a let's
+   type, value and body, a projection's term *)
+tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, at},
+    seedPosition = ConstantArray[0, n];
+    seedPosition[[order]] = Range[n];
+    {x, y, z} = ConstantArray[0, {3, n}];
+    at = Flatten[Position[kinds, 3, {1}]];
+    x[[at]] = seedPosition[[as[[at]]]];
+    y[[at]] = seedPosition[[bs[[at]]]];
+    at = Flatten[Position[kinds, 4 | 5 | 6, {1}]];
+    x[[at]] = seedPosition[[bs[[at]]]];
+    y[[at]] = seedPosition[[cs[[at]]]];
+    at = Flatten[Position[kinds, 6, {1}]];
+    z[[at]] = seedPosition[[ds[[at]]]];
+    at = Flatten[Position[kinds, 9, {1}]];
+    x[[at]] = seedPosition[[cs[[at]]]];
+    <|"Terms" -> Join @@ levelTerms, "Codes" -> {0, 0, 0, 4, 5, 6, 7, 0, 0, 9, 0, 0}[[kinds[[order]] + 1]], "Parts" -> Transpose[{x, y, z}][[order]], "Starts" -> starts|>
 ]
 
 tableLeaf[position_Integer] := Switch[ kinds[[position]],
