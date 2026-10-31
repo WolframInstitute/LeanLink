@@ -69,12 +69,14 @@ $lastImportTimings = <||>
 importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
     Block[
         {
-            $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $handle = handle,
+            $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $fieldTerms = <||>,
+            $handle = handle,
             start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment
         },
         cone = coneOrder[roots];
         baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
+        If[coreTermsQ[] && fieldsTableQ[], $fieldTerms = fieldTable[Catenate[fieldNames /@ order]]];
         declarations = Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order];
         {checking, environment} = AbsoluteTiming[TypeTheoryEnvironment[baseEnvironment, declarations, Sequence @@ batchOptions[]]];
         If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
@@ -606,7 +608,11 @@ declarationTerm[expression_] := If[coreTermsQ[], leanCore[expression], leanTerm[
    core term is built from the table by position, each node from its parts' core terms, so that no Lean term is
    rebuilt and no subterm is looked up by its whole structure; the leaves, few and shared across the import, go
    through leanCore's memo. *)
-fieldTerm[name_String, field : "Type" | "Term"] := If[ coreTermsQ[] && sharedFetchQ[],
+fieldTerm[name_String, field : "Type" | "Term"] := Replace[Lookup[Lookup[$fieldTerms, name, <||>], field, None], None :> readFieldTerm[name, field]]
+
+$fieldTerms = <||>
+
+readFieldTerm[name_String, field : "Type" | "Term"] := If[ coreTermsQ[] && sharedFetchQ[],
     Replace[
         Quiet[decodeWXF[If[field === "Type", $getTypeSharedFn, $getValueSharedFn][$handle, name]]],
         {
@@ -615,6 +621,103 @@ fieldTerm[name_String, field : "Type" | "Term"] := If[ coreTermsQ[] && sharedFet
         }
     ],
     declarationTerm[leanExpression[name, field]]
+]
+
+(* The fields of the constants an import declares, read at once: their types, and the values of those that have one, as
+   one table of the distinct subterms of all of them (WXF.fieldsTable in the shim). A node is its kind and four numbers,
+   which name names, levels, level lists, literals and other nodes by position: 0 a bound variable, 1 a sort, 2 a
+   constant, 3 an application, 4 a lambda, 5 a function type, 6 a let, 7 and 8 a natural number and a string literal, 9 a
+   projection, 10 and 11 a free variable and a metavariable. Each node has a depth, 0 for a leaf and one more than its
+   deepest part's for another: the core terms of a depth are built together, from those of the depths before, with
+   MapThread and Extract, as one list for each depth, which nothing changes after, since a list filled in place costs
+   its length each time. The leaves go through leanCore's memo, as Lean expressions, so they are those the other reads
+   give. *)
+
+fieldNames[name_String] := Switch[ constantKind[name],
+    "inductive",
+        blockMembers[name]
+    ,
+    "quot",
+        $quotientConstants
+    ,
+    _,
+        {name}
+]
+
+fieldTable[names_List] := Replace[
+    Quiet[decodeWXF[$getFieldsTableFn[$handle, StringRiffle[names, "\n"]]]],
+    {table : KeyValuePattern[{"Nodes" -> {__List}, "Depths" -> {__Integer}, "Roots" -> _List}] :> tableFields[names, table], _ -> <||>}
+]
+
+tableFields[names_List, table_Association] := Block[
+    {
+        strings = table["Names"], naturals = table["Naturals"], literals = table["Strings"], owners = names, levelOf = table["Depths"] + 1,
+        levels, levelLists, kinds, as, bs, cs, ds, order, starts, indexOf, binderNames, levelTerms,
+        binders = coreBinder /@ {"default", "implicit", "strictImplicit", "instImplicit"},
+        application = coreHead["application"], lambda = coreHead["lambdaAbstraction"], forall = coreHead["dependentFunctionType"],
+        let = coreHead["localDefinition"], projection = coreHead["projection"]
+    },
+    levels = tableLevels[table["Levels"], strings];
+    levelLists = Function[ids, levels[[ids]]] /@ table["LevelLists"];
+    {kinds, as, bs, cs, ds} = Transpose[table["Nodes"]];
+    (* the nodes by depth, where each depth starts among them, and each node's place among those of its depth *)
+    order = Ordering[levelOf];
+    starts = Prepend[Accumulate[BinCounts[levelOf, {1, Max[levelOf] + 1, 1}]], 0];
+    indexOf = ConstantArray[0, Length[kinds]];
+    indexOf[[order]] = Range[Length[kinds]] - starts[[levelOf[[order]]]];
+    binderNames = ConstantArray[None, Length[strings]];
+    With[{ids = Union[Pick[as, kinds, 4], Pick[as, kinds, 5], Pick[as, kinds, 6]]},
+        binderNames[[ids]] = Function[id, HoldComplete @@ {cleanBinderName[strings[[id]]]}] /@ ids
+    ];
+    levelTerms = {tableLeaf /@ order[[1 ;; starts[[2]]]]};
+    Do[AppendTo[levelTerms, tableLevelTerms[order[[starts[[level]] + 1 ;; starts[[level + 1]]]]]], {level, 2, Length[starts] - 1}];
+    AssociationThread[names, Function[root, <|"Type" -> tableRootTerm[First[root]], "Term" -> tableRootTerm[Last[root]]|>] /@ table["Roots"]]
+]
+
+tableLeaf[position_Integer] := Switch[ kinds[[position]],
+    2, leanCore[LeanConst[strings[[as[[position]]]], levelLists[[bs[[position]]]]]],
+    0, leanCore[LeanBVar[as[[position]]]],
+    1, leanCore[LeanSort[levels[[as[[position]]]]]],
+    7, leanCore[LeanLitNat[naturals[[as[[position]]]]]],
+    8, leanCore[LeanLitStr[literals[[as[[position]]]]]],
+    _, bridgeFailure["LeanExpression", "A field of a constant among `1` holds a free variable or a metavariable.", {Short[owners]}]
+]
+
+(* the nodes at positions, all of one depth, each kind at once *)
+tableLevelTerms[positions_List] := Block[
+    {k = kinds[[positions]], a = as[[positions]], b = bs[[positions]], c = cs[[positions]], d = ds[[positions]], values = ConstantArray[Null, Length[positions]]},
+    Scan[
+        Function[kind, With[{i = Pick[Range[Length[k]], k, kind]}, If[i =!= {}, values[[i]] = tableNodes[kind, a[[i]], b[[i]], c[[i]], d[[i]]]]]],
+        {3, 5, 4, 6, 9}
+    ];
+    values
+]
+
+tableNodes[3, a_, b_, _, _] := MapThread[application, {tableTerms[a], tableTerms[b]}]
+tableNodes[4, a_, b_, c_, d_] := MapThread[lambda, {binderNames[[a]], tableTerms[b], tableTerms[c], binders[[d + 1]]}]
+tableNodes[5, a_, b_, c_, d_] := MapThread[forall, {binderNames[[a]], tableTerms[b], tableTerms[c], binders[[d + 1]]}]
+tableNodes[6, a_, b_, c_, d_] := MapThread[let, {binderNames[[a]], tableTerms[b], tableTerms[c], tableTerms[d]}]
+tableNodes[9, a_, b_, c_, _] := MapThread[projection, {Function[id, HoldComplete @@ {constantName[strings[[id]]]}] /@ a, b, tableTerms[c]}]
+
+tableTerms[positions_List] := Extract[levelTerms, Transpose[{levelOf[[positions]], indexOf[[positions]]}]]
+
+tableRootTerm[0] := None
+tableRootTerm[position_Integer] := levelTerms[[levelOf[[position]], indexOf[[position]]]]
+
+(* the levels as Lean expressions, each after its parts *)
+tableLevels[rows_List, strings_List] := Block[{levels = <||>},
+    Do[
+        levels[row] = Replace[rows[[row]], {
+            {0, _, _} :> LeanLevelZero[],
+            {1, inner_, _} :> LeanLevelSucc[levels[inner]],
+            {2, first_, second_} :> LeanLevelMax[levels[first], levels[second]],
+            {3, first_, second_} :> LeanLevelIMax[levels[first], levels[second]],
+            {4, parameter_, _} :> LeanLevelParam[strings[[parameter]]],
+            {5, metavariable_, _} :> LeanLevelMVar[strings[[metavariable]]]
+        }],
+        {row, Length[rows]}
+    ];
+    Values[levels]
 ]
 
 (* the nodes go into an Association by position, as sharedExpression's do (Lean.wl) *)

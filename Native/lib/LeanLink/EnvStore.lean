@@ -180,6 +180,19 @@ def getValueSharedExport (handle : UInt64) (constName : @& String) : IO ByteArra
     | none => return WXF.serialize (WXF.string s!"No value for: {constName}")
   | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
 
+/-- The types and values of the constants named, one per line, as one table
+    (WXF.fieldsTable): each subterm the constants share is written once. -/
+@[export leanlink_get_fields_table]
+def getFieldsTableExport (handle : UInt64) (constNames : @& String) : IO ByteArray := do
+  let store ← envStore.get
+  let some env := store[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  let mut fields : Array (Expr × Option Expr) := #[]
+  for constName in (constNames.splitOn "\n").filter (· ≠ "") do
+    match env.find? (WXF.nameOfString constName) with
+    | some ci => fields := fields.push (ci.type, ci.value? true) -- allowOpaque := true, as for the values above
+    | none => return WXF.serialize (WXF.string s!"ERROR: constant not found: {constName}")
+  return WXF.serialize (WXF.fieldsTable fields)
+
 -- ============================================================================
 -- Definition unfolding
 -- ============================================================================

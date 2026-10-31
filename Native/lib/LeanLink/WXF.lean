@@ -263,6 +263,166 @@ unsafe def exprToSharedWXFUnsafe (e : Lean.Expr) : ByteArray :=
 @[implemented_by exprToSharedWXFUnsafe]
 opaque exprToSharedWXF (e : Lean.Expr) : ByteArray
 
+-- ============================================================================
+-- The fields table: the types and values of many constants, each distinct
+-- subterm once across all of them
+-- ============================================================================
+
+/-- Numbers below 2^31, of dimensions `dims`, as a WXF packed array of 32-bit integers,
+    which the Wolfram Language reads without building an expression per number; no
+    numbers is an empty list. -/
+def packedNat32 (dims : List Nat) (data : Array Nat) : ByteArray := Id.run do
+  if data.isEmpty then return wlList #[]
+  let mut out : ByteArray := dims.foldl (fun out d => out ++ encodeVarint d) (⟨#[193, 2]⟩ ++ encodeVarint dims.length)
+  for n in data do
+    let v := n.toUInt32
+    out := out.push v.toUInt8 |>.push (v >>> 8).toUInt8 |>.push (v >>> 16).toUInt8 |>.push (v >>> 24).toUInt8
+  return out
+
+/-- The table the fields are written to. A node is five numbers, its kind and four
+    fields, which name names, levels, level lists, literals and earlier nodes by
+    position (1-based); a node is written once, after its parts, and found again by
+    its address, the fields having been maximally shared first, and has a depth. -/
+structure FieldsTable where
+  addresses : Std.HashMap Lean.ExprStructEq Nat := {}
+  count : Nat := 0
+  rows : Array Nat := #[]
+  depths : Array Nat := #[]
+  nameIds : Std.HashMap Lean.Name Nat := {}
+  names : Array String := #[]
+  levelIds : Std.HashMap (Nat × Nat × Nat) Nat := {}
+  levelRows : Array Nat := #[]
+  levelListIds : Std.HashMap (List Nat) Nat := {}
+  levelLists : Array (List Nat) := #[]
+  naturalIds : Std.HashMap Nat Nat := {}
+  naturals : Array Nat := #[]
+  stringIds : Std.HashMap String Nat := {}
+  strings : Array String := #[]
+
+-- Each function takes the table and gives a position with the table extended, the table passed on
+-- uniquely, so that Lean updates its maps and arrays in place.
+
+/-- A name by position, looked up as a Lean name, whose hash Lean keeps, and written as a string once. -/
+def tableName (n : Lean.Name) (s : FieldsTable) : Nat × FieldsTable :=
+  match s.nameIds[n]? with
+  | some i => (i, s)
+  | none => let i := s.names.size + 1; (i, { s with nameIds := s.nameIds.insert n i, names := s.names.push n.toString })
+
+def tableNatural (n : Nat) (s : FieldsTable) : Nat × FieldsTable :=
+  match s.naturalIds[n]? with
+  | some i => (i, s)
+  | none => let i := s.naturals.size + 1; (i, { s with naturalIds := s.naturalIds.insert n i, naturals := s.naturals.push n })
+
+def tableString (str : String) (s : FieldsTable) : Nat × FieldsTable :=
+  match s.stringIds[str]? with
+  | some i => (i, s)
+  | none => let i := s.strings.size + 1; (i, { s with stringIds := s.stringIds.insert str i, strings := s.strings.push str })
+
+/-- A level as three numbers: 0 zero, 1 successor of a level, 2 and 3 max and imax
+    of two, 4 a parameter and 5 a metavariable by name. -/
+partial def tableLevel (l : Lean.Level) (s : FieldsTable) : Nat × FieldsTable :=
+  let (row, s) : (Nat × Nat × Nat) × FieldsTable := match l with
+    | .zero => ((0, 0, 0), s)
+    | .succ inner => let (i, s) := tableLevel inner s; ((1, i, 0), s)
+    | .max a b => let (i, s) := tableLevel a s; let (j, s) := tableLevel b s; ((2, i, j), s)
+    | .imax a b => let (i, s) := tableLevel a s; let (j, s) := tableLevel b s; ((3, i, j), s)
+    | .param n => let (i, s) := tableName n s; ((4, i, 0), s)
+    | .mvar n => let (i, s) := tableName n.name s; ((5, i, 0), s)
+  match s.levelIds[row]? with
+  | some i => (i, s)
+  | none =>
+    let i := s.levelIds.size + 1
+    (i, { s with levelIds := s.levelIds.insert row i, levelRows := s.levelRows.push row.1 |>.push row.2.1 |>.push row.2.2 })
+
+def tableLevelList (ls : List Lean.Level) (s : FieldsTable) : Nat × FieldsTable :=
+  let (ids, s) := ls.foldr (fun l (ids, s) => let (i, s) := tableLevel l s; (i :: ids, s)) (([] : List Nat), s)
+  match s.levelListIds[ids]? with
+  | some i => (i, s)
+  | none => let i := s.levelLists.size + 1; (i, { s with levelListIds := s.levelListIds.insert ids i, levelLists := s.levelLists.push ids })
+
+def binderCode (bi : Lean.BinderInfo) : Nat := match bi with
+  | .default => 0
+  | .implicit => 1
+  | .strictImplicit => 2
+  | .instImplicit => 3
+
+/-- A node's depth is one more than its deepest part's, and a leaf's is 0: the nodes of a
+    depth have all their parts among those before, so the Wolfram Language builds them
+    together, a depth at a time. -/
+@[inline] def depthAbove (s : FieldsTable) (p : Nat) : Nat := s.depths[p - 1]! + 1
+
+@[inline] def tableRow (k a b c d depth : Nat) (s : FieldsTable) : Nat × FieldsTable :=
+  (s.count + 1, { s with count := s.count + 1, rows := s.rows.push k |>.push a |>.push b |>.push c |>.push d, depths := s.depths.push depth })
+
+/-- The position of `e`'s node: kinds 0 bound variable (index), 1 sort (level),
+    2 constant (name, level list), 3 application (function, argument), 4 lambda and
+    5 forall (binder name, type, body, binder code), 6 let (name, type, value, body),
+    7 natural literal, 8 string literal, 9 projection (structure, index, term), and
+    10 and 11 a free variable or metavariable, which no constant should hold. -/
+unsafe def tableNode (e : Lean.Expr) (s : FieldsTable) : Nat × FieldsTable :=
+  match e with
+  | .mdata _ inner => tableNode inner s
+  | _ =>
+    -- equal as Lean's Expr.equal has it, binder names and kinds included, and so, the fields maximally
+    -- shared, the same object, which it finds first
+    let address : Lean.ExprStructEq := ⟨e⟩
+    match s.addresses[address]? with
+    | some i => (i, s)
+    | none =>
+      let (i, s) := match e with
+        | .bvar i => tableRow 0 i 0 0 0 0 s
+        | .sort l => let (j, s) := tableLevel l s; tableRow 1 j 0 0 0 0 s
+        | .const n ls => let (j, s) := tableName n s; let (k, s) := tableLevelList ls s; tableRow 2 j k 0 0 0 s
+        | .app f a => let (j, s) := tableNode f s; let (k, s) := tableNode a s; tableRow 3 j k 0 0 (max (depthAbove s j) (depthAbove s k)) s
+        | .lam n t b bi =>
+          let (j, s) := tableName n s; let (k, s) := tableNode t s; let (l, s) := tableNode b s
+          tableRow 4 j k l (binderCode bi) (max (depthAbove s k) (depthAbove s l)) s
+        | .forallE n t b bi =>
+          let (j, s) := tableName n s; let (k, s) := tableNode t s; let (l, s) := tableNode b s
+          tableRow 5 j k l (binderCode bi) (max (depthAbove s k) (depthAbove s l)) s
+        | .letE n t v b _ =>
+          let (j, s) := tableName n s; let (k, s) := tableNode t s; let (l, s) := tableNode v s; let (m, s) := tableNode b s
+          tableRow 6 j k l m (max (depthAbove s k) (max (depthAbove s l) (depthAbove s m))) s
+        | .lit (.natVal n) => let (j, s) := tableNatural n s; tableRow 7 j 0 0 0 0 s
+        | .lit (.strVal str) => let (j, s) := tableString str s; tableRow 8 j 0 0 0 0 s
+        | .proj n i t => let (j, s) := tableName n s; let (k, s) := tableNode t s; tableRow 9 j i k 0 (depthAbove s k) s
+        | .fvar id => let (j, s) := tableName id.name s; tableRow 10 j 0 0 0 0 s
+        | .mvar id => let (j, s) := tableName id.name s; tableRow 11 j 0 0 0 0 s
+        | .mdata _ _ => tableRow 0 0 0 0 0 0 s
+      (i, { s with addresses := s.addresses.insert address i })
+
+unsafe def fieldsTableRows (fields : Array (Lean.Expr × Option Lean.Expr)) : Array Nat × FieldsTable :=
+  fields.foldl (init := (#[], {})) fun (roots, s) (type, value) =>
+    let (t, s) := tableNode type s
+    let (v, s) := match value with
+      | some v => tableNode v s
+      | none => (0, s)
+    (roots.push t |>.push v, s)
+
+def fieldsTableWXF (fields : Nat) (roots : Array Nat) (table : FieldsTable) : ByteArray :=
+  wlAssociation #[
+    (string "Nodes", packedNat32 [table.count, 5] table.rows),
+    (string "Depths", packedNat32 [table.count] table.depths),
+    (string "Names", wlList (table.names.map string)),
+    (string "Levels", packedNat32 [table.levelIds.size, 3] table.levelRows),
+    (string "LevelLists", wlList (table.levelLists.map fun ids => wlList (ids.toArray.map fun (i : Nat) => integer (Int.ofNat i)))),
+    (string "Naturals", wlList (table.naturals.map fun (n : Nat) => integer (Int.ofNat n))),
+    (string "Strings", wlList (table.strings.map string)),
+    (string "Roots", packedNat32 [fields, 2] roots)
+  ]
+
+unsafe def fieldsTableUnsafe (fields : Array (Lean.Expr × Option Lean.Expr)) : ByteArray :=
+  -- every two equal subterms made one object first, by Lean's own max-sharing primitive, so that
+  -- the table finds each distinct subterm by its address, across the constants as within each
+  let (roots, table) := fieldsTableRows (ShareCommon.shareCommon' fields)
+  fieldsTableWXF fields.size roots table
+
+/-- The types and values of constants as one table, `Roots` giving for each its
+    type's node and its value's, or 0: the TypeTheory bridge reads a whole cone so,
+    each subterm the constants share translated once. -/
+@[implemented_by fieldsTableUnsafe]
+opaque fieldsTable (fields : Array (Lean.Expr × Option Lean.Expr)) : ByteArray
+
 /-- Serialize a ConstantInfo kind string -/
 def constantKind (ci : Lean.ConstantInfo) : String := match ci with
   | .axiomInfo _ => "axiom"

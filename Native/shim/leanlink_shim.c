@@ -68,6 +68,7 @@ extern lean_object* leanlink_get_type(uint64_t handle, lean_object* name, uint32
 extern lean_object* leanlink_get_value(uint64_t handle, lean_object* name, uint32_t depth);
 extern lean_object* leanlink_get_type_shared(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_get_value_shared(uint64_t handle, lean_object* name);
+extern lean_object* leanlink_get_fields_table(uint64_t handle, lean_object* names);
 extern lean_object* leanlink_get_constant(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_get_used_constants(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_collect_axioms(uint64_t handle, lean_object* name);
@@ -400,6 +401,27 @@ DLLEXPORT int leanlink_wl_get_value_shared(
 
     lean_object* io_res = leanlink_get_value_shared(handle, name);
     /* name consumed by leanlink_get_value_shared */
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * getFieldsTable(handle, names) -> MTensor (WXF bytes): the types and values of the
+ * constants named, one per line, as one table of their distinct subterms
+ */
+DLLEXPORT int leanlink_wl_get_fields_table(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    if (libData->AbortQ()) return LIBRARY_FUNCTION_ERROR;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    const char* names_cstr = MArgument_getUTF8String(Args[1]);
+    lean_object* names = lean_mk_string(names_cstr);
+    libData->UTF8String_disown((char*)names_cstr);
+
+    lean_object* io_res = leanlink_get_fields_table(handle, names);
+    /* names consumed by leanlink_get_fields_table */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 

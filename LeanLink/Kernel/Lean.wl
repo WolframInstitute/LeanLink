@@ -301,6 +301,10 @@ $getTypeSharedFn := $getTypeSharedFn = Quiet[LibraryFunctionLoad[$ShimLib, "lean
 
 $getValueSharedFn := $getValueSharedFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_value_shared", {Integer, "UTF8String"}, {Integer, 1}]]
 
+(* the types and values of many constants as one table of their distinct subterms, for the TypeTheory bridge; a shim
+   from before LeanLink 1.2.6 has no such function *)
+$getFieldsTableFn := $getFieldsTableFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_fields_table", {Integer, "UTF8String"}, {Integer, 1}]]
+
 $getUsedConstantsFn := $getUsedConstantsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_get_used_constants", {Integer, "UTF8String"}, {Integer, 1}]
 
 $collectAxiomsFn := $collectAxiomsFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_collect_axioms", {Integer, "UTF8String"}, {Integer, 1}]
@@ -361,6 +365,8 @@ sharedNode[leaf_] := leaf
 sharedExpression[other_] := other
 
 sharedFetchQ[] := MatchQ[{$getTypeSharedFn, $getValueSharedFn}, {_LibraryFunction, _LibraryFunction}]
+
+fieldsTableQ[] := MatchQ[$getFieldsTableFn, _LibraryFunction]
 
 (* ============================================================================ *)
 (* Utilities                                                                    *)
