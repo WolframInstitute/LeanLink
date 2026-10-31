@@ -32,6 +32,44 @@ VerificationTest[
 
 VerificationTest[Keys[LeanToTypeTheory[$lean, "Eq.symm"]], {"Eq", "Eq.refl", InductiveRecursor["Eq"], "rfl", "Eq.symm"}, TestID -> "LeanToTypeTheory-Eq-symm-cone"]
 
+(* the shim walks the cone in Lean, in the order coneOrder gives, with the kinds, universe parameters and inductive types'
+   information the bridge would otherwise read *)
+VerificationTest[
+    With[{handle = Wolfram`LeanLink`Private`extractHandle[$lean]},
+        Block[
+            {
+                Wolfram`LeanLink`Private`$kinds = <||>, Wolfram`LeanLink`Private`$universes = <||>, Wolfram`LeanLink`Private`$inductives = <||>,
+                Wolfram`LeanLink`Private`$primaries = <||>, Wolfram`LeanLink`Private`$owners = <||>, Wolfram`LeanLink`Private`$used = <||>,
+                Wolfram`LeanLink`Private`$handle = handle, Wolfram`LeanLink`Private`$environmentTerms = First[$lean], shim, inductives, walked
+            },
+            shim = Wolfram`LeanLink`Private`bridgeCone[{"Nat.zero_add", "List.foldl"}];
+            inductives = Wolfram`LeanLink`Private`$inductives;
+            Wolfram`LeanLink`Private`$kinds = <||>; Wolfram`LeanLink`Private`$universes = <||>; Wolfram`LeanLink`Private`$inductives = <||>;
+            walked = Wolfram`LeanLink`Private`coneOrder[{"Nat.zero_add", "List.foldl"}];
+            {shim === walked, AllTrue[Keys[inductives], Function[name, inductives[name] === Wolfram`LeanLink`Private`readInductiveInformation[name]]]}
+        ]
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "Shim-cone-walk-is-coneOrder"
+]
+
+(* the fields of a cone read as one table give the records that reading each field gives *)
+VerificationTest[
+    With[{table = LeanToTypeTheory[$lean, "List.foldl_cons"]},
+        Block[{Wolfram`LeanLink`Private`fieldsTableQ, Wolfram`LeanLink`Private`bridgeConeQ},
+            Wolfram`LeanLink`Private`fieldsTableQ[] = False;
+            Wolfram`LeanLink`Private`bridgeConeQ[] = False;
+            With[{fields = LeanToTypeTheory[$lean, "List.foldl_cons"]}, {Keys[table] === Keys[fields], First[table]["Records"] === First[fields]["Records"]}]
+        ]
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "Fields-table-gives-the-records-each-field-gives"
+]
+
 VerificationTest[
     With[{env = LeanToTypeTheory[$lean, "And.comm"]},
         {Head[env], KeyExistsQ[env, InductiveRecursor["And"]], MatchQ[TypeTheoryCheck[env], True | _Success]}
