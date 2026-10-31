@@ -304,8 +304,20 @@ partial def bridgeCone (env : Environment) (roots : Array Name) : Except String 
           stack := stack.push (d, false)
   return (order, constants)
 
+/-- An inductive type's information as the bridge's inductiveInformation reads it from the
+    recursor: its parameters, its block's types, how many types are nested in them, the
+    constructors of the block and its own. -/
+def bridgeInductive (env : Environment) (n : Name) : Option ByteArray := do
+  let .inductInfo v ← env.find? n | none
+  let blockConstructors := v.all.flatMap fun t => match env.find? t with
+    | some (.inductInfo tv) => tv.ctors
+    | _ => []
+  let names (ns : List Name) := WXF.wlList (ns.toArray.map fun c => WXF.string c.toString)
+  some (WXF.wlList #[WXF.integer v.numParams, names v.all, WXF.integer v.numNested, names blockConstructors, names v.ctors])
+
 /-- The TypeTheory bridge's cone of the roots, one per line (bridgeCone): <|"Order" ->
-    {name, ...}, "Constants" -> <|name -> {kind, {level parameter, ...}}, ...|>|>. -/
+    {name, ...}, "Constants" -> <|name -> {kind, {level parameter, ...}}, ...|>,
+    "Inductives" -> <|type -> {parameters, block, nested, block constructors, constructors}, ...|>|>. -/
 @[export leanlink_get_bridge_cone]
 def getBridgeConeExport (handle : UInt64) (rootNames : @& String) : IO ByteArray := do
   let store ← envStore.get
@@ -316,9 +328,11 @@ def getBridgeConeExport (handle : UInt64) (rootNames : @& String) : IO ByteArray
   | .ok (order, constants) =>
     let entries := constants.filterMap fun n => (env.find? n).map fun ci =>
       (WXF.string n.toString, WXF.wlList #[WXF.string (WXF.constantKind ci), WXF.wlList (ci.levelParams.toArray.map fun p => WXF.string p.toString)])
+    let inductives := constants.filterMap fun n => (bridgeInductive env n).map fun info => (WXF.string n.toString, info)
     return WXF.serialize (WXF.wlAssociation #[
       (WXF.string "Order", WXF.wlList (order.map fun n => WXF.string n.toString)),
-      (WXF.string "Constants", WXF.wlAssociation entries)
+      (WXF.string "Constants", WXF.wlAssociation entries),
+      (WXF.string "Inductives", WXF.wlAssociation inductives)
     ])
 
 -- ============================================================================

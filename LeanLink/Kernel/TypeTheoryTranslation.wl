@@ -217,14 +217,17 @@ quotientComputation[_, _String] := {}
    limit: an entry {name, False} visits name, and {primary, True} follows its dependencies. *)
 
 (* The shim walks the cone in Lean, in the order coneOrder gives (EnvStore.lean's bridgeCone), and gives the kinds and
-   universe parameters of its constants, those of the blocks' members and recursors included, which then need no more
-   reads; a shim before LeanLink 1.2.6 has no such walk, and an unknown constant is coneOrder's to report. *)
+   universe parameters of its constants, those of the blocks' members and recursors included, and each inductive type's
+   information as inductiveInformation reads it, from Lean's own record of the type, which then need no more reads; a
+   shim before LeanLink 1.2.6 has no such walk, and an unknown constant is coneOrder's to report. *)
 bridgeCone[roots_List] := Replace[
     If[bridgeConeQ[], Quiet[decodeWXF[$getBridgeConeFn[$handle, StringRiffle[roots, "\n"]]]], None],
     {
-        KeyValuePattern[{"Order" -> order_List, "Constants" -> constants_Association}] :> (
+        result : KeyValuePattern[{"Order" -> order_List, "Constants" -> constants_Association}] :> (
             $kinds = Join[$kinds, First /@ constants];
             $universes = Join[$universes, Last /@ constants];
+            $inductives = Join[$inductives, Replace[Lookup[result, "Inductives", <||>], Except[_Association] -> <||>] /. {parameters_Integer, block_List, nested_Integer, blockConstructors_List, constructors_List} :>
+                <|"Parameters" -> parameters, "Block" -> block, "Nested" -> nested, "BlockConstructors" -> blockConstructors, "Constructors" -> constructors|>];
             order
         ),
         _ :> coneOrder[roots]
