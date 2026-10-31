@@ -78,7 +78,31 @@ $profiled = {
     "constantRecord",
     "levelEquivalentQ",
     "coneOrder",
-    "importedDeclarations"
+    "importedDeclarations",
+    (* inductive types *)
+    "declareBlock",
+    "originalConstructor",
+    "checkConstructor",
+    "eliminateNested",
+    "largeEliminationQ",
+    "addBlockRecords",
+    "typeTelescope",
+    "instantiateLeadingParameter",
+    "sortLevel",
+    "makeLambda",
+    "makeDependentFunctionType",
+    "abstractFreeVariables",
+    (* the import's stages *)
+    "bridgeCone",
+    "fieldTable",
+    "tableFields",
+    "deferredDeclarations",
+    "coreRecords",
+    "newEnvironment",
+    "environmentInput",
+    "seedRows",
+    "compiledCheckWith",
+    "checkRecursor"
 }
 
 arguments = Rest[Replace[$ScriptCommandLine, {} -> {$InputFileName}]];
