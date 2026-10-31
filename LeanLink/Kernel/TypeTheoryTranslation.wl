@@ -760,19 +760,19 @@ tableFields[names_List, table_Association] := Block[
    positions of its parts among the terms, an application's function and argument, a binder's type and body, a let's
    type, value and body, a projection's term, and the positions of the fields' types and values, which the records
    hold *)
-tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, at},
+tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, byKind = PositionIndex[kinds], at},
     seedPosition = ConstantArray[0, n];
     seedPosition[[order]] = Range[n];
     {x, y, z} = ConstantArray[0, {3, n}];
-    at = Flatten[Position[kinds, 3, {1}]];
+    at = Lookup[byKind, 3, {}];
     x[[at]] = seedPosition[[as[[at]]]];
     y[[at]] = seedPosition[[bs[[at]]]];
-    at = Flatten[Position[kinds, 4 | 5 | 6, {1}]];
+    at = Join[Lookup[byKind, 4, {}], Lookup[byKind, 5, {}], Lookup[byKind, 6, {}]];
     x[[at]] = seedPosition[[bs[[at]]]];
     y[[at]] = seedPosition[[cs[[at]]]];
-    at = Flatten[Position[kinds, 6, {1}]];
+    at = Lookup[byKind, 6, {}];
     z[[at]] = seedPosition[[ds[[at]]]];
-    at = Flatten[Position[kinds, 9, {1}]];
+    at = Lookup[byKind, 9, {}];
     x[[at]] = seedPosition[[cs[[at]]]];
     <|
         "Terms" -> Join @@ levelTerms,
@@ -797,11 +797,8 @@ tableLeaf[position_Integer] := Switch[ kinds[[position]],
 tableConstantName[id_Integer] := Lookup[heldNames, id, heldNames[id] = HoldComplete @@ {constantName[strings[[id]]]}]
 
 tableLevelTerms[positions_List] := Block[
-    {k = kinds[[positions]], a = as[[positions]], b = bs[[positions]], c = cs[[positions]], d = ds[[positions]], values = ConstantArray[Null, Length[positions]]},
-    Scan[
-        Function[kind, With[{i = Pick[Range[Length[k]], k, kind]}, If[i =!= {}, values[[i]] = tableNodes[kind, a[[i]], b[[i]], c[[i]], d[[i]]]]]],
-        {3, 5, 4, 6, 9}
-    ];
+    {a = as[[positions]], b = bs[[positions]], c = cs[[positions]], d = ds[[positions]], values = ConstantArray[Null, Length[positions]]},
+    KeyValueMap[Function[{kind, i}, values[[i]] = tableNodes[kind, a[[i]], b[[i]], c[[i]], d[[i]]]], PositionIndex[kinds[[positions]]]];
     values
 ]
 
