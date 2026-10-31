@@ -562,6 +562,8 @@ checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecurso
    kernel infers for it is compared with Lean's, as a core term, by definitional equality, so nothing elaborates the
    type, which for a structure of many fields is large, and no probe declaration is checked and removed. *)
 
+checkRecursorType[environment_, name_String, recursor_String] /; recursorTypeSameQ[environment, recursor] := Null
+
 checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, leanType},
     levels = placeholderLevels[Length[universeParameters[recursor]]];
     leanType = Replace[
@@ -571,6 +573,34 @@ checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, 
     If[ ! recursorTypeQ[environment, leanCore[LeanConst[recursor, levels]], leanCore[leanType]],
         bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
     ]
+]
+
+(* Most often TypeTheory's recursor has Lean's type as it is, but for the names and kinds of its binders, which
+   definitional equality ignores, and the names of its universe parameters: then the types are definitionally equal
+   with nothing to infer, and the type Lean's table holds is compared with the record's, the record's universe
+   parameters renamed to Lean's in order and every binder None, named and of kind None *)
+recursorTypeSameQ[environment_, recursor_String] := With[
+    {
+        leanType = Lookup[Lookup[$fieldTerms, recursor, <||>], "Type", None],
+        catch = coreHead["catchKernelFailure"],
+        constantRecord = coreHead["constantRecord"],
+        name = HoldComplete @@ {constantName[recursor]},
+        parameter = coreHead["levelParameter"]
+    },
+    With[{record = catch[constantRecord[environment, name]]}, And[
+        leanType =!= None,
+        AssociationQ[record],
+        Length[record["UniverseParameters"]] == Length[universeParameters[recursor]],
+        anonymousBinders[record["Type"] /. Thread[(parameter /@ record["UniverseParameters"]) -> (parameter /@ HoldComplete /@ universeParameters[recursor])]] ===
+            anonymousBinders[leanType]
+    ]]
+]
+
+anonymousBinders[term_] := With[{binderHeads = coreHead /@ {"lambdaAbstraction", "dependentFunctionType"}, let = coreHead["localDefinition"]},
+    term //. {
+        (head_[_HoldComplete, domain_, body_, _String] /; MemberQ[binderHeads, head]) :> Construct[head, None, domain, body, None],
+        let[_HoldComplete, rest___] :> Construct[let, None, rest]
+    }
 ]
 
 (* TypeTheory's kernel functions hold their arguments, so they go in as symbols put in place by With *)
@@ -635,7 +665,7 @@ readFieldTerm[name_String, field : "Type" | "Term"] := If[ coreTermsQ[] && share
 
 fieldNames[name_String] := Switch[ constantKind[name],
     "inductive",
-        blockMembers[name]
+        Join[blockMembers[name], blockRecursors[name]]
     ,
     "quot",
         $quotientConstants
