@@ -49,7 +49,7 @@ LeanToTypeTheory[term : LeanTerm[data_Association], opts : OptionsPattern[]] := 
 
 LeanToTypeTheory[env_LeanEnvironment, name_String, opts : OptionsPattern[]] := LeanToTypeTheory[env, {name}, opts]
 
-LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[]] := Block[{handle = extractHandle[env]},
+LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[]] := Block[{handle = extractHandle[env], $environmentTerms = First[env]},
     If[ IntegerQ[handle],
         importConstants[handle, names, OptionValue["Environment"]],
         Failure["NoHandle", <|"MessageTemplate" -> "The environment has no native Lean environment.", "MessageParameters" -> {}|>]
@@ -308,11 +308,20 @@ usedConstants[name_String] := With[{used = usedInformation[name]},
 
 usedInformation[name_String] := Replace[Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]], Except[_Association] -> <||>]
 
+(* the kind LeanImport read for every constant at once, where the environment has it; a recursor, which it leaves
+   out, is read from Lean, as the whole constant, which costs its type and value *)
 constantKind[name_String] := Lookup[
     $kinds,
     name,
-    $kinds[name] = Replace[Quiet[decodeWXF[$getConstantFn[$handle, name]]], {LeanConstant[_, kind_String, ___] :> kind, _ :> bridgeFailure["UnknownConstant", "Lean has no constant `1`.", {name}]}]
+    $kinds[name] = Replace[environmentKind[name], None :> Replace[
+        Quiet[decodeWXF[$getConstantFn[$handle, name]]],
+        {LeanConstant[_, kind_String, ___] :> kind, _ :> bridgeFailure["UnknownConstant", "Lean has no constant `1`.", {name}]}
+    ]]
 ]
+
+environmentKind[name_String] := Replace[Lookup[$environmentTerms, name, None], {LeanTerm[data_Association] :> Lookup[data, "Kind", None], _ -> None}]
+
+$environmentTerms = <||>
 
 $bridgeDepth = 1000000
 
