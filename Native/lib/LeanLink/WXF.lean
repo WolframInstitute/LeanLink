@@ -273,7 +273,9 @@ opaque exprToSharedWXF (e : Lean.Expr) : ByteArray
     numbers is an empty list. -/
 def packedNat32 (dims : List Nat) (data : Array Nat) : ByteArray := Id.run do
   if data.isEmpty then return wlList #[]
-  let mut out : ByteArray := dims.foldl (fun out d => out ++ encodeVarint d) (⟨#[193, 2]⟩ ++ encodeVarint dims.length)
+  let header : ByteArray := dims.foldl (fun out d => out ++ encodeVarint d) (⟨#[193, 2]⟩ ++ encodeVarint dims.length)
+  let mut out : ByteArray := ByteArray.emptyWithCapacity (header.size + 4 * data.size)
+  out := out ++ header
   for n in data do
     let v := n.toUInt32
     out := out.push v.toUInt8 |>.push (v >>> 8).toUInt8 |>.push (v >>> 16).toUInt8 |>.push (v >>> 24).toUInt8
@@ -393,7 +395,10 @@ unsafe def tableNode (e : Lean.Expr) (s : FieldsTable) : Nat × FieldsTable :=
       (i, { s with addresses := s.addresses.insert address i })
 
 unsafe def fieldsTableRows (fields : Array (Lean.Expr × Option Lean.Expr)) : Array Nat × FieldsTable :=
-  fields.foldl (init := (#[], {})) fun (roots, s) (type, value) =>
+  -- room for about as many nodes as a Mathlib cone's constants have, 64 each, so that the map and arrays seldom grow
+  let room := 64 * fields.size
+  let table : FieldsTable := { addresses := Std.HashMap.emptyWithCapacity room, rows := Array.mkEmpty (5 * room), depths := Array.mkEmpty room }
+  fields.foldl (init := (#[], table)) fun (roots, s) (type, value) =>
     let (t, s) := tableNode type s
     let (v, s) := match value with
       | some v => tableNode v s
