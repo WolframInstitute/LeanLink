@@ -621,20 +621,18 @@ recursorTypeSameQ[environment_, recursor_String] := With[
     ]]
 ]
 
-comparable[environment_, term_] := anonymousBinders[annotationFree[environment, term]]
-
 (* Lean's recursor takes a parameter at its type without outParam, semiOutParam, optParam or autoParam, which give their
-   first argument and which TypeTheory's recursor keeps as the inductive type declares them; they are taken off where
-   the environment defines each as that, a function of its arguments that is its first *)
-annotationFree[environment_, term_] := With[{app = coreHead["application"], reference = coreHead["constantReference"], names = annotationNames[environment]},
-    If[ names === {},
-        term,
-        term //. {
-            app[reference[HoldComplete[name_String], _], argument_] /; MemberQ[names, {name, 1}] :> argument,
-            app[app[reference[HoldComplete[name_String], _], argument_], _] /; MemberQ[names, {name, 2}] :> argument
-        }
-    ]
+   first argument and which TypeTheory's recursor keeps as the inductive type declares them: they are taken off where the
+   environment defines each as that, a function of its arguments that is its first. The term is walked once, each
+   distinct subterm once: a ReplaceRepeated walked the tree once for each binder nested in it. *)
+comparable[environment_, term_] := Block[{$comparableMemo = <||>, $annotationArities = Association[Rule @@@ annotationNames[environment]]},
+    comparableTerm[term]
 ]
+
+comparableTerm[term_] := Lookup[$comparableMemo, Key[term], $comparableMemo[term] = comparableNode[term]]
+
+annotationArity[name_String] := Lookup[$annotationArities, name, 0]
+annotationArity[_] := 0
 
 annotationNames[environment_] := Select[{{"outParam", 1}, {"semiOutParam", 1}, {"optParam", 2}, {"autoParam", 2}}, Function[pair, firstArgumentQ[environment, pair]]]
 
@@ -646,12 +644,24 @@ firstArgumentValueQ[value_, arity_Integer] := With[{lambda = coreHead["lambdaAbs
     MatchQ[value, Nest[lambda[_, _, #, _] &, variable[arity - 1], arity]]
 ]
 
-anonymousBinders[term_] := With[{binderHeads = coreHead /@ {"lambdaAbstraction", "dependentFunctionType"}, let = coreHead["localDefinition"]},
-    term //. {
-        (head_[_HoldComplete, domain_, body_, _String] /; MemberQ[binderHeads, head]) :> Construct[head, None, domain, body, None],
-        let[_HoldComplete, rest___] :> Construct[let, None, rest]
-    }
+(* every binder named and of kind None, a binder with quantities kept as it is; the heads are named outright, as coreHead
+   is defined below *)
+With[
+    {
+        lambda = Symbol["WolframInstitute`TypeTheory`PackageScope`lambdaAbstraction"], forall = Symbol["WolframInstitute`TypeTheory`PackageScope`dependentFunctionType"],
+        let = Symbol["WolframInstitute`TypeTheory`PackageScope`localDefinition"], app = Symbol["WolframInstitute`TypeTheory`PackageScope`application"],
+        reference = Symbol["WolframInstitute`TypeTheory`PackageScope`constantReference"], projection = Symbol["WolframInstitute`TypeTheory`PackageScope`projection"]
+    },
+    comparableNode[(head : lambda | forall)[_, domain_, body_, binder_String]] := Construct[head, None, comparableTerm[domain], comparableTerm[body], None];
+    comparableNode[(head : lambda | forall)[name_, domain_, body_, binder_]] := Construct[head, name, comparableTerm[domain], comparableTerm[body], binder];
+    comparableNode[let[_, type_, value_, body_]] := Construct[let, None, comparableTerm[type], comparableTerm[value], comparableTerm[body]];
+    comparableNode[app[reference[HoldComplete[name_], _], argument_]] /; annotationArity[name] == 1 := comparableTerm[argument];
+    comparableNode[app[app[reference[HoldComplete[name_], _], argument_], _]] /; annotationArity[name] == 2 := comparableTerm[argument];
+    comparableNode[app[function_, argument_]] := Construct[app, comparableTerm[function], comparableTerm[argument]];
+    comparableNode[projection[structure_, index_, structureTerm_]] := Construct[projection, structure, index, comparableTerm[structureTerm]]
 ]
+
+comparableNode[leaf_] := leaf
 
 (* TypeTheory's kernel functions hold their arguments, so they go in as symbols put in place by With *)
 recursorTypeQ[environment_, constant_, type_] := With[
