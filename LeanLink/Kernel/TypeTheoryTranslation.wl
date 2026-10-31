@@ -616,9 +616,34 @@ recursorTypeSameQ[environment_, recursor_String] := With[
         leanType =!= None,
         AssociationQ[record],
         Length[record["UniverseParameters"]] == Length[universeParameters[recursor]],
-        anonymousBinders[record["Type"] /. Thread[(parameter /@ record["UniverseParameters"]) -> (parameter /@ HoldComplete /@ universeParameters[recursor])]] ===
-            anonymousBinders[leanType]
+        comparable[environment, record["Type"] /. Thread[(parameter /@ record["UniverseParameters"]) -> (parameter /@ HoldComplete /@ universeParameters[recursor])]] ===
+            comparable[environment, leanType]
     ]]
+]
+
+comparable[environment_, term_] := anonymousBinders[annotationFree[environment, term]]
+
+(* Lean's recursor takes a parameter at its type without outParam, semiOutParam, optParam or autoParam, which give their
+   first argument and which TypeTheory's recursor keeps as the inductive type declares them; they are taken off where
+   the environment defines each as that, a function of its arguments that is its first *)
+annotationFree[environment_, term_] := With[{app = coreHead["application"], reference = coreHead["constantReference"], names = annotationNames[environment]},
+    If[ names === {},
+        term,
+        term //. {
+            app[reference[HoldComplete[name_String], _], argument_] /; MemberQ[names, {name, 1}] :> argument,
+            app[app[reference[HoldComplete[name_String], _], argument_], _] /; MemberQ[names, {name, 2}] :> argument
+        }
+    ]
+]
+
+annotationNames[environment_] := Select[{{"outParam", 1}, {"semiOutParam", 1}, {"optParam", 2}, {"autoParam", 2}}, Function[pair, firstArgumentQ[environment, pair]]]
+
+firstArgumentQ[environment_, {name_String, arity_Integer}] := With[{catch = coreHead["catchKernelFailure"], constantRecord = coreHead["constantRecord"], held = HoldComplete[name]},
+    MatchQ[catch[constantRecord[environment, held]], KeyValuePattern[{"Kind" -> "Definition", "Value" -> value_ /; firstArgumentValueQ[value, arity]}]]
+]
+
+firstArgumentValueQ[value_, arity_Integer] := With[{lambda = coreHead["lambdaAbstraction"], variable = coreHead["boundVariable"]},
+    MatchQ[value, Nest[lambda[_, _, #, _] &, variable[arity - 1], arity]]
 ]
 
 anonymousBinders[term_] := With[{binderHeads = coreHead /@ {"lambdaAbstraction", "dependentFunctionType"}, let = coreHead["localDefinition"]},
