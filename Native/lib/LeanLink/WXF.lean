@@ -281,8 +281,10 @@ def packedNat32 (dims : List Nat) (data : Array Nat) : ByteArray := Id.run do
 
 /-- The table the fields are written to. A node is five numbers, its kind and four
     fields, which name names, levels, level lists, literals and earlier nodes by
-    position (1-based); a node is written once, after its parts, and found again by
-    its address, the fields having been maximally shared first, and has a depth. -/
+    position (1-based); a node is written once, after its parts, and found again as
+    Lean's Expr.equal finds two terms equal, binder names and kinds included, which a
+    subterm Lean shares meets at once by its address; each node has a depth. Making
+    every two equal subterms one object first (ShareCommon) cost more than it saved. -/
 structure FieldsTable where
   addresses : Std.HashMap Lean.ExprStructEq Nat := {}
   count : Nat := 0
@@ -363,8 +365,7 @@ unsafe def tableNode (e : Lean.Expr) (s : FieldsTable) : Nat × FieldsTable :=
   match e with
   | .mdata _ inner => tableNode inner s
   | _ =>
-    -- equal as Lean's Expr.equal has it, binder names and kinds included, and so, the fields maximally
-    -- shared, the same object, which it finds first
+    -- equal as Lean's Expr.equal has it, binder names and kinds included
     let address : Lean.ExprStructEq := ⟨e⟩
     match s.addresses[address]? with
     | some i => (i, s)
@@ -412,9 +413,7 @@ def fieldsTableWXF (fields : Nat) (roots : Array Nat) (table : FieldsTable) : By
   ]
 
 unsafe def fieldsTableUnsafe (fields : Array (Lean.Expr × Option Lean.Expr)) : ByteArray :=
-  -- every two equal subterms made one object first, by Lean's own max-sharing primitive, so that
-  -- the table finds each distinct subterm by its address, across the constants as within each
-  let (roots, table) := fieldsTableRows (ShareCommon.shareCommon' fields)
+  let (roots, table) := fieldsTableRows fields
   fieldsTableWXF fields.size roots table
 
 /-- The types and values of constants as one table, `Roots` giving for each its
