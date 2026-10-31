@@ -70,7 +70,7 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
     Block[
         {
             $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $fieldTerms = <||>,
-            $fieldSeed = None, $handle = handle,
+            $fieldSeed = None, $handle = handle, $annotationAritiesCache = <||>,
             start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment
         },
         cone = bridgeCone[roots];
@@ -628,9 +628,17 @@ recursorTypeSameQ[environment_, recursor_String] := With[
    first argument and which TypeTheory's recursor keeps as the inductive type declares them: they are taken off where the
    environment defines each as that, a function of its arguments that is its first. The term is walked once, each
    distinct subterm once: a ReplaceRepeated walked the tree once for each binder nested in it. *)
-comparable[environment_, term_] := Block[{$comparableMemo = <||>, $annotationArities = Association[Rule @@@ annotationNames[environment]]},
+comparable[environment_, term_] := Block[{$comparableMemo = <||>, $annotationArities = annotationArities[environment]},
     comparableTerm[term]
 ]
+
+(* the annotations' arities, worked out once for an import's environment, which every recursor of the import is compared in *)
+annotationArities[environment_] := If[ AssociationQ[$annotationAritiesCache],
+    Lookup[$annotationAritiesCache, Key[environment], $annotationAritiesCache[environment] = Association[Rule @@@ annotationNames[environment]]],
+    Association[Rule @@@ annotationNames[environment]]
+]
+
+$annotationAritiesCache = None
 
 comparableTerm[term_] := Lookup[$comparableMemo, Key[term], $comparableMemo[term] = comparableNode[term]]
 
