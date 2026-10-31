@@ -67,7 +67,11 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
 $lastImportTimings = <||>
 
 importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
-    Block[{$kinds = <||>, $universes = <||>, $inductives = <||>, $coreTerms = <||>, $handle = handle, start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment},
+    Block[
+        {
+            $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $handle = handle,
+            start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment
+        },
         cone = coneOrder[roots];
         baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
@@ -222,8 +226,11 @@ coneOrder[roots_List] := Block[{visited = <||>, stack = CreateDataStructure["Sta
     Normal[order]
 ]
 
-(* the types of a block come with its first type, as their constructors and recursors do *)
-primaryName[name_String] := Switch[ constantKind[name],
+(* the types of a block come with its first type, as their constructors and recursors do; a constant is met once
+   for each constant that mentions it, so the answer is kept *)
+primaryName[name_String] := Lookup[$primaries, name, $primaries[name] = readPrimaryName[name]]
+
+readPrimaryName[name_String] := Switch[ constantKind[name],
     "constructor",
         First[inductiveInformation[constructorInductive[name]]["Block"]]
     ,
@@ -306,10 +313,11 @@ usedConstants[name_String] := With[{used = usedInformation[name]},
     Join[Lookup[used, "type", {}], Lookup[used, "value", {}]]
 ]
 
-usedInformation[name_String] := Replace[Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]], Except[_Association] -> <||>]
+usedInformation[name_String] := Lookup[$used, name, $used[name] = Replace[Quiet[decodeWXF[$getUsedConstantsFn[$handle, name]]], Except[_Association] -> <||>]]
 
-(* the kind LeanImport read for every constant at once, where the environment has it; a recursor, which it leaves
-   out, is read from Lean, as the whole constant, which costs its type and value *)
+(* the kind LeanImport read for every constant at once, from the environment, or for an internal constant, which it
+   leaves out, from those it kept by handle; a constant neither has is read from Lean, as the whole constant, which
+   costs its type and value *)
 constantKind[name_String] := Lookup[
     $kinds,
     name,
@@ -319,7 +327,10 @@ constantKind[name_String] := Lookup[
     ]]
 ]
 
-environmentKind[name_String] := Replace[Lookup[$environmentTerms, name, None], {LeanTerm[data_Association] :> Lookup[data, "Kind", None], _ -> None}]
+environmentKind[name_String] := Replace[
+    Lookup[$environmentTerms, name, None],
+    {LeanTerm[data_Association] :> Lookup[data, "Kind", None], _ :> Lookup[Lookup[$internalKinds, $handle, <||>], name, None]}
+]
 
 $environmentTerms = <||>
 
@@ -336,10 +347,10 @@ leanExpression[name_String, field : "Type" | "Term"] := Replace[
     result_ /; isFFIError[result] || (! sharedFetchQ[] && ! FreeQ[result, _LeanTruncated]) :> bridgeFailure["LeanExpression", "The `2` of `1` could not be read from Lean.", {name, ToLowerCase[field]}]
 ]
 
-constructorInductive[name_String] := Replace[
+constructorInductive[name_String] := Lookup[$owners, name, $owners[name] = Replace[
     First[leanSpine[Last[forallTelescope[leanExpression[name, "Type"]]]]],
     {LeanConst[inductive_String, _] :> inductive, _ :> bridgeFailure["Constructor", "The type of the constructor `1` does not end in its inductive type.", {name}]}
-]
+]]
 
 (* === Inductive types === *)
 

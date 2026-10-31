@@ -786,6 +786,15 @@ LeanBuild[dir_String, modules : {___String} : {}] := Module[{root = ExpandFileNa
 
 $handleSource = <||>;
 
+(* the kinds of the internal constants an import leaves out of its environment, by handle, for the TypeTheory bridge,
+   which meets them in the cones it imports *)
+$internalKinds = <||>;
+
+internalKinds[h_Integer, kinds_Association] := Block[{public = KeySelect[kinds, ! isInternalName[#]&]},
+    $internalKinds[h] = Join[Lookup[$internalKinds, h, <||>], KeyComplement[{kinds, public}]];
+    public
+]
+
 $typeFormCache = <||>;
 
 (* A file inside a folder: /a/kit/A.lean is inside /a/kit, /a/kit2/A.lean is not.
@@ -2583,6 +2592,7 @@ LeanLoadEnvironment[imports_List, searchPath_String] := If[ shimLoadableQ[LeanIm
 LeanFreeEnvironment[handle_Integer] := With[{tmpDir = handleInfo[handle, "TemporaryDirectory"]},
     $freeEnvFn[handle];
     KeyDropFrom[$handleSource, handle];
+    KeyDropFrom[$internalKinds, handle];
     $typeFormCache = KeySelect[$typeFormCache, First[#] =!= handle&];
     If[StringQ[tmpDir] && DirectoryQ[tmpDir], Quiet[DeleteDirectory[tmpDir, DeleteContents -> True]]];
     Null
@@ -2626,7 +2636,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
                                 Sow[h];
                                 kinds = Quiet[decodeWXF[$listConstantKindsFn[h, filter]]];
                                 If[ AssociationQ[kinds],
-                                    If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#]&]];
+                                    If[! TrueQ[OptionValue["IncludeInternal"]], kinds = internalKinds[h, kinds]];
                                     AssociateTo[envAssoc, Association @ KeyValueMap[Function[{n, k}, n -> LeanTerm[<|"Name" -> n, "Kind" -> k, "_Handle" -> h|>]], kinds]];
                                 ];
                             ];
@@ -2790,7 +2800,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
                     AppendTo[handles, h];
                     kinds = Quiet[decodeWXF[$listConstantKindsFn[h, OptionValue["Filter"]]]];
                     If[ AssociationQ[kinds],
-                        If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#]&]];
+                        If[! TrueQ[OptionValue["IncludeInternal"]], kinds = internalKinds[h, kinds]];
                         registerHandleNames[h, Keys[kinds]];
                         (* Build lazy LeanTerms: Name + Kind + _Handle. Each symbol remembers its specific handle! *)
                         AssociateTo[envAssoc, Association @ KeyValueMap[Function[{name, kind}, name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> h|>]], kinds]];
