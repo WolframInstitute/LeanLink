@@ -769,9 +769,9 @@ tableFields[names_List, table_Association] := Block[
     indexOf[[order]] = Range[Length[kinds]] - starts[[levelOf[[order]]]];
     binderNames = ConstantArray[None, Length[strings]];
     With[{ids = Union[Pick[as, kinds, 4], Pick[as, kinds, 5], Pick[as, kinds, 6]]},
-        binderNames[[ids]] = Function[id, HoldComplete @@ {cleanBinderName[strings[[id]]]}] /@ ids
+        binderNames[[ids]] = HoldComplete /@ cleanBinderNames[strings[[ids]]]
     ];
-    levelTerms = {tableLeaf /@ order[[1 ;; starts[[2]]]]};
+    levelTerms = {tableLeaves[order[[1 ;; starts[[2]]]]]};
     Do[AppendTo[levelTerms, tableLevelTerms[order[[starts[[level]] + 1 ;; starts[[level + 1]]]]]], {level, 2, Length[starts] - 1}];
     $fieldSeed = tableSeed[];
     AssociationThread[names, Function[root, <|"Type" -> tableRootTerm[First[root]], "Term" -> tableRootTerm[Last[root]]|>] /@ roots]
@@ -804,7 +804,19 @@ tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, byKind = Positio
     |>
 ]
 
-(* a constant is the core term leanCore gives it, made from its name's and level list's, each worked out once *)
+(* the leaves at positions, each kind's at once: a constant is the core term leanCore gives it, made from its name's and
+   level list's, each worked out once, a bound variable or a natural number literal its core term, and a sort or a string
+   literal what leanCore gives *)
+tableLeaves[positions_List] := Block[{leafValues = ConstantArray[Null, Length[positions]]},
+    KeyValueMap[Function[{kind, at}, leafValues[[at]] = tableKindLeaves[kind, positions[[at]]]], PositionIndex[kinds[[positions]]]];
+    leafValues
+]
+
+tableKindLeaves[2, positions_List] := MapThread[reference, {tableConstantName /@ as[[positions]], coreLevelLists[[bs[[positions]]]]}]
+tableKindLeaves[0, positions_List] := coreHead["boundVariable"] /@ as[[positions]]
+tableKindLeaves[7, positions_List] := coreHead["naturalLiteral"] /@ naturals[[as[[positions]]]]
+tableKindLeaves[_, positions_List] := tableLeaf /@ positions
+
 tableLeaf[position_Integer] := Switch[ kinds[[position]],
     2, reference[tableConstantName[as[[position]]], coreLevelLists[[bs[[position]]]]],
     0, leanCore[LeanBVar[as[[position]]]],
@@ -1056,6 +1068,11 @@ freshBinderName[binderName_String, scope_List] := Block[{base = cleanBinderName[
 freeBinderNameQ[name_String, scope_List] := ! MemberQ[scope, name] && ! KeyExistsQ[$kinds, name]
 
 cleanBinderName[binderName_String] := Replace[First[StringSplit[binderName, "._@."], binderName], "" | "_" -> "x"]
+
+cleanBinderNames[binderNames_List] := MapThread[
+    Function[{pieces, binderName}, Replace[First[pieces, binderName], "" | "_" -> "x"]],
+    {StringSplit[binderNames, "._@."], binderNames}
+]
 
 (* ============================================================================ *)
 (* To Lean                                                                      *)
