@@ -200,13 +200,22 @@ def getFieldsTableExport (handle : UInt64) (constNames : @& String) : IO ByteArr
 /-- The constants a constant mentions, in the order getUsedConstantsExport gives
     them: its type's, its value's, then the others its declaration refers to. -/
 def bridgeUsed (ci : ConstantInfo) : Array Name :=
+  let value := ci.value? true
   let typeNames := ci.type.getUsedConstants
-  let valueNames := match ci.value? true with
+  let valueNames := match value with
     | some v => v.getUsedConstants
     | none => #[]
   let typeSet : NameHashSet := typeNames.foldl (fun s n => s.insert n) {}
   let valueSet : NameHashSet := valueNames.foldl (fun s n => s.insert n) {}
-  let structural := ci.getUsedConstantsAsSet.toArray.filter fun n => !(typeSet.contains n || valueSet.contains n)
+  -- the others ConstantInfo.getUsedConstantsAsSet adds for a constant without a value, in the order of
+  -- that set, a NameSet ordered by Name.quickCmp, without walking the type and value again
+  let extras : List Name := match value, ci with
+    | some _, _ => []
+    | none, .inductInfo v => v.ctors
+    | none, .ctorInfo v => [v.name]
+    | none, .recInfo v => v.all
+    | none, _ => []
+  let structural := (extras.filter fun n => !(typeSet.contains n || valueSet.contains n)).toArray.qsort fun a b => Name.quickCmp a b == .lt
   typeNames ++ valueNames ++ structural
 
 /-- Whether a string literal occurs, which the kernel reads as String.ofList of its characters. -/
