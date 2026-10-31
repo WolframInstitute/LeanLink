@@ -732,13 +732,14 @@ fieldTable[names_List] := Replace[
 tableFields[names_List, table_Association] := Block[
     {
         strings = table["Names"], naturals = table["Naturals"], literals = table["Strings"], owners = names, levelOf = table["Depths"] + 1, roots = table["Roots"],
-        levels, levelLists, kinds, as, bs, cs, ds, order, starts, indexOf, binderNames, levelTerms,
+        levels, levelLists, coreLevelLists, heldNames = <||>, reference = coreHead["constantReference"], kinds, as, bs, cs, ds, order, starts, indexOf, binderNames, levelTerms,
         binders = coreBinder /@ {"default", "implicit", "strictImplicit", "instImplicit"},
         application = coreHead["application"], lambda = coreHead["lambdaAbstraction"], forall = coreHead["dependentFunctionType"],
         let = coreHead["localDefinition"], projection = coreHead["projection"]
     },
     levels = tableLevels[table["Levels"], strings];
     levelLists = Function[ids, levels[[ids]]] /@ table["LevelLists"];
+    coreLevelLists = Map[coreLevel, levelLists, {2}];
     {kinds, as, bs, cs, ds} = Transpose[table["Nodes"]];
     (* the nodes by depth, where each depth starts among them, and each node's place among those of its depth *)
     order = Ordering[levelOf];
@@ -782,8 +783,9 @@ tableSeed[] := Block[{n = Length[kinds], seedPosition, x, y, z, at},
     |>
 ]
 
+(* a constant is the core term leanCore gives it, made from its name's and level list's, each worked out once *)
 tableLeaf[position_Integer] := Switch[ kinds[[position]],
-    2, leanCore[LeanConst[strings[[as[[position]]]], levelLists[[bs[[position]]]]]],
+    2, reference[tableConstantName[as[[position]]], coreLevelLists[[bs[[position]]]]],
     0, leanCore[LeanBVar[as[[position]]]],
     1, leanCore[LeanSort[levels[[as[[position]]]]]],
     7, leanCore[LeanLitNat[naturals[[as[[position]]]]]],
@@ -792,6 +794,8 @@ tableLeaf[position_Integer] := Switch[ kinds[[position]],
 ]
 
 (* the nodes at positions, all of one depth, each kind at once *)
+tableConstantName[id_Integer] := Lookup[heldNames, id, heldNames[id] = HoldComplete @@ {constantName[strings[[id]]]}]
+
 tableLevelTerms[positions_List] := Block[
     {k = kinds[[positions]], a = as[[positions]], b = bs[[positions]], c = cs[[positions]], d = ds[[positions]], values = ConstantArray[Null, Length[positions]]},
     Scan[
