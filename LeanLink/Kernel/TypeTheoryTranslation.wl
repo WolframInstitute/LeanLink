@@ -86,7 +86,7 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
     ]
 ]
 
-(* the terms of the fields table, for TypeTheory's compiled kernel to write their rows at once, as it does from 0.16.2
+(* the terms of the fields table, for TypeTheory's compiled kernel to write their rows at once, as it does from 0.17.0
    ($compiledKernelSeed), where the walk of the records finds them; the variable is read held, since coreHead would
    give its value *)
 SetAttributes[withKernelSeed, HoldRest]
