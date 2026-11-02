@@ -836,20 +836,23 @@ LeanEvaluate[term_LeanTerm, arguments : Longest[Except[_Rule | _RuleDelayed]...]
    its output is read while it runs: a large value would otherwise fill the
    pipe and deadlock the wait. *)
 
-runLeanProcess[cmd_List, env_Association, limit_] := Module[{p, out = "", err = "", t0 = AbsoluteTime[], read},
-    read[stream_] := Replace[ReadString[stream, EndOfBuffer], Except[_String] -> ""];
+runLeanProcess[cmd_List, env_Association, limit_] := Module[{p, out = "", err = "", t0 = AbsoluteTime[], stdout, stderr, newOut, newErr},
     p = StartProcess[cmd, ProcessEnvironment -> env];
+    stdout = ProcessConnection[p, "StandardOutput"];
+    stderr = ProcessConnection[p, "StandardError"];
     While[ProcessStatus[p] === "Running",
-        out = out <> read[ProcessConnection[p, "StandardOutput"]];
-        err = err <> read[ProcessConnection[p, "StandardError"]];
+        newOut = readEvaluatorStream[stdout];
+        newErr = readEvaluatorStream[stderr];
+        out = out <> newOut;
+        err = err <> newErr;
         If[ AbsoluteTime[] - t0 > limit,
             KillProcess[p];
             Return[$TimedOut, Module]
         ];
-        Pause[0.02]
+        If[newOut === "" && newErr === "", Pause[0.02]]
     ];
-    out = out <> Replace[ReadString[ProcessConnection[p, "StandardOutput"]], Except[_String] -> ""];
-    err = err <> Replace[ReadString[ProcessConnection[p, "StandardError"]], Except[_String] -> ""];
+    out = out <> Replace[ReadString[stdout], Except[_String] -> ""];
+    err = err <> Replace[ReadString[stderr], Except[_String] -> ""];
     <|"ExitCode" -> ProcessInformation[p, "ExitCode"], "StandardOutput" -> out, "StandardError" -> err|>
 ]
 
