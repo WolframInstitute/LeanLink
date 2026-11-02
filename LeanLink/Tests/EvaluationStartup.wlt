@@ -77,7 +77,7 @@ VerificationTest[
 
 VerificationTest[
     Block[{Wolfram`LeanLink`Private`evaluatorCommand = Function[toolchain,
-        {Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"], "--run", FileNameJoin[{Wolfram`LeanLink`Private`$PacletRoot, "Assets", "Evaluator.lean"}]}]},
+        {Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"], "--run", FileNameJoin[{Wolfram`LeanLink`Private`$PacletRoot, "Assets", "code.lean"}], "evaluate"}]},
         LeanEvaluate[$startupEnv, "21*2"]],
     42, TestID -> "EvaluationStartup-SourceFallback"
 ]

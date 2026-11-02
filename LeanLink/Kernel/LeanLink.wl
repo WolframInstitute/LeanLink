@@ -167,8 +167,6 @@ EndPackage[];
 
 Get[FileNameJoin[{DirectoryName[$InputFileName], "Lean.wl"}]];
 
-Get[FileNameJoin[{DirectoryName[$InputFileName], "Evaluation.wl"}]];
-
 Get[FileNameJoin[{DirectoryName[$InputFileName], "ProofToLean.wl"}]];
 
 (* The bridge to WolframInstitute/TypeTheory: its entry points only; the rest loads on the first call *)

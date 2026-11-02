@@ -72,7 +72,6 @@ PacletObject[
         "Root" -> "Assets",
         "Assets" -> {
           {"CodeLean", "code.lean"},
-          {"Evaluator", "Evaluator.lean"},
           {"Examples", "Examples.lean"}
         }
       },

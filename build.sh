@@ -7,7 +7,7 @@ echo "=== Building Lean library ==="
 cd "$ROOT/Native"
 lake build LeanLink
 lake env lean --root="$ROOT/LeanLink/Assets" \
-    -c "$ROOT/Native/.lake/build/ir/LeanLinkEvaluator.c" "$ROOT/LeanLink/Assets/Evaluator.lean"
+    -c "$ROOT/Native/.lake/build/ir/LeanLinkEvaluator.c" "$ROOT/LeanLink/Assets/code.lean"
 
 echo "=== Preparing Cross-Compilation Sysroots ==="
 # Get Lean version from lean-toolchain file
