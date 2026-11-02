@@ -1324,6 +1324,8 @@ resultHead[HoldComplete[Implies[_, codomain_]]] := resultHead[HoldComplete[codom
 
 resultHead[HoldComplete[TypeSpecifier[_ -> codomain_]]] := resultHead[HoldComplete[codomain]]
 
+resultHead[HoldComplete[_ -> codomain_]] := resultHead[HoldComplete[codomain]]
+
 resultHead[HoldComplete[Construct[head_, ___]]] := resultHead[HoldComplete[head]]
 
 resultHead[HoldComplete[Subscript[head_, ___]]] := HoldComplete[head]
@@ -1508,6 +1510,9 @@ leanText[Implies[domain_, codomain_], scope_Association] := "(" <> leanText[doma
 leanText[TypeSpecifier[{domains___} -> codomain_], scope_Association] := Block[{domainTexts = Function[domain, heldLeanText[domain, scope] <> " -> "] /@ (HoldComplete /@ Unevaluated[{domains}])},
     "(" <> StringJoin[domainTexts] <> leanText[codomain, scope] <> ")"
 ]
+
+(* A -> B, as TypeTheory reads a function type back since 0.18 *)
+leanText[domain_ -> codomain_, scope_Association] := "(" <> leanText[domain, scope] <> " -> " <> leanText[codomain, scope] <> ")"
 
 leanText[Typed[term_, type_], scope_Association] := "(" <> leanText[term, scope] <> " : " <> leanText[type, scope] <> ")"
 
