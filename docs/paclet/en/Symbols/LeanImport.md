@@ -27,9 +27,11 @@ RelatedGuides: [LeanLink]
 | `"Imports"` | `{}` | extra modules to load alongside the target |
 | `"Filter"` | `""` | keep only constants whose name contains this substring |
 | `"IncludeInternal"` | `False` | include compiler-internal / private declarations |
+| `"PrepareEvaluation"` | `False` | prepare the evaluator while importing, so the first evaluation can use it immediately |
 
 - Importing a module requires that project to be **built** (`lake build`). A module with no compiled `.olean` file in the project's search path fails: [LeanImport]() returns [$Failed]() with a message that names it.
 - A *file* can `import` other `.lean` files of its folder, or of the Lake project around it: they are compiled first, in import order, so `import B` finds `B.lean` next to the file and `import Sub.C` finds `Sub/C.lean`. A GitHub URL import does the same with the files it downloads.
+- `"PrepareEvaluation" -> True` overlaps evaluator startup with native module loading. It requires explicit modules or a source file, rather than a collection of separately discovered environments. Preparation uses the default `"TimeLimit"` of [LeanEvaluate](); failure or interruption stops its process.
 
 ## Basic Examples
 
@@ -96,6 +98,30 @@ Information[env, "Kinds"]
 ```
 
 <!-- => <|"theorem" -> 18, "def" -> 11, "constructor" -> 2, "inductive" -> 1|> -->
+
+## Options
+
+### PrepareEvaluation
+
+Prepare evaluation while importing a module:
+
+```wl
+env = LeanImport["Init", "PrepareEvaluation" -> True, "Filter" -> "Nat.add"]
+```
+
+Apply its addition function:
+
+```wl
+LeanEvaluate[env["Nat.add"], 17, 25]
+```
+
+<!-- => 42 -->
+
+Release the environment and its evaluator:
+
+```wl
+LeanFreeEnvironment[env]
+```
 
 ## Possible Issues
 

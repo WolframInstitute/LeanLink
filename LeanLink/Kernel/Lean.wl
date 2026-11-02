@@ -2464,7 +2464,7 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
     ];
     (* the download folder is the root of the module names; the files the target imports compile first *)
     Block[{$leanImportRoot = tmpDir},
-        LeanImport[targetFile]
+        LeanImport[targetFile, opts]
     ]
 ]
 
@@ -2633,7 +2633,7 @@ LeanFreeEnvironment[handle_Integer, OptionsPattern[]] := Block[{directories = en
 
 (* --- LeanImport --- *)
 
-Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False}
+Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False, "PrepareEvaluation" -> False}
 
 (* Internal name patterns to filter out *)
 
@@ -2659,6 +2659,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
         oleans = FileNames["*.olean", FileNameJoin[{buildLib, module}], Infinity];
         subModules = oleanModule[#, buildLib]& /@ oleans;
         If[ subModules =!= {},
+            If[TrueQ[OptionValue["PrepareEvaluation"]], Return[evaluationFailure["SeparateEnvironments", "Select the modules together with Imports before preparing evaluation."], Block]];
             (* Load ALL discovered sub-modules so the full environment is available, one by one to avoid module
                clash failures. *)
             Block[{envAssoc = <||>, handles, kinds},
@@ -2680,7 +2681,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
                     {}
                 ];
                 If[Length[envAssoc] === 0, Return[$Failed, Block]];
-                results = LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]];
+                results = LeanEnvironment[Join[envAssoc, <|"_Handle" -> Last[handles], "_Handles" -> DeleteDuplicates[handles]|>]];
             ];
             Return[results, Block]
         ]
@@ -2696,7 +2697,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* If within a lake project, delegate to module-based import *)
     If[ projDir =!= Automatic && insideDirectoryQ[absFile, ExpandFileName[projDir]],
         modName = StringReplace[StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"], {".lean" -> "", "/" -> ".", "\\" -> "."}];
-        Return[LeanImport["Imports" -> {modName}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]], opts], Module]
+        Return[LeanImport["Imports" -> {modName}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]], opts], Block]
     ];
     (* A source file outside the project (e.g. a LeanImportString snippet) can still
        import the project's modules: its oleans go on LEAN_PATH for the compile and
@@ -2759,7 +2760,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     ];
     (* Load via lazy pattern *)
     searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
-    Block[{handle, kinds, res},
+    WithCleanup[result = withEvaluationPreparation[Block[{handle, kinds, res},
         If[ ! shimLoadableQ[LeanImport],
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
@@ -2770,24 +2771,26 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
         ];
+        registerHandle[handle, {modName}, searchPath];
+        $handleSource[handle, "ProjectDir"] = If[StringQ[projDir], ExpandFileName[resolveProjDir[projDir]], None];
+        $handleSource[handle, "Files"] = <|modName -> absFile|>;
+        $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         (* Keep exactly the constants this module declares, read from its own olean
            data. Matching names scraped from the source text missed everything inside
            a namespace (environment names are qualified, the scraped ones were not),
            and anything made by a macro, `private`, or an attribute on the same line. *)
         kinds = decodeWXF[$moduleConstantKindsFn[handle, modName]];
-        If[! AssociationQ[kinds], Return[$Failed, Block]];
+        If[! AssociationQ[kinds], LeanFreeEnvironment[handle]; Return[$Failed, Block]];
         If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]];
         (* "Filter" keeps the names that contain it, as for a module *)
         If[OptionValue["Filter"] =!= "", kinds = KeySelect[kinds, StringContainsQ[#, OptionValue["Filter"]]&]];
-        registerHandle[handle, {modName}, searchPath];
-        $handleSource[handle, "ProjectDir"] = If[StringQ[projDir], ExpandFileName[resolveProjDir[projDir]], None];
-        $handleSource[handle, "Files"] = <|modName -> absFile|>;
-        $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         registerHandleNames[handle, Keys[kinds]];
         (* Build lazy LeanTerms *)
         res = LeanEnvironment[Append[Association @ KeyValueMap[Function[{name, kind}, name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]], kinds], "_Handle" -> handle]];
         (* Don't delete tmpDir -- olean needed for lazy queries *)
         res
+    ], {modName}, searchPath, OptionValue["PrepareEvaluation"]],
+        If[! MatchQ[result, _LeanEnvironment] && DirectoryQ[tmpDir], Quiet[DeleteDirectory[tmpDir, DeleteContents -> True]]]
     ]
 ]
 
@@ -2826,7 +2829,10 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
     ];
     (* If the user gave a list of imports, load them together; if they were discovered, load them one by one to
        prevent Lean module clash failures *)
-    Block[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}], envAssoc = <||>, handles = {}},
+    If[TrueQ[OptionValue["PrepareEvaluation"]] && OptionValue["Imports"] === {} && Length[imports] > 1,
+        Return[evaluationFailure["SeparateEnvironments", "Select the modules together with Imports before preparing evaluation."]]
+    ];
+    withEvaluationPreparation[Block[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}], envAssoc = <||>, handles = {}},
         Do[
             With[{h = Quiet[getOrLoadEnv[projDir, batch]]},
                 If[ IntegerQ[h] && h > 0,
@@ -2850,7 +2856,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             Return[$Failed]
         ];
         LeanEnvironment[Join[envAssoc, <|"_Handle" -> Last[handles], "_Handles" -> DeleteDuplicates[handles]|>]]
-    ]
+    ], imports, resolveSearchPath[projDir], OptionValue["PrepareEvaluation"], If[KeyExistsQ[$envCache, {projDir, imports}], $envCache[{projDir, imports}], None]]
 ]
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)

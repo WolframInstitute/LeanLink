@@ -38,6 +38,7 @@ readEvaluatorStream[process_, name_String] := Replace[Quiet[ReadString[ProcessCo
    buffer. The JSON envelope keeps diagnostics separate from the returned value. *)
 evaluatorResponse[process_, id_String, deadline_] := Block[{out = "", err = "", lines, response, status},
     While[True,
+        If[AbsoluteTime[] >= deadline, Return[evaluationFailure["TimedOut", "Lean evaluation exceeded the time limit."], Block]];
         out = out <> readEvaluatorStream[process, "StandardOutput"];
         err = StringTake[err <> readEvaluatorStream[process, "StandardError"], UpTo[4096]];
         lines = StringSplit[out, "\n", All];
@@ -51,7 +52,6 @@ evaluatorResponse[process_, id_String, deadline_] := Block[{out = "", err = "", 
         ];
         status = Quiet[ProcessStatus[process]];
         If[status =!= "Running", Return[evaluationFailure["LeanEvaluateFailed", "The Lean evaluator stopped.", <|"Output" -> err <> out|>], Block]];
-        If[AbsoluteTime[] >= deadline, Return[evaluationFailure["TimedOut", "Lean evaluation exceeded the time limit."], Block]];
         Pause[0.001]
     ]
 ]
@@ -62,24 +62,83 @@ sendEvaluatorRequest[process_, request_Association, deadline_] := Block[{json},
     evaluatorResponse[process, request["id"], deadline]
 ]
 
-startEvaluator[handle_Integer, deadline_] := Block[{tc, bin, process, response, request, environment},
+evaluatorCommand[toolchain_String] := Block[{program},
+    program = leanProgram[FileNameJoin[{$PacletRoot, "LibraryResources", $SystemID}], "LeanLinkEvaluator"];
+    If[! FileExistsQ[program], Return[{leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"], "--run", FileNameJoin[{$PacletRoot, "Assets", "Evaluator.lean"}]}]];
+    program = runnableShim[program];
+    If[StringQ[program], {program}, evaluationFailure["LeanEvaluateFailed", "Could not prepare the compiled Lean evaluator."]]
+]
+
+beginEvaluator[imports_List, searchPath_String] := Block[{tc, bin, process = None, request, environment, command},
     tc = leanToolchainDir[];
     If[tc === $Failed, Return[evaluationFailure["ToolchainNotInstalled", "Install LeanLink's pinned Lean toolchain before evaluating."]]];
     bin = FileNameJoin[{tc, "bin"}];
     environment = Association[GetEnvironment[],
-        "LEAN_PATH" -> handleInfo[handle, "SearchPath"],
+        "LEAN_PATH" -> searchPath,
+        "LEAN_SYSROOT" -> tc,
         "PATH" -> StringRiffle[{bin, Replace[Environment["PATH"], Except[_String] -> ""]}, $searchPathSeparator]
     ];
-    process = Quiet[StartProcess[{leanProgram[bin, "lean"], "--run", FileNameJoin[{$PacletRoot, "Assets", "Evaluator.lean"}]}, ProcessEnvironment -> environment]];
-    If[! MatchQ[process, _ProcessObject], Return[evaluationFailure["LeanEvaluateFailed", "Could not start the Lean evaluator."]]];
-    $evaluationWorkers[handle] = <|"Process" -> process|>;
-    request = <|"id" -> CreateUUID[], "imports" -> handleInfo[handle, "Imports"]|>;
-    response = sendEvaluatorRequest[process, request, deadline];
+    command = evaluatorCommand[tc];
+    If[FailureQ[command], Return[command]];
+    CheckAbort[
+        process = Quiet[StartProcess[command, ProcessEnvironment -> environment]];
+        If[! MatchQ[process, _ProcessObject], Return[evaluationFailure["LeanEvaluateFailed", "Could not start the Lean evaluator."], Block]];
+        request = <|"id" -> CreateUUID[], "imports" -> imports|>;
+        If[Quiet[Check[WriteString[process, ExportString[request, "RawJSON", "Compact" -> True] <> "\n"], $Failed]] === $Failed,
+            Quiet[KillProcess[process]];
+            Return[evaluationFailure["LeanEvaluateFailed", "Could not initialize the Lean evaluator."], Block]
+        ];
+        <|"Process" -> process, "RequestID" -> request["id"]|>,
+        If[MatchQ[process, _ProcessObject], Quiet[KillProcess[process]]]; Abort[]
+    ]
+]
+
+finishEvaluator[handle_Integer, deadline_] := Block[{worker = $evaluationWorkers[handle], response},
+    response = evaluatorResponse[worker["Process"], worker["RequestID"], deadline];
     If[FailureQ[response] || ! TrueQ[response["ok"]],
         stopEvaluator[handle];
         Return[If[FailureQ[response], response, evaluationFailure["LeanEvaluateFailed", Lookup[response, "error", "Lean could not import the environment."]]]]
     ];
-    process
+    $evaluationWorkers[handle] = KeyDrop[worker, "RequestID"];
+    worker["Process"]
+]
+
+startEvaluator[handle_Integer, deadline_] := With[{worker = beginEvaluator[handleInfo[handle, "Imports"], handleInfo[handle, "SearchPath"]]},
+    If[FailureQ[worker], worker, $evaluationWorkers[handle] = worker; finishEvaluator[handle, deadline]]
+]
+
+(* Start module loading before the native import and namespace construction.
+   Transfer ownership only after both imports succeed. Failed or interrupted
+   preparation releases newly imported handles, but never a borrowed handle. *)
+SetAttributes[withPreparedEvaluation, HoldFirst]
+SetAttributes[withEvaluationPreparation, HoldAll]
+
+withEvaluationPreparation[body_, imports_, searchPath_, prepare_, cachedHandle_ : None] :=
+    If[TrueQ[prepare], withPreparedEvaluation[body, imports, searchPath, cachedHandle], body]
+
+withPreparedEvaluation[body_, imports_List, searchPath_String, cachedHandle_ : None] := Block[{
+    worker, environment, handle = None, ready = False, result,
+    previousHandles = Keys[$handleSource], deadline = AbsoluteTime[] + OptionValue[LeanEvaluate, {}, "TimeLimit"]
+},
+    worker = Lookup[$evaluationWorkers, cachedHandle, <||>];
+    If[KeyExistsQ[worker, "Process"] && ! KeyExistsQ[worker, "RequestID"] && Quiet[ProcessStatus[worker["Process"]]] === "Running", Return[body]];
+    worker = beginEvaluator[imports, searchPath];
+    If[FailureQ[worker], Return[worker]];
+    WithCleanup[
+        environment = body;
+        If[! MatchQ[environment, _LeanEnvironment], Return[environment, Block]];
+        handle = environmentHandle[environment];
+        $evaluationWorkers[handle] = worker;
+        result = finishEvaluator[handle, deadline];
+        If[FailureQ[result], Return[result, Block]];
+        ready = True;
+        environment,
+        If[! ready,
+            Quiet[KillProcess[worker["Process"]]];
+            If[IntegerQ[handle], KeyDropFrom[$evaluationWorkers, handle]];
+            Scan[LeanFreeEnvironment, Complement[Keys[$handleSource], previousHandles]]
+        ]
+    ]
 ]
 
 evaluateInEnvironment[handle_Integer, expression_String, source_String, opens_List, limit_] := Block[{worker, process, response, deadline = AbsoluteTime[] + limit},

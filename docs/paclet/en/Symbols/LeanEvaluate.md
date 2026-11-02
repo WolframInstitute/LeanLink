@@ -20,7 +20,7 @@ RelatedGuides: [LeanLink]
 ## Details & Options
 
 - The value comes back through `Lean.toJson`: `Nat` and `Int` give integers, `Bool` gives [True]() or [False](), `String` gives strings, `Float` gives machine reals, exactly, with [Infinity]() and [Indeterminate]() for the infinities and NaN, and `List` and `Array` give lists. A type without a `ToJson` instance fails; wrap the expression in `toString` to get a string instead.
-- An environment starts its evaluator on the first call. Later calls reuse the imported modules; computed values are not cached. The string-only form starts a separate process on every call.
+- An environment starts its evaluator on the first call, or during [LeanImport]() with `"PrepareEvaluation" -> True`. Later calls reuse the imported modules; computed values are not cached. The string-only form starts a separate process on every call.
 - Term arguments can be exact integers, rationals, booleans, strings, lists or other terms from the same environment. Strings are passed as string values. The environment and term forms also return `Rat` values as exact Wolfram rationals.
 - For the environment and term forms, select modules and the project with [LeanImport](). `"Source"` declarations apply to the current call only; add imports through [LeanImport]() or [LeanImportString]().
 - Give an explicit `"Imports"` list to load several modules together. Automatic project discovery can return a collection of separate environments; its terms can be evaluated individually, but an expression requires one shared environment.

@@ -52,56 +52,68 @@ add_library(LeanLinkShim SHARED
     ${IR_DIR}/LeanLink/Examples.c
 )
 
+# Compile the worker once at build time. It shares the installed Lean runtime;
+# linking Lean statically would add hundreds of megabytes to each platform.
+add_executable(LeanLinkEvaluator ${IR_DIR}/LeanLinkEvaluator.c)
+if(WIN32)
+    target_link_options(LeanLinkEvaluator PRIVATE -Wl,--stack,104857600)
+endif()
+
 # Pass Lean library path at compile time for LEAN_PATH init
 target_compile_definitions(LeanLinkShim PRIVATE
     LEAN_LIB_DIR="${LEAN_HOME}/lib/lean"
 )
 
-target_include_directories(LeanLinkShim PRIVATE
-    ${LEAN_HOME}/include
-    ${WL_INCLUDE}
-)
+foreach(target LeanLinkShim LeanLinkEvaluator)
+    target_include_directories(${target} PRIVATE
+        ${LEAN_HOME}/include
+        ${WL_INCLUDE}
+    )
 
-target_link_directories(LeanLinkShim PRIVATE ${LEAN_HOME}/lib/lean)
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    # Link against the toolchain's import libraries, which name the DLL that exports each symbol. Linked
-    # straight to the DLLs, with an import library naming libleanshared.dll for the symbols ld did not find
-    # there, the shim imported initialize_Init, l_Array_range and the rest of Init's symbols from
-    # libleanshared.dll, which does not export them (they are libInit_shared.dll's since Lean 4.30), so
-    # Windows refused to load it (error 127).
-    set(DEFAULT_LIBS ${LEAN_HOME}/lib/lean/libleanshared.dll.a ${LEAN_HOME}/lib/lean/libleanshared_1.dll.a ${LEAN_HOME}/lib/lean/libleanshared_2.dll.a ${LEAN_HOME}/lib/lean/libInit_shared.dll.a)
-    target_link_libraries(LeanLinkShim PRIVATE -Wl,--enable-auto-import ${DEFAULT_LIBS})
-    # Link the MinGW runtime statically. The shim's _Thread_local needs libgcc's
-    # emulated-TLS helper (__emutls_get_address), which in turn needs winpthread;
-    # linked dynamically they drag in libgcc_s_seh-1.dll and libwinpthread-1.dll,
-    # which neither Windows nor the Lean toolchain (built with LLVM/libc++)
-    # provides, so the shim would fail to load. The system UCRT stays dynamic.
-    target_link_options(LeanLinkShim PRIVATE -static)
-else()
-    target_link_libraries(LeanLinkShim PRIVATE leanshared)
-endif()
+    target_link_directories(${target} PRIVATE ${LEAN_HOME}/lib/lean)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # Link against the toolchain's import libraries, which name the DLL that exports each symbol. Linked
+        # straight to the DLLs, with an import library naming libleanshared.dll for the symbols ld did not find
+        # there, the shim imported initialize_Init, l_Array_range and the rest of Init's symbols from
+        # libleanshared.dll, which does not export them (they are libInit_shared.dll's since Lean 4.30), so
+        # Windows refused to load it (error 127).
+        set(DEFAULT_LIBS ${LEAN_HOME}/lib/lean/libleanshared.dll.a ${LEAN_HOME}/lib/lean/libleanshared_1.dll.a ${LEAN_HOME}/lib/lean/libleanshared_2.dll.a ${LEAN_HOME}/lib/lean/libInit_shared.dll.a)
+        target_link_libraries(${target} PRIVATE -Wl,--enable-auto-import ${DEFAULT_LIBS})
+        # Link the MinGW runtime statically. The shim's _Thread_local needs libgcc's
+        # emulated-TLS helper (__emutls_get_address), which in turn needs winpthread;
+        # linked dynamically they drag in libgcc_s_seh-1.dll and libwinpthread-1.dll,
+        # which neither Windows nor the Lean toolchain (built with LLVM/libc++)
+        # provides, so the shim would fail to load. The system UCRT stays dynamic.
+        target_link_options(${target} PRIVATE -static)
+    else()
+        target_link_libraries(${target} PRIVATE leanshared)
+        if(NOT APPLE AND target STREQUAL "LeanLinkEvaluator")
+            target_link_libraries(${target} PRIVATE leanshared_1 leanshared_2 Init_shared)
+        endif()
+    endif()
 
-# Portable runtime linkage: reference libleanshared relative to the shim so the
-# packaged paclet carries no absolute build paths. The kernel provisions
-# libleanshared (+ siblings) next to the shim at load, from the user's installed
-# Lean toolchain. Do NOT bake an absolute toolchain path here.
-if(APPLE)
-    set_target_properties(LeanLinkShim PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "@loader_path"
-    )
-    add_custom_command(TARGET LeanLinkShim POST_BUILD
-        COMMAND install_name_tool -change @rpath/libleanshared.dylib
-            @loader_path/libleanshared.dylib $<TARGET_FILE:LeanLinkShim>
-        COMMENT "Linking libleanshared via @loader_path for a portable paclet"
-    )
-elseif(UNIX)
-    # Linux already NEEDs libleanshared.so by soname; resolve it next to the shim.
-    set_target_properties(LeanLinkShim PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN"
-    )
-endif()
+    # Portable runtime linkage: reference libleanshared relative to the shim so the
+    # packaged paclet carries no absolute build paths. The kernel provisions
+    # libleanshared (+ siblings) next to the shim at load, from the user's installed
+    # Lean toolchain. Do NOT bake an absolute toolchain path here.
+    if(APPLE)
+        set_target_properties(${target} PROPERTIES
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH "@loader_path"
+        )
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND install_name_tool -change @rpath/libleanshared.dylib
+                @loader_path/libleanshared.dylib $<TARGET_FILE:${target}>
+            COMMENT "Linking libleanshared via @loader_path for a portable paclet"
+        )
+    elseif(UNIX)
+        # Linux already NEEDs libleanshared.so by soname; resolve it next to the shim.
+        set_target_properties(${target} PROPERTIES
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH "$ORIGIN"
+        )
+    endif()
+endforeach()
 # Windows imports libleanshared*.dll by name; Windows searches the shim's own
 # directory, so the kernel-provisioned DLLs resolve with no link-time change.
 
