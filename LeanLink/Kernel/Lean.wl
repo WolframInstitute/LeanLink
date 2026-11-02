@@ -663,15 +663,20 @@ stopEvaluator[handle_] := With[{worker = Lookup[$evaluationWorkers, handle, None
     Null
 ]
 
-readEvaluatorStream[process_, name_String] := Replace[Quiet[ReadString[ProcessConnection[process, name], EndOfBuffer]], Except[_String] -> ""]
+readEvaluatorStream[stream_] := Replace[Quiet[ReadString[stream, EndOfBuffer]], Except[_String] -> ""]
 
 (* Both pipes are drained while waiting, including when the result exceeds a pipe
-   buffer. The JSON envelope keeps diagnostics separate from the returned value. *)
-evaluatorResponse[process_, id_String, deadline_] := Block[{out = "", err = "", lines, response, status},
+   buffer. Sleep only when neither pipe has data, so large replies keep flowing. *)
+evaluatorResponse[process_, id_String, deadline_] := Block[{
+    out = "", err = "", chunk, diagnostics, lines, response, status,
+    stdout = ProcessConnection[process, "StandardOutput"], stderr = ProcessConnection[process, "StandardError"]
+},
     While[True,
         If[AbsoluteTime[] >= deadline, Return[evaluationFailure["TimedOut", "Lean evaluation exceeded the time limit."], Block]];
-        out = out <> readEvaluatorStream[process, "StandardOutput"];
-        err = StringTake[err <> readEvaluatorStream[process, "StandardError"], UpTo[4096]];
+        chunk = readEvaluatorStream[stdout];
+        diagnostics = readEvaluatorStream[stderr];
+        out = out <> chunk;
+        err = StringTake[err <> diagnostics, UpTo[4096]];
         lines = StringSplit[out, "\n", All];
         out = Last[lines];
         Do[
@@ -683,7 +688,7 @@ evaluatorResponse[process_, id_String, deadline_] := Block[{out = "", err = "", 
         ];
         status = Quiet[ProcessStatus[process]];
         If[status =!= "Running", Return[evaluationFailure["LeanEvaluateFailed", "The Lean evaluator stopped.", <|"Output" -> err <> out|>], Block]];
-        Pause[0.001]
+        If[chunk === "" && diagnostics === "", Pause[0.001]]
     ]
 ]
 

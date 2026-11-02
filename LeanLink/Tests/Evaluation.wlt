@@ -48,6 +48,14 @@ VerificationTest[
 VerificationTest[LeanEvaluate[$evaluationEnv, "3+4"], 7, TestID -> "EnvironmentEvaluation-RestartAfterTimeout"]
 
 VerificationTest[
+    $interruptedWorker = Wolfram`LeanLink`Private`$evaluationWorkers[Information[$evaluationEnv, "Handle"]]["Process"];
+    CheckAbort[TimeConstrained[LeanEvaluate[$evaluationEnv, "42", "Source" -> "run_cmd Lean.Elab.Command.liftIO (IO.sleep 10000)"], 0.05], Null];
+    {ProcessStatus[$interruptedWorker], KeyExistsQ[Wolfram`LeanLink`Private`$evaluationWorkers, Information[$evaluationEnv, "Handle"]]},
+    {"Finished", False}, TestID -> "EnvironmentEvaluation-InterruptStopsWaitingWorker"
+]
+VerificationTest[LeanEvaluate[$evaluationEnv, "6*7"], 42, TestID -> "EnvironmentEvaluation-RestartAfterInterrupt"]
+
+VerificationTest[
     $derivedEnv = LeanImportString[$evaluationEnv, "def evaluationSquare (n : Nat) := n*n"];
     LeanEvaluate[$derivedEnv["evaluationSquare"], 7], 49, TestID -> "EnvironmentEvaluation-CompiledDefinition"
 ]
