@@ -483,6 +483,7 @@ getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, se
     ];
     $envCache[key] = handle;
     registerHandle[handle, imports, searchPath];
+    $handleSource[handle, "ProjectDir"] = ExpandFileName[projDir];
     handle
 ]
 
@@ -2615,12 +2616,18 @@ LeanLoadEnvironment[imports_List, searchPath_String] := If[ shimLoadableQ[LeanIm
 (* The olean that an import of a file compiled, in a temporary folder, is deleted
    with its environment *)
 
-LeanFreeEnvironment[handle_Integer] := With[{tmpDir = handleInfo[handle, "TemporaryDirectory"]},
+Options[LeanFreeEnvironment] = {"EvaluatorOnly" -> False}
+
+LeanFreeEnvironment[handle_Integer, OptionsPattern[]] := Block[{directories = environmentDirectories[handle]},
+    stopEvaluator[handle];
+    If[TrueQ[OptionValue["EvaluatorOnly"]], Return[Null]];
     $freeEnvFn[handle];
+    $envCache = Select[$envCache, # =!= handle&];
+    $termCache = KeySelect[$termCache, First[#] =!= handle&];
     KeyDropFrom[$handleSource, handle];
     KeyDropFrom[$internalKinds, handle];
     $typeFormCache = KeySelect[$typeFormCache, First[#] =!= handle&];
-    If[StringQ[tmpDir] && DirectoryQ[tmpDir], Quiet[DeleteDirectory[tmpDir, DeleteContents -> True]]];
+    Scan[If[DirectoryQ[#] && ! MemberQ[Flatten[environmentDirectories /@ Keys[$handleSource]], #], Quiet[DeleteDirectory[#, DeleteContents -> True]]]&, directories];
     Null
 ]
 
@@ -2694,7 +2701,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* A source file outside the project (e.g. a LeanImportString snippet) can still
        import the project's modules: its oleans go on LEAN_PATH for the compile and
        on the search path for the load. Only an explicit ProjectDir does this. *)
-    projSearch = If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""];
+    projSearch = StringRiffle[DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], $leanImportSearchPath}, ""], $searchPathSeparator];
     (* Resolve the correct lean binary from the LeanLink project toolchain *)
     (* Try: 1) dev mode Native/lean-toolchain, 2) paclet-bundled lean-toolchain *)
     (* The pinned toolchain the shim was built against comes first: the olean this
@@ -2773,6 +2780,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         (* "Filter" keeps the names that contain it, as for a module *)
         If[OptionValue["Filter"] =!= "", kinds = KeySelect[kinds, StringContainsQ[#, OptionValue["Filter"]]&]];
         registerHandle[handle, {modName}, searchPath];
+        $handleSource[handle, "ProjectDir"] = If[StringQ[projDir], ExpandFileName[resolveProjDir[projDir]], None];
         $handleSource[handle, "Files"] = <|modName -> absFile|>;
         $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         registerHandleNames[handle, Keys[kinds]];
@@ -2841,7 +2849,7 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             Message[LeanImport::err, loadFailureText[imports, resolveSearchPath[projDir]]];
             Return[$Failed]
         ];
-        LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]]
+        LeanEnvironment[Join[envAssoc, <|"_Handle" -> Last[handles], "_Handles" -> DeleteDuplicates[handles]|>]]
     ]
 ]
 
@@ -2872,7 +2880,7 @@ LeanListConstants[opts : OptionsPattern[]] := callNative[$listTheoremsFn, {Optio
 LeanEnvironment /: LeanEnvironment[data_Association][key_String] := Block[{val = data[key], handle},
     If[ MatchQ[val, _LeanTerm],
         handle = Lookup[data, "_Handle", None];
-        If[IntegerQ[handle], LeanTerm[Append[val[[1]], "_Handle" -> handle]], val]
+        If[IntegerQ[handle] && ! KeyExistsQ[val[[1]], "_Handle"], LeanTerm[Append[val[[1]], "_Handle" -> handle]], val]
         ,
         val
     ]
@@ -2895,7 +2903,7 @@ LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data
 
 (* Information protocol -- no collision with term names *)
 
-$leanEnvProperties = {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"}
+$leanEnvProperties = {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble", "Imports", "ProjectDir", "Valid"}
 
 LeanEnvironment /: Information[env : LeanEnvironment[data_Association], "Properties"] := $leanEnvProperties
 
@@ -2917,6 +2925,15 @@ LeanEnvironment /: Information[env : LeanEnvironment[data_Association], prop_Str
     ,
     "Preamble",
         Lookup[data, "_Preamble", None]
+    ,
+    "Imports",
+        DeleteDuplicates[Flatten[handleInfo[#, "Imports"]& /@ environmentHandles[env]]]
+    ,
+    "ProjectDir",
+        handleInfo[Lookup[data, "_Handle", 0], "ProjectDir"]
+    ,
+    "Valid",
+        environmentHandles[env] =!= {} && AllTrue[environmentHandles[env], liveEnvironmentQ]
     ,
     _,
         Missing["UnknownProperty", prop]

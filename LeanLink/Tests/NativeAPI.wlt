@@ -491,7 +491,7 @@ VerificationTest[
 (* LeanEnvironment Properties                                         *)
 (* ================================================================ *)
 
-VerificationTest[Information[$ptlEnv, "Properties"], {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"}, TestID -> "LeanEnvironment-Properties-List"]
+VerificationTest[Information[$ptlEnv, "Properties"], {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble", "Imports", "ProjectDir", "Valid"}, TestID -> "LeanEnvironment-Properties-List"]
 
 VerificationTest[Information[$ptlEnv, "Constants"], Keys[$ptlEnv], TestID -> "LeanEnvironment-Constants-EqualsKeys"]
 

@@ -15,6 +15,8 @@ RelatedGuides: [LeanLink]
 
 <code>[LeanImportString]()[{*src1*, *src2*, ...}]</code> compiles the sources joined with newlines.
 
+<code>[LeanImportString]()[*environment*, *src*]</code> compiles the source with the modules and project of an existing [LeanEnvironment]().
+
 ## Details & Options
 
 - *src* is ordinary Lean 4 source: any mix of `def`, `theorem`, `inductive`, `structure`, and so on. Each top-level declaration becomes one [LeanTerm]() in the result.
@@ -23,6 +25,7 @@ RelatedGuides: [LeanLink]
 - Declarations inside a `namespace` are kept under their full names.
 - A list of sources is one source, joined with newlines: an `import` line, a few declarations and generated source go in as they are, with no string joining.
 - Use [LeanImportString]() for ad-hoc definitions and round-trips; use [LeanImport]() to pull constants from a compiled module such as Mathlib.
+- The environment form inherits compiled snippets as well as project modules. Their temporary compiled files are kept until the last dependent environment is released.
 
 ## Basic Examples
 

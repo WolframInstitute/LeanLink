@@ -5,7 +5,7 @@ Context: Wolfram`LeanLink`
 Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/ref/LeanEvaluate
 Keywords: [Lean, eval, evaluate, value, JSON, cross-validation, interpreter]
-SeeAlso: [LeanImportString, LeanBuild, LeanImport]
+SeeAlso: [LeanImportString, LeanBuild, LeanImport, LeanFreeEnvironment, LeanVerify]
 RelatedGuides: [LeanLink]
 ---
 
@@ -13,9 +13,18 @@ RelatedGuides: [LeanLink]
 
 <code>[LeanEvaluate]()[*"expr"*]</code> evaluates the Lean expression *expr* with `#eval` and returns its value as a Wolfram Language expression.
 
+<code>[LeanEvaluate]()[*environment*, *"expr"*]</code> evaluates in an imported [LeanEnvironment](), reusing its evaluator between calls.
+
+<code>[LeanEvaluate]()[*term*, *args*]</code> applies an imported [LeanTerm]() to Wolfram Language arguments.
+
 ## Details & Options
 
 - The value comes back through `Lean.toJson`: `Nat` and `Int` give integers, `Bool` gives [True]() or [False](), `String` gives strings, `Float` gives machine reals, exactly, with [Infinity]() and [Indeterminate]() for the infinities and NaN, and `List` and `Array` give lists. A type without a `ToJson` instance fails; wrap the expression in `toString` to get a string instead.
+- An environment starts its evaluator on the first call. Later calls reuse the imported modules; computed values are not cached. The string-only form starts a separate process on every call.
+- Term arguments can be exact integers, rationals, booleans, strings, lists or other terms from the same environment. Strings are passed as string values. The environment and term forms also return `Rat` values as exact Wolfram rationals.
+- For the environment and term forms, select modules and the project with [LeanImport](). `"Source"` declarations apply to the current call only; add imports through [LeanImport]() or [LeanImportString]().
+- Give an explicit `"Imports"` list to load several modules together. Automatic project discovery can return a collection of separate environments; its terms can be evaluated individually, but an expression requires one shared environment.
+- [LeanFreeEnvironment]() stops the evaluator and releases the environment. `"EvaluatorOnly" -> True` stops the process while keeping the environment available. A timeout or interruption also stops the process; the next call starts a new one.
 - Options:
 
 | Option | Default | |
@@ -26,7 +35,7 @@ RelatedGuides: [LeanLink]
 | `"Open"` | `{}` | namespaces to open |
 | `"TimeLimit"` | `600` | seconds before the evaluation is stopped |
 
-- The value is computed by Lean's interpreter, not checked by its kernel. For a kernel-checked claim, state it as a theorem proved `by decide` with [LeanImportString]().
+- The value is computed by Lean's interpreter. For a checked theorem, use [LeanImportString]() followed by [LeanVerify]().
 - An expression that does not elaborate returns a `"LeanEvaluateFailed"` [Failure]() carrying Lean's message; one that runs past `"TimeLimit"` returns a `"TimedOut"` [Failure]().
 
 ## Basic Examples
@@ -46,6 +55,32 @@ LeanEvaluate["decide (2 ^ 10 = 1024)"]
 <!-- => True -->
 
 ## Scope
+
+Compile a function once:
+
+```wl
+env = LeanImportString["def square (n : Nat) := n*n"]
+```
+
+Apply it to a Wolfram integer:
+
+```wl
+LeanEvaluate[env["square"], 12]
+```
+
+Evaluate several inputs in one call:
+
+```wl
+LeanEvaluate[env, "(List.range 6).map square"]
+```
+
+Release the environment when finished:
+
+```wl
+LeanFreeEnvironment[env]
+```
+
+---
 
 A small project, built with [LeanBuild]():
 

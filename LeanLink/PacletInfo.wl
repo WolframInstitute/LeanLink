@@ -62,6 +62,7 @@ PacletObject[
           "Wolfram`LeanLink`LeanToTypeTheory",
           "Wolfram`LeanLink`LeanTruncated",
           "Wolfram`LeanLink`LeanValue",
+          "Wolfram`LeanLink`LeanVerify",
           "Wolfram`LeanLink`ProofToLean",
           "Wolfram`LeanLink`TypeTheoryToLean"
         }
@@ -71,6 +72,7 @@ PacletObject[
         "Root" -> "Assets",
         "Assets" -> {
           {"CodeLean", "code.lean"},
+          {"Evaluator", "Evaluator.lean"},
           {"Examples", "Examples.lean"}
         }
       },
