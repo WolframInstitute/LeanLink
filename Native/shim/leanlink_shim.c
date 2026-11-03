@@ -40,9 +40,38 @@ static int portable_setenv(const char *name, const char *value, int overwrite) {
     }
     return _putenv_s(name, value);
 }
-static uint64_t monotonic_us(void) { return (uint64_t)GetTickCount64() * 1000; }
-/* Windows sleeps whole milliseconds */
-static void sleep_us(uint64_t us) { Sleep((DWORD)((us + 999) / 1000)); }
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+/* QueryPerformanceCounter, not GetTickCount64, which moves in timer ticks of about 15.6 ms */
+static uint64_t monotonic_us(void) {
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER now;
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&now);
+    return (uint64_t)(now.QuadPart / freq.QuadPart) * 1000000 + (uint64_t)(now.QuadPart % freq.QuadPart) * 1000000 / (uint64_t)freq.QuadPart;
+}
+/* Sleep(1) waits a whole timer tick, about 15.6 ms, which made every evaluation that was not done at the first
+   check take that long. A high-resolution waitable timer (Windows 10 1803 and later) waits the microseconds asked
+   for; without one, a wait under a millisecond only yields the thread. */
+static void sleep_us(uint64_t us) {
+    static _Thread_local HANDLE timer = NULL;
+    static _Thread_local int timer_tried = 0;
+    if (!timer_tried) {
+        timer_tried = 1;
+        timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    }
+    if (timer) {
+        LARGE_INTEGER due;
+        due.QuadPart = -(LONGLONG)(us * 10); /* relative, in units of 100 ns */
+        if (SetWaitableTimer(timer, &due, 0, NULL, NULL, FALSE)) {
+            WaitForSingleObject(timer, INFINITE);
+            return;
+        }
+    }
+    if (us < 1000) SwitchToThread();
+    else Sleep((DWORD)(us / 1000));
+}
 #else
 #include <time.h>
 static int portable_setenv(const char *name, const char *value, int overwrite) {
