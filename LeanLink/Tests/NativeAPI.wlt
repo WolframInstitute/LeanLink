@@ -121,6 +121,23 @@ VerificationTest[
 
 VerificationTest[LeanEvaluate["undefinedThing + 1"]["Tag"], "LeanEvaluateFailed", TestID -> "LeanEvaluate-ErrorFailure"]
 
+VerificationTest[
+    LeanEvaluate["List.range 200000"] === Range[0, 199999],
+    True, TestID -> "LeanEvaluate-ReplyLargerThanPipeBuffer"
+]
+
+VerificationTest[
+    LeanEvaluate["String.ofList (List.replicate 100000 '\:03b1')"] === StringRepeat["\:03b1", 100000],
+    True, TestID -> "LeanEvaluate-LargeUnicodeReply"
+]
+
+VerificationTest[
+    LeanEvaluate["42", "Source" ->
+        "#eval IO.println (String.ofList (List.replicate 200000 'o'))\n" <>
+        "#eval IO.eprintln (String.ofList (List.replicate 200000 'e'))"],
+    42, TestID -> "LeanEvaluate-DrainLargeDiagnosticsOnBothStreams"
+]
+
 (* a loop over a range allocates nothing, so it runs into the time limit at the memory it started with; the list of
    300 million it replaces took about 10 GB in its 2 seconds *)
 VerificationTest[
@@ -496,7 +513,7 @@ VerificationTest[
 (* LeanEnvironment Properties                                         *)
 (* ================================================================ *)
 
-VerificationTest[Information[$ptlEnv, "Properties"], {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"}, TestID -> "LeanEnvironment-Properties-List"]
+VerificationTest[Information[$ptlEnv, "Properties"], {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble", "Imports", "ProjectDir", "Valid"}, TestID -> "LeanEnvironment-Properties-List"]
 
 VerificationTest[Information[$ptlEnv, "Constants"], Keys[$ptlEnv], TestID -> "LeanEnvironment-Constants-EqualsKeys"]
 

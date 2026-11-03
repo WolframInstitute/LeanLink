@@ -50,6 +50,7 @@ add_library(LeanLinkShim SHARED
     ${IR_DIR}/LeanLink/WXF.c
     ${IR_DIR}/LeanLink/EnvStore.c
     ${IR_DIR}/LeanLink/Examples.c
+    ${IR_DIR}/LeanLink/Evaluate.c
 )
 
 # Pass Lean library path at compile time for LEAN_PATH init
@@ -111,6 +112,7 @@ add_executable(test_lean_proper test_lean_proper.c
     ${IR_DIR}/LeanLink/WXF.c
     ${IR_DIR}/LeanLink/EnvStore.c
     ${IR_DIR}/LeanLink/Examples.c
+    ${IR_DIR}/LeanLink/Evaluate.c
 )
 target_include_directories(test_lean_proper PRIVATE ${LEAN_HOME}/include)
 target_link_directories(test_lean_proper PRIVATE ${LEAN_HOME}/lib/lean)
@@ -122,6 +124,7 @@ add_executable(test_full_tactic test_full_tactic.c
     ${IR_DIR}/LeanLink/WXF.c
     ${IR_DIR}/LeanLink/EnvStore.c
     ${IR_DIR}/LeanLink/Examples.c
+    ${IR_DIR}/LeanLink/Evaluate.c
 )
 target_include_directories(test_full_tactic PRIVATE ${LEAN_HOME}/include)
 target_link_directories(test_full_tactic PRIVATE ${LEAN_HOME}/lib/lean)

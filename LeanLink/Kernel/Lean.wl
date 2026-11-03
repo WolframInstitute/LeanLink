@@ -74,7 +74,7 @@ LeanListConstants::usage = "LeanListConstants[opts] lists all constants as \[Lef
 
 LeanLoadEnvironment::usage = "LeanLoadEnvironment[{\"Module1\", ...}, searchPath] loads a Lean environment handle for repeated queries."
 
-LeanFreeEnvironment::usage = "LeanFreeEnvironment[handle] frees a loaded Lean environment and releases memory."
+LeanFreeEnvironment::usage = "LeanFreeEnvironment[environment] or LeanFreeEnvironment[handle] releases an imported environment, with what its evaluations use: the state they start from and an isolated evaluator process. \"EvaluatorOnly\" -> True releases only those."
 
 (* Interactive proof objects *)
 
@@ -94,11 +94,13 @@ LeanBuild::usage = "LeanBuild[dir, {\"Module1\", ...}] builds those modules of t
 
 LeanBuild::version = "The project pins `1` but LeanLink's runtime is `2`: LeanImport cannot load what this builds."
 
-LeanEvaluate::usage = "LeanEvaluate[expr] evaluates the Lean expression expr (a string) with #eval and returns its value as a Wolfram Language expression, through JSON: Nat and Int give integers, Bool gives True or False, String gives strings, List and Array give lists. \"ProjectDir\" and \"Imports\" make a built project's modules available, \"Source\" adds declarations (definitions, opens) the expression uses, \"Open\" opens namespaces, \"TimeLimit\" bounds the run in seconds. The value is computed by Lean's interpreter, not checked by its kernel."
+LeanEvaluate::usage = "LeanEvaluate[environment, expression] evaluates a Lean expression using an imported environment. LeanEvaluate[term, args] applies an imported declaration to Wolfram values. Both run in the kernel, in the environment LeanLink holds; with \"Isolated\" -> True they run in a Lean process of their own, which a loop, a stack overflow or exhausted memory cannot take the kernel down with. LeanEvaluate[expression] evaluates in a separate process."
 
-LeanImportString::usage = "LeanImportString[src] compiles a Lean 4 source string and returns LeanEnvironment[...]. LeanImportString[{src1, src2, ...}] compiles the sources joined with newlines. With \"ProjectDir\" -> dir the source can import that built Lake project's modules."
+LeanImportString::usage = "LeanImportString[source] compiles Lean source into a LeanEnvironment. LeanImportString[environment, source] also imports the modules of environment. LeanImportString[{source1, source2, ...}] joins the sources with newlines."
 
 ProofToLean::usage = "ProofToLean[proof] transpiles a ProofObject to a LeanEnvironment."
+
+LeanVerify::usage = "LeanVerify[term] checks a theorem in Lean's kernel and rejects dependencies on admitted proofs or additional axioms."
 
 (* Compilation *)
 
@@ -484,6 +486,7 @@ getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, se
     ];
     $envCache[key] = handle;
     registerHandle[handle, imports, searchPath];
+    $handleSource[handle, "ProjectDir"] = ExpandFileName[projDir];
     handle
 ]
 
@@ -639,30 +642,296 @@ declarationSource[h_Integer, name_String] := Module[{range, module, file, lines}
     StringRiffle[lines, "\n"]
 ]
 
+(* Environment evaluation. An evaluation runs in the shim, on a Lean thread of its own, in the environment the shim
+   already holds: nothing is imported again and no process is started. The kernel waits in slices it can abort
+   between. *)
+
+$leanImportSearchPath = ""
+
+(* Evaluations that ran past their time limit or were aborted and had not stopped a moment later, by job number,
+   with their environments' handles: Lean stops elaborating at its next check, but compiled code that loops or sleeps
+   runs until it returns, and its thread cannot be stopped from outside *)
+$unfinishedEvaluations = <||>
+
+(* A kernel refuses new evaluations while this many are unfinished, so that runaway code does not take every core *)
+$maxUnfinishedEvaluations = 4
+
+evaluationFailure[tag_String, message_String, data_Association : <||>] := Failure[tag, Join[<|"MessageTemplate" -> message|>, data]]
+
+environmentHandle[LeanEnvironment[data_Association]] := Lookup[data, "_Handle", None]
+
+environmentHandle[LeanTerm[data_Association]] := Lookup[data, "_Handle", None]
+
+environmentHandles[LeanEnvironment[data_Association]] := Select[Lookup[data, "_Handles", {Lookup[data, "_Handle", None]}], IntegerQ]
+
+liveEnvironmentQ[handle_] := IntegerQ[handle] && KeyExistsQ[$handleSource, handle]
+
+environmentDirectories[handle_Integer] := Select[Flatten[{handleInfo[handle, "TemporaryDirectory"], handleInfo[handle, "RetainedDirectories"]}], StringQ]
+
+(* $Failed with a shim from before LeanLink 1.2.8 *)
+$evaluateStartFn := $evaluateStartFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_evaluate_start", {Integer, "UTF8String", "UTF8String", "UTF8String"}, Integer]]
+
+$evaluateWaitFn := $evaluateWaitFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_evaluate_wait", {Integer, Integer}, Integer]]
+
+$evaluateCancelFn := $evaluateCancelFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_evaluate_cancel", {Integer}, "Void"]]
+
+$evaluateResultFn := $evaluateResultFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_evaluate_result", {Integer}, {Integer, 1}]]
+
+$evaluateReleaseFn := $evaluateReleaseFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_evaluate_release", {Integer}, "Void"]]
+
+(* Forgets the unfinished evaluations that have finished since *)
+pruneEvaluations[] := Scan[
+    If[ $evaluateWaitFn[#, 0] === 1,
+        $evaluateResultFn[#];
+        KeyDropFrom[$unfinishedEvaluations, #]
+    ]&
+    ,
+    Keys[$unfinishedEvaluations]
+]
+
+(* Asks an evaluation to stop and gives it a moment; one still running is kept as unfinished *)
+stopEvaluation[job_Integer, handle_Integer] := (
+    $evaluateCancelFn[job];
+    If[$evaluateWaitFn[job, 200] === 1, $evaluateResultFn[job], $unfinishedEvaluations[job] = handle];
+    Null
+)
+
+(* The value an evaluation gave, or a Failure with Lean's errors *)
+evaluationValue[result_Association] /; TrueQ[result["ok"]] := withFloats[result["value"]]
+
+evaluationValue[result_Association] := With[{error = Replace[result["error"], Except[_String] -> ""]},
+    evaluationFailure["LeanEvaluateFailed", "Lean could not evaluate the expression: `1`", <|"MessageParameters" -> {StringTake[error, UpTo[500]]}, "Output" -> error|>]
+]
+
+evaluationValue[_] := evaluationFailure["LeanEvaluateFailed", "The Lean shim returned no result."]
+
+(* Evaluates the expression after the declarations of source, with the namespaces of opens open. With neither, makes
+   the state the environment's evaluations start from, and gives Null *)
+runEvaluation[handle_Integer, source_String, expression_String, opens_List, limit_] := Block[{job, finished = 0, deadline = AbsoluteTime[] + limit},
+    If[! MatchQ[$evaluateStartFn, _LibraryFunction], Return[evaluationFailure["LeanEvaluateFailed", "This Lean shim predates evaluation in an environment; rebuild it."]]];
+    pruneEvaluations[];
+    If[ Length[$unfinishedEvaluations] >= $maxUnfinishedEvaluations,
+        Return[evaluationFailure["Busy", "`1` earlier evaluations that did not stop at their time limit are still running.", <|"MessageParameters" -> {Length[$unfinishedEvaluations]}|>]]
+    ];
+    job = $evaluateStartFn[handle, source, expression, StringRiffle[opens, ","]];
+    If[! IntegerQ[job] || job === 0, Return[evaluationFailure["InvalidEnvironment", "The Lean environment has been released or is not available in this kernel."]]];
+    CheckAbort[
+        While[finished =!= 1 && AbsoluteTime[] < deadline, finished = $evaluateWaitFn[job, Ceiling[1000 * Min[0.1, deadline - AbsoluteTime[]]]]]
+        ,
+        stopEvaluation[job, handle];
+        Abort[]
+    ];
+    If[ finished =!= 1,
+        stopEvaluation[job, handle];
+        Return[evaluationFailure["TimedOut", "Lean evaluation exceeded the time limit of `1` s.", <|"MessageParameters" -> {limit}|>]]
+    ];
+    evaluationValue[Quiet[decodeWXF[$evaluateResultFn[job]]]]
+]
+
+(* With prepare, makes the state a newly imported environment's evaluations start from. When that fails or is
+   aborted, the environments the import made are released, but never one it took from the cache *)
+SetAttributes[withEvaluationPreparation, HoldFirst]
+
+withEvaluationPreparation[body_, prepare_] := If[ ! TrueQ[prepare],
+    body
+    ,
+    Block[{previousHandles = Keys[$handleSource], environment, prepared = $Aborted},
+        WithCleanup[
+            environment = body;
+            prepared = If[MatchQ[environment, _LeanEnvironment], runEvaluation[environmentHandle[environment], "", "", {}, OptionValue[LeanEvaluate, {}, "TimeLimit"]], Null];
+            If[FailureQ[prepared], prepared, environment]
+            ,
+            If[FailureQ[prepared] || prepared === $Aborted, Scan[LeanFreeEnvironment, Complement[Keys[$handleSource], previousHandles]]]
+        ]
+    ]
+]
+
+(* Forgets the state an environment's evaluations start from *)
+releaseEvaluation[handle_Integer] := If[MatchQ[$evaluateReleaseFn, _LibraryFunction], $evaluateReleaseFn[handle]]
+
+(* Isolated evaluation, "Isolated" -> True: a Lean process per environment, code.lean's evaluate mode, which imports the
+   environment's modules once and answers requests over its pipes. It is slower to start and holds a second copy of
+   the imports, but code that loops, overflows the stack or exhausts memory ends with the process, which is killed at
+   the time limit or on abort, and never with the kernel *)
+
+$evaluationWorkers = <||>
+
+stopEvaluator[handle_] := With[{worker = Lookup[$evaluationWorkers, handle, None]},
+    If[AssociationQ[worker], Quiet[KillProcess[worker["Process"]]]];
+    KeyDropFrom[$evaluationWorkers, handle];
+    Null
+]
+
+(* Both pipes are drained while waiting, including when the reply exceeds a pipe buffer; it sleeps only when neither
+   has data, so large replies keep flowing *)
+evaluatorResponse[process_, id_String, deadline_] := Block[{out = "", err = "", chunk, diagnostics, lines, response, status, stdout = ProcessConnection[process, "StandardOutput"], stderr = ProcessConnection[process, "StandardError"]},
+    While[True,
+        If[AbsoluteTime[] >= deadline, Return[evaluationFailure["TimedOut", "Lean evaluation exceeded the time limit."], Block]];
+        chunk = readProcessStream[stdout];
+        diagnostics = readProcessStream[stderr];
+        out = out <> chunk;
+        err = StringTake[err <> diagnostics, UpTo[4096]];
+        lines = StringSplit[out, "\n", All];
+        out = Last[lines];
+        Do[
+            If[ StringStartsQ[line, "LEANLINK_RESPONSE "],
+                response = Quiet[ImportString[StringDrop[line, StringLength["LEANLINK_RESPONSE "]], "RawJSON"]];
+                If[AssociationQ[response] && Lookup[response, "id", None] === id, Return[response, Block]]
+            ]
+            ,
+            {line, Most[lines]}
+        ];
+        status = Quiet[ProcessStatus[process]];
+        If[status =!= "Running", Return[evaluationFailure["LeanEvaluateFailed", "The Lean evaluator stopped.", <|"Output" -> err <> out|>], Block]];
+        If[chunk === "" && diagnostics === "", Pause[0.001]]
+    ]
+]
+
+sendEvaluatorRequest[process_, request_Association, deadline_] := (
+    WriteString[process, ExportString[request, "RawJSON", "Compact" -> True] <> "\n"];
+    evaluatorResponse[process, request["id"], deadline]
+)
+
+evaluatorCommand[toolchain_String] := {leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"], "--run", FileNameJoin[{$PacletRoot, "Assets", "code.lean"}], "evaluate"}
+
+(* Starts a worker and sends it the imports; finishEvaluator waits for it to have imported them *)
+beginEvaluator[imports_List, searchPath_String] := Block[{tc, bin, process = None, request, environment},
+    tc = leanToolchainDir[];
+    If[tc === $Failed, Return[evaluationFailure["ToolchainNotInstalled", "Install LeanLink's pinned Lean toolchain before evaluating."]]];
+    bin = FileNameJoin[{tc, "bin"}];
+    environment = Association[
+        GetEnvironment[],
+        "LEAN_PATH" -> searchPath,
+        "LEAN_SYSROOT" -> tc,
+        "PATH" -> StringRiffle[{bin, Replace[Environment["PATH"], Except[_String] -> ""]}, $searchPathSeparator]
+    ];
+    CheckAbort[
+        process = Quiet[StartProcess[evaluatorCommand[tc], ProcessEnvironment -> environment]];
+        If[! MatchQ[process, _ProcessObject], Return[evaluationFailure["LeanEvaluateFailed", "Could not start the Lean evaluator."], Block]];
+        request = <|"id" -> CreateUUID[], "imports" -> imports|>;
+        If[ Quiet[Check[WriteString[process, ExportString[request, "RawJSON", "Compact" -> True] <> "\n"], $Failed]] === $Failed,
+            Quiet[KillProcess[process]];
+            Return[evaluationFailure["LeanEvaluateFailed", "Could not initialize the Lean evaluator."], Block]
+        ];
+        <|"Process" -> process, "RequestID" -> request["id"]|>
+        ,
+        If[MatchQ[process, _ProcessObject], Quiet[KillProcess[process]]];
+        Abort[]
+    ]
+]
+
+finishEvaluator[handle_Integer, deadline_] := Block[{worker = $evaluationWorkers[handle], response},
+    response = evaluatorResponse[worker["Process"], worker["RequestID"], deadline];
+    If[ FailureQ[response] || ! TrueQ[response["ok"]],
+        stopEvaluator[handle];
+        Return[If[FailureQ[response], response, evaluationFailure["LeanEvaluateFailed", Lookup[response, "error", "Lean could not import the environment."]]]]
+    ];
+    $evaluationWorkers[handle] = KeyDrop[worker, "RequestID"];
+    worker["Process"]
+]
+
+startEvaluator[handle_Integer, deadline_] := With[{worker = beginEvaluator[handleInfo[handle, "Imports"], handleInfo[handle, "SearchPath"]]},
+    If[ FailureQ[worker],
+        worker
+        ,
+        $evaluationWorkers[handle] = worker;
+        finishEvaluator[handle, deadline]
+    ]
+]
+
+isolatedEvaluation[handle_Integer, source_String, expression_String, opens_List, limit_] := Block[{process, response, deadline = AbsoluteTime[] + limit},
+    CheckAbort[
+        process = Lookup[Lookup[$evaluationWorkers, handle, <||>], "Process", None];
+        If[! MatchQ[process, _ProcessObject] || Quiet[ProcessStatus[process]] =!= "Running", process = startEvaluator[handle, deadline]];
+        If[FailureQ[process], Return[process, Block]];
+        response = sendEvaluatorRequest[process, <|"id" -> CreateUUID[], "expression" -> expression, "source" -> source, "open" -> opens|>, deadline];
+        (* a worker that timed out or stopped is replaced on the next call *)
+        If[ FailureQ[response],
+            stopEvaluator[handle];
+            Return[response, Block]
+        ];
+        If[ ! MatchQ[response["value"], {_}] && TrueQ[response["ok"]],
+            stopEvaluator[handle];
+            Return[evaluationFailure["LeanEvaluateFailed", "The Lean evaluator returned an invalid value."], Block]
+        ];
+        evaluationValue[If[TrueQ[response["ok"]], <|"ok" -> True, "value" -> First[response["value"]]|>, response]]
+        ,
+        stopEvaluator[handle];
+        Abort[]
+    ]
+]
+
+LeanEvaluate[environment_LeanEnvironment, expression_String, opts : OptionsPattern[]] := Block[{limit = OptionValue["TimeLimit"], source = OptionValue["Source"], opens, handle},
+    If[ Length[environmentHandles[environment]] > 1,
+        Return[evaluationFailure["SeparateEnvironments", "Import the required modules together with LeanImport's Imports option, or evaluate a term from this collection."]]
+    ];
+    handle = environmentHandle[environment];
+    If[! liveEnvironmentQ[handle], Return[evaluationFailure["InvalidEnvironment", "Use an imported Lean environment that has not been released."]]];
+    If[! (limit === Infinity || NumberQ[limit] && TrueQ[limit > 0]) || ! StringQ[source], Return[evaluationFailure["InvalidOption", "Use a positive TimeLimit and a string Source."]]];
+    opens = Flatten[{OptionValue["Open"]}];
+    If[! MatchQ[opens, {___String}], Return[evaluationFailure["InvalidOption", "Open must contain namespace names."]]];
+    If[ OptionValue["ProjectDir"] =!= None || OptionValue["Imports"] =!= {},
+        Return[evaluationFailure["InvalidOption", "Select the project and modules with LeanImport before evaluating in an environment."]]
+    ];
+    If[StringTrim[expression] === "", Return[evaluationFailure["InvalidOption", "Give a Lean expression to evaluate."]]];
+    If[TrueQ[OptionValue["Isolated"]], isolatedEvaluation[handle, source, expression, opens, limit], runEvaluation[handle, source, expression, opens, limit]]
+]
+
+leanArgument[_, n_Integer] := "(" <> If[n < 0, "-", ""] <> IntegerString[Abs[n]] <> ")"
+leanArgument[handle_, n_Rational] := "(" <> leanArgument[handle, Numerator[n]] <> " / " <> IntegerString[Denominator[n]] <> " : Rat)"
+leanArgument[_, True] := "true"
+leanArgument[_, False] := "false"
+leanArgument[_, value_String] := "\"" <> StringJoin[Map[
+    Switch[#, 34, "\\\"", 92, "\\\\", 10, "\\n", 13, "\\r", 9, "\\t", _, If[# < 32 || # === 127, "\\u" <> IntegerString[#, 16, 4], FromCharacterCode[#]]]&,
+    ToCharacterCode[value]
+]] <> "\""
+leanArgument[handle_, values_List] := With[{encoded = leanArgument[handle, #]& /@ values},
+    If[AnyTrue[encoded, FailureQ], SelectFirst[encoded, FailureQ], "[" <> StringRiffle[encoded, ", "] <> "]"]
+]
+leanArgument[handle_, term_LeanTerm] := If[environmentHandle[term] === handle, quotedLeanName[term["Name"]], evaluationFailure["InvalidEnvironment", "Use term arguments from the same environment."]]
+leanArgument[_, _] := evaluationFailure["UnsupportedArgument", "Use exact integers, rationals, booleans, strings, lists or terms from the same environment."]
+
+quotedLeanName[name_String] := If[StringContainsQ[name, "\:00ab" | "\:00bb" | "\n" | "\r"],
+    evaluationFailure["UnsupportedName", "This declaration's name cannot be used in Lean source."],
+    StringRiffle[("\:00ab" <> # <> "\:00bb"&) /@ StringSplit[name, ".", All], "."]
+]
+
+LeanEvaluate[term_LeanTerm, arguments : Longest[Except[_Rule | _RuleDelayed]...], opts : OptionsPattern[]] := Block[{handle = environmentHandle[term], encoded},
+    If[! liveEnvironmentQ[handle], Return[evaluationFailure["InvalidEnvironment", "The term must belong to an imported environment that has not been released."]]];
+    encoded = Prepend[leanArgument[handle, #]& /@ {arguments}, quotedLeanName[term["Name"]]];
+    If[AnyTrue[encoded, FailureQ], Return[SelectFirst[encoded, FailureQ]]];
+    LeanEvaluate[LeanEnvironment[<|"_Handle" -> handle|>], StringRiffle[encoded, " "], opts]
+]
+
 (* ---- LeanEvaluate ----
    #eval in a lean process (the pinned toolchain), value returned through JSON.
    The process is polled rather than run with RunProcess, for a time limit, and
    its output is read while it runs: a large value would otherwise fill the
    pipe and deadlock the wait. *)
 
-runLeanProcess[cmd_List, env_Association, limit_] := Module[{p, out = "", err = "", t0 = AbsoluteTime[], read},
-    read[stream_] := Replace[ReadString[stream, EndOfBuffer], Except[_String] -> ""];
+readProcessStream[stream_] := Replace[Quiet[ReadString[stream, EndOfBuffer]], Except[_String] -> ""]
+
+runLeanProcess[cmd_List, env_Association, limit_] := Module[{p, out = "", err = "", t0 = AbsoluteTime[], stdout, stderr, newOut, newErr},
     p = StartProcess[cmd, ProcessEnvironment -> env];
+    stdout = ProcessConnection[p, "StandardOutput"];
+    stderr = ProcessConnection[p, "StandardError"];
     While[ProcessStatus[p] === "Running",
-        out = out <> read[ProcessConnection[p, "StandardOutput"]];
-        err = err <> read[ProcessConnection[p, "StandardError"]];
+        newOut = readProcessStream[stdout];
+        newErr = readProcessStream[stderr];
+        out = out <> newOut;
+        err = err <> newErr;
         If[ AbsoluteTime[] - t0 > limit,
             KillProcess[p];
             Return[$TimedOut, Module]
         ];
-        Pause[0.02]
+        If[newOut === "" && newErr === "", Pause[0.02]]
     ];
-    out = out <> Replace[ReadString[ProcessConnection[p, "StandardOutput"]], Except[_String] -> ""];
-    err = err <> Replace[ReadString[ProcessConnection[p, "StandardError"]], Except[_String] -> ""];
+    out = out <> Replace[ReadString[stdout], Except[_String] -> ""];
+    err = err <> Replace[ReadString[stderr], Except[_String] -> ""];
     <|"ExitCode" -> ProcessInformation[p, "ExitCode"], "StandardOutput" -> out, "StandardError" -> err|>
 ]
 
-Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "Source" -> "", "TimeLimit" -> 600};
+Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "Source" -> "", "TimeLimit" -> 600, "Isolated" -> False}
 
 LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searchPath, opens, srcLines, srcImports, srcBody, script, file, res, json, diag},
     tc = leanToolchainDir[];
@@ -725,6 +994,10 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searc
 floatFromBits[bits_Integer] := First[ImportByteArray[ByteArray[IntegerDigits[bits, 256, 8]], "Real64", ByteOrdering -> 1]]
 
 withFloats[float_Association /; Keys[float] === {"LeanLinkFloat"}] := floatFromBits[float["LeanLinkFloat"]]
+
+withFloats[value_Association /; Keys[value] === {"LeanLinkRational"}] := With[{fraction = value["LeanLinkRational"]},
+    If[MatchQ[fraction, {_Integer, _Integer ? Positive}], First[fraction] / Last[fraction], evaluationFailure["InvalidValue", "Lean returned an invalid rational number."]]
+]
 
 withFloats[value : (_Association | _List)] := withFloats /@ value
 
@@ -2308,6 +2581,41 @@ LeanImportString[src_String, opts : OptionsPattern[LeanImport]] := Block[{tmpFil
 
 LeanImportString[sources : {___String}, opts : OptionsPattern[LeanImport]] := LeanImportString[StringRiffle[sources, "\n"], opts]
 
+(* A compiled snippet inherits the existing module path, including earlier
+   snippets, without changing LEAN_PATH in the Wolfram process. *)
+LeanImportString[environment_LeanEnvironment, source_String, opts : OptionsPattern[LeanImport]] := Block[{handle = environmentHandle[environment], project, imports, result},
+    If[Length[environmentHandles[environment]] > 1, Return[evaluationFailure["SeparateEnvironments", "Import the required modules together with LeanImport's Imports option before adding declarations."]]];
+    If[! liveEnvironmentQ[handle], Return[evaluationFailure["InvalidEnvironment", "Use an imported Lean environment that has not been released."]]];
+    project = Replace[handleInfo[handle, "ProjectDir"], None -> Automatic];
+    imports = StringRiffle[("import " <> #&) /@ handleInfo[handle, "Imports"], "\n"];
+    result = Block[{$leanImportSearchPath = handleInfo[handle, "SearchPath"]}, LeanImportString[imports <> "\n" <> source, opts, "ProjectDir" -> project]];
+    If[MatchQ[result, _LeanEnvironment], $handleSource[environmentHandle[result], "RetainedDirectories"] = environmentDirectories[handle]];
+    result
+]
+
+(* Proof verification *)
+
+Options[LeanVerify] = {"TimeLimit" -> 600}
+
+LeanVerify[term_LeanTerm, OptionsPattern[]] := Block[{axioms, checked, kinds, limit = OptionValue["TimeLimit"]},
+    If[! liveEnvironmentQ[environmentHandle[term]], Return[evaluationFailure["InvalidEnvironment", "The theorem's environment is not available."]]];
+    If[! StringQ[term["Name"]], Return[evaluationFailure["NotATheorem", "Select a named theorem declaration to verify."]]];
+    kinds = Quiet[decodeWXF[$listConstantKindsFn[environmentHandle[term], term["Name"]]]];
+    If[! AssociationQ[kinds] || Lookup[kinds, term["Name"], None] =!= "theorem", Return[evaluationFailure["NotATheorem", "Select a theorem declaration to verify."]]];
+    If[! (limit === Infinity || NumberQ[limit] && TrueQ[limit > 0]), Return[evaluationFailure["InvalidOption", "TimeLimit must be positive or Infinity."]]];
+    TimeConstrained[
+        axioms = term["Axioms"];
+        If[! MatchQ[axioms, {___String}] || Complement[axioms, {"propext", "Quot.sound", "Classical.choice"}] =!= {},
+            Return[evaluationFailure["UntrustedProof", "The theorem depends on an admitted proof or an additional axiom.", <|"Axioms" -> axioms|>], Block]
+        ];
+        checked = term["KernelCheck"];
+        If[MatchQ[checked, _Success], Success["Verified", <|"MessageTemplate" -> "Lean's kernel accepts the theorem with standard axioms.", "Axioms" -> axioms, "KernelCheck" -> checked|>],
+            evaluationFailure["KernelRejected", "Lean's kernel did not accept the theorem's module.", <|"Result" -> checked|>]
+        ],
+        limit, evaluationFailure["TimedOut", "Proof checking exceeded the time limit."]
+    ]
+]
+
 (* --- Local imports of a source file --- *)
 
 (* The folder that a URL import downloads a repository's files into, the root of
@@ -2464,7 +2772,7 @@ LeanImport[url_String, opts : OptionsPattern[]] /; StringStartsQ[url, "http://" 
     ];
     (* the download folder is the root of the module names; the files the target imports compile first *)
     Block[{$leanImportRoot = tmpDir},
-        LeanImport[targetFile]
+        LeanImport[targetFile, opts]
     ]
 ]
 
@@ -2616,18 +2924,27 @@ LeanLoadEnvironment[imports_List, searchPath_String] := If[ shimLoadableQ[LeanIm
 (* The olean that an import of a file compiled, in a temporary folder, is deleted
    with its environment *)
 
-LeanFreeEnvironment[handle_Integer] := With[{tmpDir = handleInfo[handle, "TemporaryDirectory"]},
+Options[LeanFreeEnvironment] = {"EvaluatorOnly" -> False}
+
+LeanFreeEnvironment[handle_Integer, OptionsPattern[]] := Block[{directories = environmentDirectories[handle]},
+    stopEvaluator[handle];
+    releaseEvaluation[handle];
+    If[TrueQ[OptionValue["EvaluatorOnly"]], Return[Null]];
     $freeEnvFn[handle];
+    $envCache = Select[$envCache, # =!= handle&];
+    $termCache = KeySelect[$termCache, First[#] =!= handle&];
     KeyDropFrom[$handleSource, handle];
     KeyDropFrom[$internalKinds, handle];
     $typeFormCache = KeySelect[$typeFormCache, First[#] =!= handle&];
-    If[StringQ[tmpDir] && DirectoryQ[tmpDir], Quiet[DeleteDirectory[tmpDir, DeleteContents -> True]]];
+    Scan[If[DirectoryQ[#] && ! MemberQ[Flatten[environmentDirectories /@ Keys[$handleSource]], #], Quiet[DeleteDirectory[#, DeleteContents -> True]]]&, directories];
     Null
 ]
 
+LeanFreeEnvironment[environment_LeanEnvironment, opts : OptionsPattern[]] := Scan[LeanFreeEnvironment[#, opts]&, environmentHandles[environment]]
+
 (* --- LeanImport --- *)
 
-Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False}
+Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False, "PrepareEvaluation" -> False}
 
 (* Internal name patterns to filter out *)
 
@@ -2654,6 +2971,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
         subModules = oleanModule[#, buildLib]& /@ oleans;
         If[ subModules =!= {},
             If[! shimLoadableQ[LeanImport], Return[$Failed, Block]];
+            If[TrueQ[OptionValue["PrepareEvaluation"]], Return[evaluationFailure["SeparateEnvironments", "Select the modules together with Imports before preparing evaluation."], Block]];
             (* Load ALL discovered sub-modules so the full environment is available, one by one to avoid module
                clash failures. *)
             Block[{envAssoc = <||>, handles, kinds},
@@ -2675,7 +2993,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
                     {}
                 ];
                 If[Length[envAssoc] === 0, Return[$Failed, Block]];
-                results = LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]];
+                results = LeanEnvironment[Join[envAssoc, <|"_Handle" -> Last[handles], "_Handles" -> DeleteDuplicates[handles]|>]];
             ];
             Return[results, Block]
         ]
@@ -2691,12 +3009,12 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     (* If within a lake project, delegate to module-based import *)
     If[ projDir =!= Automatic && insideDirectoryQ[absFile, ExpandFileName[projDir]],
         modName = StringReplace[StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"], {".lean" -> "", "/" -> ".", "\\" -> "."}];
-        Return[LeanImport["Imports" -> {modName}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]], opts], Module]
+        Return[LeanImport["Imports" -> {modName}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]], opts], Block]
     ];
     (* A source file outside the project (e.g. a LeanImportString snippet) can still
        import the project's modules: its oleans go on LEAN_PATH for the compile and
        on the search path for the load. Only an explicit ProjectDir does this. *)
-    projSearch = If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""];
+    projSearch = StringRiffle[DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], $leanImportSearchPath}, ""], $searchPathSeparator];
     (* Resolve the correct lean binary from the LeanLink project toolchain *)
     (* Try: 1) dev mode Native/lean-toolchain, 2) paclet-bundled lean-toolchain *)
     (* The pinned toolchain the shim was built against comes first: the olean this
@@ -2754,7 +3072,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     ];
     (* Load via lazy pattern *)
     searchPath = StringRiffle[DeleteCases[{tmpDir, projSearch, leanLibDir}, ""], $searchPathSeparator];
-    Block[{handle, kinds, res},
+    WithCleanup[result = withEvaluationPreparation[Block[{handle, kinds, res},
         If[ ! shimLoadableQ[LeanImport],
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
@@ -2765,23 +3083,26 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
         ];
+        registerHandle[handle, {modName}, searchPath];
+        $handleSource[handle, "ProjectDir"] = If[StringQ[projDir], ExpandFileName[resolveProjDir[projDir]], None];
+        $handleSource[handle, "Files"] = <|modName -> absFile|>;
+        $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         (* Keep exactly the constants this module declares, read from its own olean
            data. Matching names scraped from the source text missed everything inside
            a namespace (environment names are qualified, the scraped ones were not),
            and anything made by a macro, `private`, or an attribute on the same line. *)
         kinds = decodeWXF[$moduleConstantKindsFn[handle, modName]];
-        If[! AssociationQ[kinds], Return[$Failed, Block]];
+        If[! AssociationQ[kinds], LeanFreeEnvironment[handle]; Return[$Failed, Block]];
         If[! TrueQ[OptionValue["IncludeInternal"]], kinds = KeySelect[kinds, ! isInternalName[#] && ! StringContainsQ[#, "._"]&]];
         (* "Filter" keeps the names that contain it, as for a module *)
         If[OptionValue["Filter"] =!= "", kinds = KeySelect[kinds, StringContainsQ[#, OptionValue["Filter"]]&]];
-        registerHandle[handle, {modName}, searchPath];
-        $handleSource[handle, "Files"] = <|modName -> absFile|>;
-        $handleSource[handle, "TemporaryDirectory"] = tmpDir;
         registerHandleNames[handle, Keys[kinds]];
         (* Build lazy LeanTerms *)
         res = LeanEnvironment[Append[Association @ KeyValueMap[Function[{name, kind}, name -> LeanTerm[<|"Name" -> name, "Kind" -> kind, "_Handle" -> handle|>]], kinds], "_Handle" -> handle]];
         (* Don't delete tmpDir -- olean needed for lazy queries *)
         res
+    ], OptionValue["PrepareEvaluation"]],
+        If[! MatchQ[result, _LeanEnvironment] && DirectoryQ[tmpDir], Quiet[DeleteDirectory[tmpDir, DeleteContents -> True]]]
     ]
 ]
 
@@ -2817,7 +3138,10 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
     ];
     (* If the user gave a list of imports, load them together; if they were discovered, load them one by one to
        prevent Lean module clash failures *)
-    Block[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}], envAssoc = <||>, handles = {}},
+    If[TrueQ[OptionValue["PrepareEvaluation"]] && OptionValue["Imports"] === {} && Length[imports] > 1,
+        Return[evaluationFailure["SeparateEnvironments", "Select the modules together with Imports before preparing evaluation."]]
+    ];
+    withEvaluationPreparation[Block[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}], envAssoc = <||>, handles = {}},
         Do[
             With[{h = Quiet[getOrLoadEnv[projDir, batch]]},
                 If[ IntegerQ[h] && h > 0,
@@ -2840,8 +3164,8 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             Message[LeanImport::err, loadFailureText[imports, resolveSearchPath[projDir]]];
             Return[$Failed]
         ];
-        LeanEnvironment[Append[envAssoc, "_Handle" -> Last[handles]]]
-    ]
+        LeanEnvironment[Join[envAssoc, <|"_Handle" -> Last[handles], "_Handles" -> DeleteDuplicates[handles]|>]]
+    ], OptionValue["PrepareEvaluation"]]
 ]
 
 (* --- Type / Value / ConstantInfo / ListConstants --- *)
@@ -2871,7 +3195,7 @@ LeanListConstants[opts : OptionsPattern[]] := callNative[$listTheoremsFn, {Optio
 LeanEnvironment /: LeanEnvironment[data_Association][key_String] := Block[{val = data[key], handle},
     If[ MatchQ[val, _LeanTerm],
         handle = Lookup[data, "_Handle", None];
-        If[IntegerQ[handle], LeanTerm[Append[val[[1]], "_Handle" -> handle]], val]
+        If[IntegerQ[handle] && ! KeyExistsQ[val[[1]], "_Handle"], LeanTerm[Append[val[[1]], "_Handle" -> handle]], val]
         ,
         val
     ]
@@ -2894,7 +3218,7 @@ LeanEnvironment /: Normal[LeanEnvironment[data_Association]] := data
 
 (* Information protocol -- no collision with term names *)
 
-$leanEnvProperties = {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"}
+$leanEnvProperties = {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble", "Imports", "ProjectDir", "Valid"}
 
 LeanEnvironment /: Information[env : LeanEnvironment[data_Association], "Properties"] := $leanEnvProperties
 
@@ -2916,6 +3240,15 @@ LeanEnvironment /: Information[env : LeanEnvironment[data_Association], prop_Str
     ,
     "Preamble",
         Lookup[data, "_Preamble", None]
+    ,
+    "Imports",
+        DeleteDuplicates[Flatten[handleInfo[#, "Imports"]& /@ environmentHandles[env]]]
+    ,
+    "ProjectDir",
+        handleInfo[Lookup[data, "_Handle", 0], "ProjectDir"]
+    ,
+    "Valid",
+        environmentHandles[env] =!= {} && AllTrue[environmentHandles[env], liveEnvironmentQ]
     ,
     _,
         Missing["UnknownProperty", prop]

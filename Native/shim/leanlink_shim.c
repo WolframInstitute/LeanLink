@@ -33,15 +33,58 @@ extern void lean_io_mark_end_initialization(void);
 extern void lean_initialize_thread(void);
 
 #ifdef _WIN32
+#include <windows.h>
 static int portable_setenv(const char *name, const char *value, int overwrite) {
     if (!overwrite && getenv(name) != NULL) {
         return 0;
     }
     return _putenv_s(name, value);
 }
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+/* QueryPerformanceCounter, not GetTickCount64, which moves in timer ticks of about 15.6 ms */
+static uint64_t monotonic_us(void) {
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER now;
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&now);
+    return (uint64_t)(now.QuadPart / freq.QuadPart) * 1000000 + (uint64_t)(now.QuadPart % freq.QuadPart) * 1000000 / (uint64_t)freq.QuadPart;
+}
+/* Sleep(1) waits a whole timer tick, about 15.6 ms, which made every evaluation that was not done at the first
+   check take that long. A high-resolution waitable timer (Windows 10 1803 and later) waits the microseconds asked
+   for; without one, a wait under a millisecond only yields the thread. */
+static void sleep_us(uint64_t us) {
+    static _Thread_local HANDLE timer = NULL;
+    static _Thread_local int timer_tried = 0;
+    if (!timer_tried) {
+        timer_tried = 1;
+        timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    }
+    if (timer) {
+        LARGE_INTEGER due;
+        due.QuadPart = -(LONGLONG)(us * 10); /* relative, in units of 100 ns */
+        if (SetWaitableTimer(timer, &due, 0, NULL, NULL, FALSE)) {
+            WaitForSingleObject(timer, INFINITE);
+            return;
+        }
+    }
+    if (us < 1000) SwitchToThread();
+    else Sleep((DWORD)(us / 1000));
+}
 #else
+#include <time.h>
 static int portable_setenv(const char *name, const char *value, int overwrite) {
     return setenv(name, value, overwrite);
+}
+static uint64_t monotonic_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
+}
+static void sleep_us(uint64_t us) {
+    struct timespec ts = { (time_t)(us / 1000000), (long)(us % 1000000) * 1000 };
+    nanosleep(&ts, NULL);
 }
 #endif
 
@@ -89,6 +132,11 @@ extern lean_object* leanlink_open_goal(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_apply_tactic(uint64_t stateId, lean_object* tactic);
 extern lean_object* leanlink_open_goal_expr(uint64_t handle, lean_object* exprWXF);
 extern lean_object* leanlink_pp_expr(uint64_t handle, lean_object* exprWXF);
+extern lean_object* leanlink_evaluate_start(uint64_t handle, lean_object* source, lean_object* expression, lean_object* opens);
+extern lean_object* leanlink_evaluate_finished(uint64_t job);
+extern lean_object* leanlink_evaluate_cancel(uint64_t job);
+extern lean_object* leanlink_evaluate_result(uint64_t job);
+extern lean_object* leanlink_evaluate_release(uint64_t handle);
 
 static int g_initialized = 0;
 static WolframLibraryData g_libData = NULL;
@@ -760,4 +808,108 @@ DLLEXPORT int leanlink_wl_pp_expr(
     lean_object* io_res = leanlink_pp_expr(handle, ba);
     /* ba is consumed by leanlink_pp_expr */
     return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/* ======================================================================== */
+/* Evaluation in a loaded environment                                       */
+/* ======================================================================== */
+
+/* An evaluation runs on a Lean thread of its own (LeanLink/Evaluate.lean); the kernel starts it, waits for
+   it in slices it can abort between, and collects its result. */
+
+/*
+ * evaluateStart(handle, source, expression, opens) -> job number, 0 when the handle names no environment
+ */
+DLLEXPORT int leanlink_wl_evaluate_start(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+
+    uint64_t handle = (uint64_t)MArgument_getInteger(Args[0]);
+    char* source_cstr = MArgument_getUTF8String(Args[1]);
+    char* expression_cstr = MArgument_getUTF8String(Args[2]);
+    char* opens_cstr = MArgument_getUTF8String(Args[3]);
+    lean_object* source = lean_mk_string(source_cstr);
+    lean_object* expression = lean_mk_string(expression_cstr);
+    lean_object* opens = lean_mk_string(opens_cstr);
+    libData->UTF8String_disown(source_cstr);
+    libData->UTF8String_disown(expression_cstr);
+    libData->UTF8String_disown(opens_cstr);
+
+    lean_object* io_res = leanlink_evaluate_start(handle, source, expression, opens);
+    /* source, expression and opens consumed by leanlink_evaluate_start */
+    if (!io_res || !lean_io_result_is_ok(io_res)) {
+        if (io_res) lean_dec_ref(io_res);
+        return LIBRARY_FUNCTION_ERROR;
+    }
+    uint64_t job = lean_unbox_uint64(lean_io_result_get_value(io_res));
+    lean_dec_ref(io_res);
+    MArgument_setInteger(Res, (mint)job);
+    return LIBRARY_NO_ERROR;
+}
+
+static int evaluation_finished(uint64_t job) {
+    lean_object* io_res = leanlink_evaluate_finished(job);
+    int finished = !io_res || !lean_io_result_is_ok(io_res) || lean_unbox(lean_io_result_get_value(io_res)) != 0;
+    if (io_res) lean_dec_ref(io_res);
+    return finished;
+}
+
+/*
+ * evaluateWait(job, milliseconds) -> 1 when the evaluation has finished, 0 when it is still running after
+ * that long or the kernel was asked to abort. Polls often at first, so a short evaluation is not held up.
+ */
+DLLEXPORT int leanlink_wl_evaluate_wait(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    uint64_t job = (uint64_t)MArgument_getInteger(Args[0]);
+    mint limit_ms = MArgument_getInteger(Args[1]);
+    uint64_t deadline = monotonic_us() + (uint64_t)(limit_ms > 0 ? limit_ms : 0) * 1000;
+    uint64_t pause = 20;
+    int finished;
+    while (!(finished = evaluation_finished(job)) && !libData->AbortQ() && monotonic_us() < deadline) {
+        sleep_us(pause);
+        if (pause < 1000) pause *= 2;
+    }
+    MArgument_setInteger(Res, finished);
+    return LIBRARY_NO_ERROR;
+}
+
+/*
+ * evaluateCancel(job): asks the evaluation to stop
+ */
+DLLEXPORT int leanlink_wl_evaluate_cancel(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    lean_object* io_res = leanlink_evaluate_cancel((uint64_t)MArgument_getInteger(Args[0]));
+    if (io_res) lean_dec_ref(io_res);
+    return LIBRARY_NO_ERROR;
+}
+
+/*
+ * evaluateResult(job) -> MTensor (WXF): <|"ok" -> True, "value" -> value|> or <|"ok" -> False, "error" -> text|>.
+ * Waits for the evaluation when it is still running; call it once evaluateWait has given 1.
+ */
+DLLEXPORT int leanlink_wl_evaluate_result(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    lean_object* io_res = leanlink_evaluate_result((uint64_t)MArgument_getInteger(Args[0]));
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * evaluateRelease(handle): forgets the state evaluations in that environment start from
+ */
+DLLEXPORT int leanlink_wl_evaluate_release(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    if (!g_lean_initialized) return LIBRARY_NO_ERROR;
+    lean_object* io_res = leanlink_evaluate_release((uint64_t)MArgument_getInteger(Args[0]));
+    if (io_res) lean_dec_ref(io_res);
+    return LIBRARY_NO_ERROR;
 }

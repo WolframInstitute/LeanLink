@@ -22,7 +22,7 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 - [LeanImport]() import constants from a compiled Lean module, returning a [LeanEnvironment]()
 - [LeanImportString]() compile a Lean 4 source string into a [LeanEnvironment](); with `"ProjectDir"` it can import a built project
 - [LeanBuild]() build a Lake project's modules with its pinned toolchain
-- [LeanEvaluate]() evaluate a Lean expression with `#eval` and return its value
+- [LeanEvaluate]() evaluate expressions or apply imported functions, reusing the environment between calls
 - [LeanExportString]() convert a [LeanEnvironment]() back to Lean 4 source
 - [LeanExport]() write a [LeanEnvironment]() to a `.lean` file
 
@@ -69,6 +69,7 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 
 ### Interactive proofs
 
+- [LeanVerify]() check a theorem's module in the kernel and audit its axiom dependencies
 - [LeanState]() open a theorem as a proof goal; holds `"Goals"`, `"Complete"`, `"GoalCount"`
 - [LeanTactic]() a tactic, applied as <code>[LeanTactic]()[*tac*][*state*]</code>
 - [LeanGoal]() a single goal, with `"Target"` and `"Context"`

@@ -17,7 +17,7 @@ RelatedGuides: [LeanLink]
 
 - A [LeanEnvironment]() is produced by [LeanImport](), [LeanImportString](), or [ProofToLean]() - you rarely build one by hand.
 - Index it by constant name to get a [LeanTerm](): <code>*env*["mul_comm"]</code>. It also supports [Keys](), [Values](), [Length](), [KeyExistsQ](), and [Normal]() (which returns the underlying [Association]()).
-- <code>[Information]()[*env*, *prop*]</code> exposes environment metadata. Properties: `"Constants"` (the names), `"Kinds"` (a count by declaration kind), `"Handle"` (the native environment id), `"Source"`, `"DeclOrder"`, `"Preamble"`.
+- <code>[Information]()[*env*, *prop*]</code> exposes environment metadata. Properties: `"Constants"` (the names), `"Kinds"` (a count by declaration kind), `"Handle"` (the native environment id), `"Source"`, `"DeclOrder"`, `"Preamble"`, `"Imports"` (module names), `"ProjectDir"` (the project directory) and `"Valid"` (whether the environment is still available).
 
 ## Basic Examples
 
@@ -69,7 +69,7 @@ The available metadata properties:
 Information[env, "Properties"]
 ```
 
-<!-- => {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble"} -->
+<!-- => {"Constants", "Kinds", "Handle", "Source", "DeclOrder", "Preamble", "Imports", "ProjectDir", "Valid"} -->
 
 How many constants of each kind:
 
