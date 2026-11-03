@@ -101,7 +101,7 @@ static void evaluate(mint handle, const char *name, char *source, char *expressi
 int main(int argc, char **argv) {
     require(argc == 4, "usage: native_evaluation shim imports searchpath");
 #ifdef _WIN32
-    HMODULE shim = LoadLibraryA(argv[1]);
+    HMODULE shim = LoadLibraryExA(argv[1], NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!shim) fprintf(stderr, "LoadLibrary error: %lu\n", GetLastError());
     require(shim != NULL, "could not load shim");
 #define SYMBOL(name) GetProcAddress(shim, name)
