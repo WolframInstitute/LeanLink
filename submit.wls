@@ -44,17 +44,6 @@ If[ missing =!= {},
     Exit[1]
 ]
 
-missingEvaluators = Select[
-    {"MacOSX-ARM64", "MacOSX-x86-64", "Linux-x86-64", "Linux-ARM64", "Windows-x86-64"},
-    Function[systemID, ! FileExistsQ[FileNameJoin[{repoDir, "LeanLink", "LibraryResources", systemID,
-        "LeanLinkEvaluator" <> If[systemID === "Windows-x86-64", ".exe", ""]}]]]
-]
-
-If[ missingEvaluators =!= {},
-    Print["FATAL: no evaluator for ", #, "; rebuild with ./build.sh."]& /@ missingEvaluators;
-    Exit[1]
-]
-
 Print["native libraries:"]
 
 Scan[Print["  ", FileNameTake[DirectoryName[#]], "  ", DateString[FileDate[#], {"ISODate", " ", "Hour", ":", "Minute"}]]&, Sort[libs]]

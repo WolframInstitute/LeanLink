@@ -13,18 +13,20 @@ RelatedGuides: [LeanLink]
 
 <code>[LeanEvaluate]()[*"expr"*]</code> evaluates the Lean expression *expr* with `#eval` and returns its value as a Wolfram Language expression.
 
-<code>[LeanEvaluate]()[*environment*, *"expr"*]</code> evaluates in an imported [LeanEnvironment](), reusing its evaluator between calls.
+<code>[LeanEvaluate]()[*environment*, *"expr"*]</code> evaluates in an imported [LeanEnvironment](), in the kernel, with the modules LeanLink has already imported.
 
 <code>[LeanEvaluate]()[*term*, *args*]</code> applies an imported [LeanTerm]() to Wolfram Language arguments.
 
 ## Details & Options
 
 - The value comes back through `Lean.toJson`: `Nat` and `Int` give integers, `Bool` gives [True]() or [False](), `String` gives strings, `Float` gives machine reals, exactly, with [Infinity]() and [Indeterminate]() for the infinities and NaN, and `List` and `Array` give lists. A type without a `ToJson` instance fails; wrap the expression in `toString` to get a string instead.
-- An environment starts its evaluator on the first call, or during [LeanImport]() with `"PrepareEvaluation" -> True`. Later calls reuse the imported modules; computed values are not cached. The string-only form starts a separate process on every call.
+- The environment and term forms run in the kernel, on a thread of their own, in the environment [LeanImport]() loaded: nothing is imported again, and a call takes about a millisecond more than Lean's own work. The first call in an environment makes the state later calls start from; [LeanImport]() with `"PrepareEvaluation" -> True` makes it during the import. An environment without Lean's JSON modules, such as `Init`, imports them once for this. Computed values are not cached. The string-only form starts a separate process on every call.
 - Term arguments can be exact integers, rationals, booleans, strings, lists or other terms from the same environment. Strings are passed as string values. The environment and term forms also return `Rat` values as exact Wolfram rationals.
 - For the environment and term forms, select modules and the project with [LeanImport](). `"Source"` declarations apply to the current call only; add imports through [LeanImport]() or [LeanImportString]().
 - Give an explicit `"Imports"` list to load several modules together. Automatic project discovery can return a collection of separate environments; its terms can be evaluated individually, but an expression requires one shared environment.
-- [LeanFreeEnvironment]() stops the evaluator and releases the environment. `"EvaluatorOnly" -> True` stops the process while keeping the environment available. A timeout or interruption also stops the process; the next call starts a new one.
+- In the kernel, an evaluation that passes `"TimeLimit"` or is aborted is asked to stop. Elaboration stops at once, but compiled code that loops or sleeps runs on until it returns: [LeanEvaluate]() returns, and the thread keeps running in the background. While four such evaluations are still running, new ones return a `"Busy"` [Failure](). Code that overflows the stack, calls `IO.Process.exit` or exhausts memory takes the kernel with it. Deep recursion that is not a tail call overflows it sooner than it may seem: `(List.range 10000000).sum` does.
+- `"Isolated" -> True` evaluates in a Lean process of the environment's own instead, which imports the environment's modules again when it starts, and keeps them for later isolated calls. A timeout, an abort or a failure kills the process and leaves the kernel untouched; the next call starts a new one. Use it for code that may not terminate.
+- [LeanFreeEnvironment]() releases the environment, its evaluation state and its isolated process. `"EvaluatorOnly" -> True` releases only the evaluation state and the process, and keeps the environment.
 - Options:
 
 | Option | Default | |
@@ -34,6 +36,7 @@ RelatedGuides: [LeanLink]
 | `"Source"` | `""` | Lean declarations the expression uses (definitions, `open`s), placed after the imports |
 | `"Open"` | `{}` | namespaces to open |
 | `"TimeLimit"` | `600` | seconds before the evaluation is stopped |
+| `"Isolated"` | [False]() | whether to evaluate in a Lean process of the environment's own |
 
 - The value is computed by Lean's interpreter. For a checked theorem, use [LeanImportString]() followed by [LeanVerify]().
 - An expression that does not elaborate returns a `"LeanEvaluateFailed"` [Failure]() carrying Lean's message; one that runs past `"TimeLimit"` returns a `"TimedOut"` [Failure]().
@@ -133,3 +136,12 @@ LeanEvaluate["undefinedName + 1"]["Tag"]
 ```
 
 <!-- => "LeanEvaluateFailed" -->
+
+Code that never returns runs on after the time limit in the kernel. Evaluate it in a process of its own, which the time limit stops:
+
+```wl
+env = LeanImport["Init"];
+LeanEvaluate[env, "spin 0", "Source" -> "partial def spin (n : Nat) : Nat := spin (n + 1)", "Isolated" -> True, "TimeLimit" -> 2]["Tag"]
+```
+
+<!-- => "TimedOut" -->

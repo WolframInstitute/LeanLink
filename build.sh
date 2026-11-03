@@ -6,8 +6,6 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 echo "=== Building Lean library ==="
 cd "$ROOT/Native"
 lake build LeanLink
-lake env lean --root="$ROOT/LeanLink/Assets" \
-    -c "$ROOT/Native/.lake/build/ir/LeanLinkEvaluator.c" "$ROOT/LeanLink/Assets/code.lean"
 
 echo "=== Preparing Cross-Compilation Sysroots ==="
 # Get Lean version from lean-toolchain file
@@ -115,7 +113,7 @@ build_target() {
     fi
 
     "${CMAKE_CMD[@]}" ..
-    cmake --build . --config Release --target LeanLinkShim LeanLinkEvaluator
+    cmake --build . --config Release --target LeanLinkShim
     cd "$ROOT/Native/shim"
     BUILT="${BUILT}${sysid} "
 }
@@ -148,4 +146,4 @@ elif [[ "$BUILT" != *" ${NATIVE_SYSID} "* ]]; then
     echo "ERROR: ${NATIVE_SYSID}, this machine's own target, did not build: install a C compiler (clang on macOS; elsewhere cc, or set CC)."
     exit 1
 fi
-echo "A release needs all five platforms' shims and evaluators; submit.wls refuses one without them."
+echo "A release needs all five platforms' shims; submit.wls refuses one without them."

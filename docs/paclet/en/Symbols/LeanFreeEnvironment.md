@@ -13,15 +13,15 @@ RelatedGuides: [LeanLink]
 
 <code>[LeanFreeEnvironment]()[*handle*]</code> releases a Lean environment previously loaded with [LeanLoadEnvironment]().
 
-<code>[LeanFreeEnvironment]()[*environment*]</code> releases an imported [LeanEnvironment]() and stops its evaluator.
+<code>[LeanFreeEnvironment]()[*environment*]</code> releases an imported [LeanEnvironment](), with what its evaluations use.
 
 ## Details & Options
 
 - *handle* is the integer returned by [LeanLoadEnvironment](). After freeing, the handle is no longer valid for queries.
 - Freeing an environment invalidates every term and alias that shares its handle and removes cached queries for that handle. A later import creates a usable handle again.
 - Temporary compiled files are deleted when no remaining environment depends on them.
-- `"EvaluatorOnly" -> True` stops the evaluator while keeping the imported environment and its terms available. The next evaluation starts a new process.
-- Stopping the evaluator releases that process's memory. Lean's embedded runtime retains imported module regions until the Wolfram kernel exits.
+- `"EvaluatorOnly" -> True` releases only what [LeanEvaluate]() uses: the state its evaluations start from, and its process with `"Isolated" -> True`. The environment and its terms stay available, and the next evaluation makes them again.
+- Stopping an isolated evaluator releases that process's memory. Lean's embedded runtime retains imported module regions until the Wolfram kernel exits.
 - Returns [Null]().
 
 ## Basic Examples

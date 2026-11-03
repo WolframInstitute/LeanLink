@@ -57,6 +57,11 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
   let env ← Lean.importModules modules {} 0 (loadExts := true)
   return env
 
+/-- The environment loaded under a handle, with the search path it was loaded with. -/
+def loadedEnvironment? (handle : UInt64) : IO (Option (Environment × Option SearchPath)) := do
+  let some env := (← envStore.get)[handle]? | return none
+  return some (env, (← searchPathStore.get)[handle]?)
+
 -- ============================================================================
 -- Exported C API
 -- ============================================================================

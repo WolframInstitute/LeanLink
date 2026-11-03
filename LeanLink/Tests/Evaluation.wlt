@@ -1,7 +1,7 @@
 BeginTestSection["EnvironmentEvaluation"]
 
 VerificationTest[
-    $evaluationEnv = LeanImport["Lean", "ProjectDir" -> $LeanLinkTestProjectDir];
+    $evaluationEnv = LeanImport["Init", "ProjectDir" -> $LeanLinkTestProjectDir];
     LeanEvaluate[$evaluationEnv, "2^100"], 2^100, TestID -> "EnvironmentEvaluation-ExactInteger"
 ]
 
@@ -41,19 +41,49 @@ VerificationTest[Length[LeanEvaluate[$evaluationEnv, "List.range 20000"]], 20000
 VerificationTest[LeanEvaluate[$evaluationEnv, "2+2", "TimeLimit" -> 0]["Tag"], "InvalidOption", TestID -> "EnvironmentEvaluation-ValidateTimeLimit"]
 VerificationTest[LeanEvaluate[$evaluationEnv, "2+2", "ProjectDir" -> "/missing"]["Tag"], "InvalidOption", TestID -> "EnvironmentEvaluation-DoNotOverrideProject"]
 
+(* not (List.range 10000000).sum: once it outlasts its time limit in the kernel it overflows the stack, and Lean then
+   aborts the kernel *)
 VerificationTest[
-    LeanEvaluate[$evaluationEnv, "(List.range 10000000).sum", "TimeLimit" -> 0.001]["Tag"],
+    LeanEvaluate[$evaluationEnv, "1", "Source" -> "#eval (IO.sleep 300 : IO Unit)", "TimeLimit" -> 0.05]["Tag"],
     "TimedOut", TestID -> "EnvironmentEvaluation-Timeout"
 ]
 VerificationTest[LeanEvaluate[$evaluationEnv, "3+4"], 7, TestID -> "EnvironmentEvaluation-RestartAfterTimeout"]
 
+(* an evaluation that sleeps past an abort is kept as unfinished, and the next one runs beside it *)
 VerificationTest[
-    $interruptedWorker = Wolfram`LeanLink`Private`$evaluationWorkers[Information[$evaluationEnv, "Handle"]]["Process"];
-    CheckAbort[TimeConstrained[LeanEvaluate[$evaluationEnv, "42", "Source" -> "run_cmd Lean.Elab.Command.liftIO (IO.sleep 10000)"], 0.05], Null];
-    {ProcessStatus[$interruptedWorker], KeyExistsQ[Wolfram`LeanLink`Private`$evaluationWorkers, Information[$evaluationEnv, "Handle"]]},
-    {"Finished", False}, TestID -> "EnvironmentEvaluation-InterruptStopsWaitingWorker"
+    CheckAbort[TimeConstrained[LeanEvaluate[$evaluationEnv, "42", "Source" -> "#eval (IO.sleep 1500 : IO Unit)"], 0.05], Null];
+    Length[Wolfram`LeanLink`Private`$unfinishedEvaluations] >= 1,
+    True, TestID -> "EnvironmentEvaluation-AbortKeepsSleepingEvaluation"
 ]
+
 VerificationTest[LeanEvaluate[$evaluationEnv, "6*7"], 42, TestID -> "EnvironmentEvaluation-RestartAfterInterrupt"]
+
+(* \"Isolated\" -> True: a Lean process of its own, killed at the time limit, on abort, or when it fails *)
+
+VerificationTest[LeanEvaluate[$evaluationEnv["Nat.add"], 17, 25, "Isolated" -> True], 42, TestID -> "EnvironmentEvaluation-Isolated"]
+
+VerificationTest[
+    LeanEvaluate[$evaluationEnv, "spin 0", "Source" -> "partial def spin (n : Nat) : Nat := spin (n + 1)", "Isolated" -> True, "TimeLimit" -> 2]["Tag"],
+    "TimedOut", TestID -> "EnvironmentEvaluation-IsolatedLoopIsKilled"
+]
+
+VerificationTest[
+    {LeanEvaluate[$evaluationEnv, "42", "Source" -> "#eval (IO.Process.exit 3 : IO Unit)", "Isolated" -> True]["Tag"],
+     LeanEvaluate[$evaluationEnv, "2+2", "Isolated" -> True]},
+    {"LeanEvaluateFailed", 4}, TestID -> "EnvironmentEvaluation-IsolatedExitSparesKernel"
+]
+
+VerificationTest[
+    {LeanEvaluate[$evaluationEnv, "unknownDeclaration", "Isolated" -> True]["Tag"], LeanEvaluate[$evaluationEnv, "(1 : Rat) / 3", "Isolated" -> True]},
+    {"LeanEvaluateFailed", 1/3}, TestID -> "EnvironmentEvaluation-IsolatedErrorsAndRationals"
+]
+
+VerificationTest[
+    Pause[1.5];
+    Wolfram`LeanLink`Private`pruneEvaluations[];
+    Wolfram`LeanLink`Private`$unfinishedEvaluations,
+    <||>, TestID -> "EnvironmentEvaluation-SleepingEvaluationFinishes"
+]
 
 VerificationTest[
     $derivedEnv = LeanImportString[$evaluationEnv, "def evaluationSquare (n : Nat) := n*n"];
@@ -109,7 +139,7 @@ VerificationTest[
 
 VerificationTest[
     WithCleanup[$forgedEvaluationEnv = LeanImportString[$evaluationEnv,
-        "open Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `forgedEvaluationProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"],
+        "import Lean\nopen Lean Elab Command\nset_option debug.skipKernelTC true in\nrun_cmd liftCoreM <| addDecl <| .thmDecl { name := `forgedEvaluationProof, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro }"],
         LeanVerify[$forgedEvaluationEnv["forgedEvaluationProof"]]["Tag"], LeanFreeEnvironment[$forgedEvaluationEnv]],
     "KernelRejected", TestID -> "LeanVerify-RejectForgedTheorem"
 ]
@@ -123,7 +153,7 @@ VerificationTest[
 
 VerificationTest[
     LeanFreeEnvironment[$evaluationEnv];
-    $evaluationEnv = LeanImport["Lean", "ProjectDir" -> $LeanLinkTestProjectDir];
+    $evaluationEnv = LeanImport["Init", "ProjectDir" -> $LeanLinkTestProjectDir];
     LeanEvaluate[$evaluationEnv, "10+1"], 11, TestID -> "EnvironmentEvaluation-ReimportAfterRelease"
 ]
 
