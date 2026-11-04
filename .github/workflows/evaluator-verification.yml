@@ -1,8 +1,13 @@
 name: Evaluator platform verification
 
+# The native evaluator on Linux and Windows, which cannot be run on the macOS machines that build releases: on
+# changes to the native code, and on request
 on:
   push:
-    branches: [verify/environment-evaluation-platforms]
+    branches: [main]
+    paths: ['Native/**', '.github/workflows/evaluator-verification.yml']
+  pull_request:
+    paths: ['Native/**', '.github/workflows/evaluator-verification.yml']
   workflow_dispatch:
 
 permissions:
