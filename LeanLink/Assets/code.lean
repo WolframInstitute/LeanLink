@@ -64,6 +64,16 @@ private def evaluate (base : Elab.Command.State) (request : Json) : IO Json := d
       return Json.mkObj [("id", id), ("ok", toJson true), ("value", value)]
   return failure id "Lean did not return an evaluation result."
 
+/-- Answers one request line. -/
+def answer (base : Elab.Command.State) (stdout : IO.FS.Stream) (line : String) : IO Unit := do
+  match Json.parse line with
+  | .error e => send stdout (failure Json.null s!"unreadable request: {e}")
+  | .ok request =>
+    try
+      send stdout (← evaluate base request)
+    catch error =>
+      send stdout (failure (request.getObjValD "id") error.toString)
+
 unsafe def run : IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -79,14 +89,14 @@ unsafe def run : IO Unit := do
   if base.messages.hasErrors then throw (IO.userError (← messages base))
   let base := { base with messages := {} }
   send stdout (Json.mkObj [("id", setup.getObjValD "id"), ("ok", toJson true)])
+  -- Each request runs on a thread of its own while this one waits for the next line. The end of the input means
+  -- the kernel that started the worker has exited or let it go, and the worker then exits at once, even in the
+  -- middle of an evaluation that loops, which would otherwise run on, orphaned, until killed. The kernel sends a
+  -- request only after the reply to the one before, or kills the worker, so requests do not overlap.
   while true do
     let line ← stdin.getLine
-    if line.isEmpty then break
-    let request ← IO.ofExcept (Json.parse line)
-    try
-      send stdout (← evaluate base request)
-    catch error =>
-      send stdout (failure (request.getObjValD "id") error.toString)
+    if line.isEmpty then IO.Process.exit 0
+    let _ ← IO.asTask (prio := .dedicated) (answer base stdout line)
 
 end LeanLinkEvaluator
 
