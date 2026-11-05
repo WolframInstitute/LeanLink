@@ -412,6 +412,26 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-lists-are-Lean-lists"
 ]
 
+(* a string name that one of TypeTheory's library environments declares is TypeTheory's, not Lean's: the
+   WolframLanguage environment's "sequenceOf" (TypeTheory 0.27) and the Integers' theorems are declared *)
+
+VerificationTest[
+    If[ KeyExistsQ[TypeTheoryEnvironment["WolframLanguage"], "sequenceOf"],
+        With[{sequences = TypeTheoryToLean[TypeTheoryEnvironment["WolframLanguage"], "sequenceOfPrepend"], integers = TypeTheoryToLean[TypeTheoryEnvironment["Integers"], "integerAdditionCommutativity"]},
+            {
+                StringContainsQ[sequences, "inductive TypeTheory.sequenceOf"],
+                MatchQ[LeanImportString[sequences], _LeanEnvironment],
+                First[LeanImportString[integers]["TypeTheory.integerAdditionCommutativity"]["KernelCheck"]]
+            }
+        ],
+        {True, True, "KernelChecked"}
+    ]
+    ,
+    {True, True, "KernelChecked"}
+    ,
+    TestID -> "TypeTheoryToLean-library-string-names-are-TypeTheory's"
+]
+
 VerificationTest[
     If[ $opaqueDefinitions,
         With[{

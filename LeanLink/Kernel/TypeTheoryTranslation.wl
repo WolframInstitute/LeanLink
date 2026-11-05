@@ -1282,7 +1282,7 @@ TypeTheoryToLean[environment_TypeTheoryEnvironment, names_List, opts : OptionsPa
     declarations = Normal[environment],
     prelude = TypeTheoryEnvironment["Prelude"],
     $environment = environment,
-    $typeTheoryPrelude = TypeTheoryEnvironment["Prelude"],
+    $typeTheoryLibraryNames = typeTheoryLibraryNames[],
     $declarationIndex,
     $constructorOwners,
     $blockOwners,
@@ -1384,17 +1384,34 @@ ownerKey[key_HoldComplete] := With[{owner = Lookup[$constructorOwners, Replace[k
     Lookup[$blockOwners, owner, owner]
 ]
 
-(* a constant is Lean's own when it came from Lean, as a string name the prelude does not declare, or is a
-   prelude constant Lean has; the prelude names its internal constants by strings too, as "equal" *)
+(* a constant is Lean's own when it came from Lean, as a string name none of TypeTheory's library environments
+   declares, or is a prelude constant Lean has. The libraries name their constants by strings too: the prelude's
+   "equal", the WolframLanguage environment's "sequenceOf", and so the recursor InductiveRecursor["sequenceOf"] *)
 
 leanSideQ[key_HoldComplete] := Or[
     KeyExistsQ[$preludeLeanNames, key],
-    MatchQ[key, HoldComplete[_String] | HoldComplete[InductiveRecursor[_String] | InductiveRecursor[_String, _Integer]]] && ! preludeStringNameQ[key]
+    MatchQ[key, HoldComplete[_String] | HoldComplete[InductiveRecursor[_String] | InductiveRecursor[_String, _Integer]]] && ! libraryStringNameQ[key]
 ]
 
-preludeStringNameQ[key_HoldComplete] := MatchQ[key, HoldComplete[name_String] /; KeyExistsQ[$typeTheoryPrelude, name]]
+libraryStringNameQ[key_HoldComplete] := MatchQ[
+    key,
+    HoldComplete[name_String | InductiveRecursor[name_String] | InductiveRecursor[name_String, _Integer]] /; KeyExistsQ[$typeTheoryLibraryNames, name]
+]
 
-$typeTheoryPrelude = <||>
+$typeTheoryLibraryNames = <||>
+
+(* the string names TypeTheory's library environments declare, the Prelude's, the Integers', the WolframLanguage
+   environment's and the others', which TypeTheory lists in the failure for a name it has no environment for; made
+   once in a session *)
+
+typeTheoryLibraryNames[] := typeTheoryLibraryNames[] = Association @ Thread[
+    Select[DeleteDuplicates[Catenate[Keys /@ Select[TypeTheoryEnvironment /@ libraryEnvironmentNames[], ! FailureQ[#]&]]], StringQ] -> True
+]
+
+libraryEnvironmentNames[] := Replace[
+    Quiet[TypeTheoryEnvironment["LeanLink: no such environment"]],
+    {failure_Failure :> Replace[Last[failure["MessageParameters"], {}], Except[{__String}] -> {"Prelude"}], _ -> {"Prelude"}}
+]
 
 (* the types used as classes, by an instance or an instance-implicit binder, which Lean declares with class
    inductive; Lean refuses the binder [x : T] for a T that is not a class *)
@@ -1435,7 +1452,7 @@ leanName[key_HoldComplete] := Which[
     KeyExistsQ[$preludeLeanNames, key],
         $preludeLeanNames[key]
     ,
-    MatchQ[key, HoldComplete[_String]] && ! preludeStringNameQ[key],
+    MatchQ[key, HoldComplete[_String]] && ! libraryStringNameQ[key],
         First[key]
     ,
     MatchQ[key, HoldComplete[InductiveRecursor[_]]],
