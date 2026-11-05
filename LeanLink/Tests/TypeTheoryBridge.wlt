@@ -272,14 +272,14 @@ $proof = TypeTheoryProof[
         TypeTheoryTactic["Induction", n],
         TypeTheoryTactic["Reflexivity"],
         TypeTheoryTactic["Introduce", k, ih],
-        TypeTheoryTactic["Exact", EqualityCongruence[NaturalNumberSuccessor, ih]]
+        TypeTheoryTactic["Exact", "equalityCongruence"["successor", ih]]
     }
 ]
 
 $proved = Append[$prelude, TypeTheoryTheorem[ZeroLeftIdentity, $proof]]
 
 VerificationTest[
-    StringContainsQ[TypeTheoryToLean[$proved, ZeroLeftIdentity], {"theorem TypeTheory.EqualityCongruence.{u, v}", "theorem TypeTheory.ZeroLeftIdentity"}, IgnoreCase -> False],
+    StringContainsQ[TypeTheoryToLean[$proved, ZeroLeftIdentity], {"theorem TypeTheory.equalityCongruence.{u, v}", "theorem TypeTheory.ZeroLeftIdentity"}, IgnoreCase -> False],
     True,
     TestID -> "TypeTheoryToLean-writes-the-theorem-and-its-dependencies"
 ]
@@ -346,11 +346,11 @@ VerificationTest[
 ]
 
 VerificationTest[
-    With[{source = TypeTheoryToLean[$prelude, ExcludedMiddle]},
+    With[{source = TypeTheoryToLean[$prelude, "excludedMiddle"]},
         {
             StringFreeQ[source, "axiom "],
             AllTrue[{"@propext", "@funext", "@Classical.choice"}, Function[name, StringContainsQ[source, name]]],
-            LeanImportString[source]["TypeTheory.ExcludedMiddle"]["TypeForm"]
+            LeanImportString[source]["TypeTheory.excludedMiddle"]["TypeForm"]
         }
     ]
     ,
@@ -365,7 +365,7 @@ $booleans = Append[
     TypeTheoryTheorem[
         NegationTwice,
         ForAll[{Typed[b, Booleans]}, Not[Not[b]] == b],
-        Function[{Typed[b, Booleans]}, InductiveRecursor[Booleans][Function[{Typed[t, Booleans]}, Not[Not[t]] == t], EqualityReflexivity[False], EqualityReflexivity[True], b]]
+        Function[{Typed[b, Booleans]}, InductiveRecursor[Booleans][Function[{Typed[t, Booleans]}, Not[Not[t]] == t], "equalityReflexivity"[False], "equalityReflexivity"[True], b]]
     ]
 ]
 
@@ -379,13 +379,46 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-the-Booleans-are-Lean-Bool"
 ]
 
+(* TypeTheory 0.24's lists, {A} with {} and Prepend, are Lean's List: none is declared, and a proof by the recursor of
+   lists checks in Lean's kernel *)
+
+VerificationTest[
+    With[{
+        source = TypeTheoryToLean[
+            Append[
+                $prelude
+                ,
+                TypeTheoryTheorem[
+                    ListSelf,
+                    ForAll[{Typed[l, {NonNegativeIntegers}]}, l == l],
+                    Function[{Typed[l, {NonNegativeIntegers}]},
+                        InductiveRecursor[List][
+                            Function[{Typed[k, {NonNegativeIntegers}]}, k == k],
+                            "equalityReflexivity"[Typed[{}, {NonNegativeIntegers}]],
+                            Function[{Typed[x, NonNegativeIntegers], Typed[t, {NonNegativeIntegers}], Typed[ih, t == t]}, "equalityReflexivity"[Prepend[x][t]]],
+                            l
+                        ]
+                    ]
+                ]
+            ],
+            ListSelf
+        ]
+    },
+        {StringFreeQ[source, "inductive "], AllTrue[{"@List.rec", "@List.nil", "@List.cons"}, StringContainsQ[source, #]&], First[LeanImportString[source]["TypeTheory.ListSelf"]["KernelCheck"]]}
+    ]
+    ,
+    {True, True, "KernelChecked"}
+    ,
+    TestID -> "TypeTheoryToLean-lists-are-Lean-lists"
+]
+
 VerificationTest[
     If[ $opaqueDefinitions,
         With[{
             source = TypeTheoryToLean[
                 TypeTheoryEnvironment[
                     $prelude,
-                    {TypeTheoryDefinition[Secret, Typed[42, NonNegativeIntegers], "Opaque" -> True], TypeTheoryTheorem[SecretSelf, Secret == Secret, EqualityReflexivity[Secret]]}
+                    {TypeTheoryDefinition[Secret, Typed[42, NonNegativeIntegers], "Opaque" -> True], TypeTheoryTheorem[SecretSelf, Secret == Secret, "equalityReflexivity"[Secret]]}
                 ],
                 SecretSelf
             ]
@@ -409,7 +442,7 @@ $bits = {TypeTheoryInductiveType[Bit, TypeUniverse[1], {BitZero -> Bit, BitOne -
 
 VerificationTest[
     {
-        First @ TypeTheoryToLean[TypeTheoryEnvironment["HomotopyTypeTheory"], UniverseNotSet],
+        First @ TypeTheoryToLean[TypeTheoryEnvironment["HomotopyTypeTheory"], "universeNotSet"],
         First @ TypeTheoryToLean[TypeTheoryEnvironment[$rewriting, Append[$bits, TypeTheoryRewriteRule[FlipZero, Flip[BitZero] -> BitOne]]], Flip],
         StringContainsQ[TypeTheoryToLean[TypeTheoryEnvironment[$rewriting, $bits], Flip], "axiom TypeTheory.Flip"]
     }
@@ -430,11 +463,11 @@ VerificationTest[Head[LeanImportString[TypeTheoryToLean[$prelude, Keys[$prelude]
 
 VerificationTest[
     If[ KeyExistsQ[$prelude, "trueDecidable"],
-        With[{source = TypeTheoryToLean[$prelude, {DecideSoundness, NaturalNumberEqualityDecidable}]},
+        With[{source = TypeTheoryToLean[$prelude, {"decideSoundness", "naturalNumberEqualityDecidable"}]},
             {
                 StringContainsQ[source, "class inductive TypeTheory.Decidable"]
                 ,
-                StringContainsQ[source, "@[instance] noncomputable def TypeTheory.NaturalNumberEqualityDecidable"]
+                StringContainsQ[source, "@[instance] noncomputable def TypeTheory.naturalNumberEqualityDecidable"]
                 ,
                 StringContainsQ[source, "noncomputable def TypeTheory.equal :"]
                 ,

@@ -1164,6 +1164,17 @@ $preludeLeanNames = <|
     ,
     HoldComplete[BooleanOr] -> "Bool.or"
     ,
+    (* the lists of TypeTheory 0.24, {A}, whose type is named by List itself: as Lean's, a list type is never
+       declared, and a binder list such as {Typed[b, Booleans]}, which mentionedConstants also finds, costs
+       nothing *)
+    HoldComplete[List] -> "List"
+    ,
+    HoldComplete["{}"] -> "List.nil"
+    ,
+    HoldComplete["Prepend"] -> "List.cons"
+    ,
+    HoldComplete[InductiveRecursor[List]] -> "List.rec"
+    ,
     HoldComplete[Nonempty] -> "Nonempty"
     ,
     HoldComplete["nonempty"] -> "Nonempty.intro"
