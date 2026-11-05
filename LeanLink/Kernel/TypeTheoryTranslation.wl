@@ -1081,12 +1081,13 @@ cleanBinderNames[binderNames_List] := MapThread[
 (* TypeTheory's prelude constants that Lean has in Init, with the same definitions, except Plus, which
    becomes Nat.add: they compute the same on constructors, so a proof that does not depend on how Plus
    is defined checks in Lean too. The prelude's axioms are Lean's three, with the same types, and its
-   quotient types are Lean's; FunctionExtensionality is proved from them, as Lean proves funext. *)
+   quotient types are Lean's; "functionExtensionality" is proved from them, as Lean proves funext. Since
+   TypeTheory 0.24 its constructors, theorems and axioms are constants named by strings. *)
 
 $preludeLeanNames = <|
     HoldComplete[True] -> "True"
     ,
-    HoldComplete[TrueIntroduction] -> "True.intro"
+    HoldComplete["trueIntroduction"] -> "True.intro"
     ,
     HoldComplete[InductiveRecursor[True]] -> "True.rec"
     ,
@@ -1098,41 +1099,41 @@ $preludeLeanNames = <|
     ,
     HoldComplete[And] -> "And"
     ,
-    HoldComplete[AndIntroduction] -> "And.intro"
+    HoldComplete["andIntroduction"] -> "And.intro"
     ,
     HoldComplete[InductiveRecursor[And]] -> "And.rec"
     ,
     HoldComplete[Or] -> "Or"
     ,
-    HoldComplete[OrIntroductionLeft] -> "Or.inl"
+    HoldComplete["orIntroductionLeft"] -> "Or.inl"
     ,
-    HoldComplete[OrIntroductionRight] -> "Or.inr"
+    HoldComplete["orIntroductionRight"] -> "Or.inr"
     ,
     HoldComplete[InductiveRecursor[Or]] -> "Or.rec"
     ,
     HoldComplete[Equivalent] -> "Iff"
     ,
-    HoldComplete[EquivalentIntroduction] -> "Iff.intro"
+    HoldComplete["equivalentIntroduction"] -> "Iff.intro"
     ,
     HoldComplete[InductiveRecursor[Equivalent]] -> "Iff.rec"
     ,
     HoldComplete[Equal] -> "Eq"
     ,
-    HoldComplete[EqualityReflexivity] -> "Eq.refl"
+    HoldComplete["equalityReflexivity"] -> "Eq.refl"
     ,
     HoldComplete[InductiveRecursor[Equal]] -> "Eq.rec"
     ,
     HoldComplete[Exists] -> "Exists"
     ,
-    HoldComplete[ExistsIntroduction] -> "Exists.intro"
+    HoldComplete["existsIntroduction"] -> "Exists.intro"
     ,
     HoldComplete[InductiveRecursor[Exists]] -> "Exists.rec"
     ,
     HoldComplete[NonNegativeIntegers] -> "Nat"
     ,
-    HoldComplete[NaturalNumberZero] -> "Nat.zero"
+    HoldComplete["zero"] -> "Nat.zero"
     ,
-    HoldComplete[NaturalNumberSuccessor] -> "Nat.succ"
+    HoldComplete["successor"] -> "Nat.succ"
     ,
     HoldComplete[InductiveRecursor[NonNegativeIntegers]] -> "Nat.rec"
     ,
@@ -1165,13 +1166,13 @@ $preludeLeanNames = <|
     ,
     HoldComplete[Nonempty] -> "Nonempty"
     ,
-    HoldComplete[NonemptyIntroduction] -> "Nonempty.intro"
+    HoldComplete["nonempty"] -> "Nonempty.intro"
     ,
     HoldComplete[InductiveRecursor[Nonempty]] -> "Nonempty.rec"
     ,
     HoldComplete[Subtype] -> "Subtype"
     ,
-    HoldComplete[SubtypeIntroduction] -> "Subtype.mk"
+    HoldComplete["subtype"] -> "Subtype.mk"
     ,
     HoldComplete[InductiveRecursor[Subtype]] -> "Subtype.rec"
     ,
@@ -1182,6 +1183,37 @@ $preludeLeanNames = <|
     HoldComplete[QuotientLift] -> "Quot.lift"
     ,
     HoldComplete[QuotientInduction] -> "Quot.ind"
+    ,
+    HoldComplete["quotientSoundness"] -> "Quot.sound"
+    ,
+    HoldComplete["propositionalExtensionality"] -> "propext"
+    ,
+    HoldComplete["functionExtensionality"] -> "funext"
+    ,
+    HoldComplete["choice"] -> "Classical.choice"
+    ,
+    (* the names these constants had before TypeTheory 0.24, as symbols *)
+    HoldComplete[TrueIntroduction] -> "True.intro"
+    ,
+    HoldComplete[AndIntroduction] -> "And.intro"
+    ,
+    HoldComplete[OrIntroductionLeft] -> "Or.inl"
+    ,
+    HoldComplete[OrIntroductionRight] -> "Or.inr"
+    ,
+    HoldComplete[EquivalentIntroduction] -> "Iff.intro"
+    ,
+    HoldComplete[EqualityReflexivity] -> "Eq.refl"
+    ,
+    HoldComplete[ExistsIntroduction] -> "Exists.intro"
+    ,
+    HoldComplete[NaturalNumberZero] -> "Nat.zero"
+    ,
+    HoldComplete[NaturalNumberSuccessor] -> "Nat.succ"
+    ,
+    HoldComplete[NonemptyIntroduction] -> "Nonempty.intro"
+    ,
+    HoldComplete[SubtypeIntroduction] -> "Subtype.mk"
     ,
     HoldComplete[QuotientSoundness] -> "Quot.sound"
     ,
