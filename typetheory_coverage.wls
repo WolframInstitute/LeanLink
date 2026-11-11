@@ -120,7 +120,9 @@ coverageStatus[name_String, environment_] := Which[
         ]
 ]
 
-coverage[handle_, rootGroups_List] := Block[{$kinds = <||>, $universes = <||>, $inductives = <||>, $handle = handle, $seen = <||>, $dependencies = <||>, $walkFailures = <||>, $status = <||>, $seconds = <||>},
+(* the import's own tables come from withImportState, the bridge's, which importConstants runs in: listed here, they fell
+   behind the bridge's and nothing checked *)
+coverage[handle_, rootGroups_List] := withImportState[handle, Block[{$seen = <||>, $dependencies = <||>, $walkFailures = <||>, $status = <||>, $seconds = <||>},
     Module[{environment = TypeTheoryEnvironment[quotientRules[]], start = AbsoluteTime[]},
         Scan[
             Function[group,
@@ -148,7 +150,7 @@ coverage[handle_, rootGroups_List] := Block[{$kinds = <||>, $universes = <||>, $
         (* a constructor or recursor is checked with its inductive type *)
         {$status, AssociationMap[Function[name, Replace[Catch[primaryName[name], $bridgeTag], Except[_String] -> name]], Flatten[rootGroups]], $seconds}
     ]
-]
+]]
 
 End[];
 

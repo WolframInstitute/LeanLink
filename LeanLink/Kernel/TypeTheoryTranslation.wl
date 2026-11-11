@@ -66,13 +66,22 @@ LeanToTypeTheory[env_LeanEnvironment, names : {__String}, opts : OptionsPattern[
    typetheory_benchmark.wls, which compares the checking with Lean's kernel *)
 $lastImportTimings = <||>
 
-importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure[
+(* the tables an import fills as it reads the constants of the Lean environment handle names; importConstants runs in
+   them, and so does typetheory_coverage.wls, so that a table added here reaches the script too *)
+SetAttributes[withImportState, HoldRest]
+
+withImportState[handle_Integer, body_] := Block[
+    {
+        $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $fieldTerms = <||>,
+        $fieldSeed = None, $handle = handle, $annotationAritiesCache = <||>
+    },
+    body
+]
+
+importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ withImportState[
+    handle,
     Block[
-        {
-            $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $fieldTerms = <||>,
-            $fieldSeed = None, $handle = handle, $annotationAritiesCache = <||>,
-            start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment
-        },
+        {start = SessionTime[], checking, cone, order, baseEnvironment, declarations, environment},
         cone = bridgeCone[roots];
         baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
         order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
