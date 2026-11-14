@@ -587,6 +587,18 @@ VerificationTest[
     TestID -> "LeanNotation-off-shows-Lean-names"
 ]
 
+(* an existential shows its variable and type below the quantifier, and the notation applies inside its body;
+   TypeTheory gives a rule the function a constant is applied to from 0.45 *)
+VerificationTest[
+    With[{text = $notationText[ToBoxes[TypeTheoryTerm["Exists"[Function[{Typed["n", "Nat"]}, "Eq"["HAdd.hAdd"["n", "OfNat.ofNat"[1]], "OfNat.ofNat"[2]]]]]]]},
+        {StringContainsQ[text, "\[Exists]"], StringFreeQ[text, "Exists" | "Eq" | "HAdd" | "OfNat"], StringContainsQ[text, "Nat"] && StringContainsQ[text, "+"]}
+    ]
+    ,
+    {True, True, True}
+    ,
+    TestID -> "LeanNotation-Exists-is-a-quantifier"
+]
+
 (* a constant given other arguments than its notation takes is shown as it is *)
 VerificationTest[StringContainsQ[$notationText[ToBoxes[TypeTheoryTerm["Eq"["a"]]]], "Eq"], True, TestID -> "LeanNotation-leaves-other-arities"]
 

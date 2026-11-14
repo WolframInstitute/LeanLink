@@ -1725,8 +1725,8 @@ heldLevelText[HoldComplete[level_]] := levelText[level]
 (* A statement imported from Lean reads in Lean's names, "Eq"["HMod.hMod"["a", "b"], "OfNat.ofNat"[0]]. TypeTheory draws
    a constant by a MakeBoxes rule given for it, so these rules draw the common ones as the Wolfram Language writes
    them, a mod b == 0. The whole term is rewritten, held, before it is drawn: an operand drawn by a rule of its own
-   would not get the parentheses its operator needs, as (a + b) * c. Only the display changes. Exists has no rule:
-   TypeTheory lays out a constant applied to a function itself, before any rule is asked. *)
+   would not get the parentheses its operator needs, as (a + b) * c. Only the display changes. Since TypeTheory 0.45 a
+   constant with a rule, applied to a function, gives the rule the function, so Exists has one too. *)
 
 $leanNotationRules = {
     "Eq"[a_, b_] :> Equal[a, b],
@@ -1747,12 +1747,13 @@ $leanNotationRules = {
     "And"[a_, b_] :> And[a, b],
     "Or"[a_, b_] :> Or[a, b],
     "Not"[a_] :> Not[a],
-    "Iff"[a_, b_] :> Equivalent[a, b]
+    "Iff"[a_, b_] :> Equivalent[a, b],
+    "Exists"[Verbatim[Function][{Verbatim[Typed][variable_, type_]}, body_]] :> leanExists[variable, type, body]
 }
 
 $leanNotationHeads = {
     "Eq", "Ne", "LT.lt", "LE.le", "GT.gt", "GE.ge", "HAdd.hAdd", "Nat.add", "HSub.hSub", "Nat.sub", "HMul.hMul", "Nat.mul", "HDiv.hDiv", "Nat.div", "HMod.hMod", "Nat.mod", "HPow.hPow",
-    "Nat.pow", "Neg.neg", "OfNat.ofNat", "Nat.succ", "And", "Or", "Not", "Iff"
+    "Nat.pow", "Neg.neg", "OfNat.ofNat", "Nat.succ", "And", "Or", "Not", "Iff", "Exists"
 }
 
 (* the term with its Lean constants rewritten, or the term as it is when no rule applies, as for a constant given
@@ -1769,6 +1770,9 @@ Scan[
     ],
     $leanNotationHeads
 ]
+
+(* an existential with its variable and the variable's type below the quantifier, as TypeTheory draws ForAll *)
+MakeBoxes[leanExists[variable_, type_, body_], form_] := RowBox[{SubscriptBox["\[Exists]", RowBox[{MakeBoxes[variable, form], "\[Colon]", MakeBoxes[type, form]}]], MakeBoxes[body, form]}]
 
 (* a mod b, an operand that is not one token in parentheses *)
 MakeBoxes[leanModulo[a_, b_], form_] := RowBox[{moduloOperand[MakeBoxes[a, form]], " ", "mod", " ", moduloOperand[MakeBoxes[b, form]]}]

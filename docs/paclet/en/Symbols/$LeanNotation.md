@@ -30,6 +30,7 @@ RelatedGuides: [LeanLink]
 | `OfNat.ofNat` | the numeral |
 | `Nat.succ` | `n + 1` |
 | `And`, `Or`, `Not`, `Iff` | `a && b`, <code>a &#124;&#124; b</code>, `!a`, `a ⧦ b` |
+| `Exists` | `∃` with the variable and its type below it, from TypeTheory 0.45 |
 
 - A term is rewritten as a whole before it is displayed, so an operand gets the parentheses its operator needs: `(a + b) (c mod d)`.
 - Only the display changes: the term, its type check and what [TypeTheoryToLean]() writes are the same.
