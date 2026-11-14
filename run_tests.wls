@@ -1,5 +1,6 @@
 #!/usr/bin/env wolframscript
-(* run_tests.wls -- Run all .wlt test files and report results *)
+(* run_tests.wls -- Run all .wlt test files and report results; with file names after it, as
+   wolframscript -file run_tests.wls TypeTheoryBridge.wlt, only those *)
 
 $rootDir = DirectoryName[$ScriptCommandLine[[1]]];
 
@@ -27,13 +28,15 @@ Print["LeanLink Test Runner"];
 
 Print["===================="];
 
+Print["Kernel:  ", $Version];
+
 Print["Paclet:  ", $pacletDir];
 
 Print["Project: ", $LeanLinkTestProjectDir];
 
 Print[""];
 
-testFiles = FileNames["*.wlt", $testDir];
+testFiles = Replace[Select[Rest[$ScriptCommandLine], StringEndsQ[".wlt"]], {{} :> FileNames["*.wlt", $testDir], names_ :> (FileNameJoin[{$testDir, #}]& /@ names)}];
 
 If[ testFiles === {},
     Print["No .wlt files found in ", $testDir];
@@ -63,7 +66,7 @@ Do[
                 ]
             ]
             ,
-            {tr, Values[report["TestResults"]]}
+            {tr, Replace[report["TestResults"], results_Association :> Values[results]]}
         ]
     ];
     Print[]
