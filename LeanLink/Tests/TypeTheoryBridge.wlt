@@ -511,4 +511,83 @@ VerificationTest[
     TestID -> "TypeTheoryToLean-writes-the-prelude's-string-names-classes-and-instances"
 ]
 
+(* TypeTheory's pairs and disjoint unions are Lean's Prod and Sum: neither is declared, and proofs by their recursors
+   check in Lean's kernel *)
+
+VerificationTest[
+    With[{pairs = CartesianProductType[NonNegativeIntegers, Booleans], unions = DisjointUnionType[NonNegativeIntegers, Booleans]},
+        With[{
+            environment = TypeTheoryEnvironment[
+                $prelude,
+                {
+                    TypeTheoryTheorem[
+                        PairSelf,
+                        ForAll[{Typed[p, pairs]}, p == p],
+                        Function[{Typed[p, pairs]},
+                            InductiveRecursor[CartesianProductType][
+                                Function[{Typed[q, pairs]}, q == q],
+                                Function[{Typed[x, NonNegativeIntegers], Typed[y, Booleans]}, "equalityReflexivity"["pair"[x, y]]],
+                                p
+                            ]
+                        ]
+                    ],
+                    TypeTheoryTheorem[
+                        UnionSelf,
+                        ForAll[{Typed[s, unions]}, s == s],
+                        Function[{Typed[s, unions]},
+                            InductiveRecursor[DisjointUnionType][
+                                Function[{Typed[t, unions]}, t == t],
+                                Function[{Typed[x, NonNegativeIntegers]}, "equalityReflexivity"[Typed["left"[x], unions]]],
+                                Function[{Typed[y, Booleans]}, "equalityReflexivity"[Typed["right"[y], unions]]],
+                                s
+                            ]
+                        ]
+                    ]
+                }
+            ]
+        },
+            With[{pair = TypeTheoryToLean[environment, PairSelf], union = TypeTheoryToLean[environment, UnionSelf]},
+                {
+                    StringFreeQ[pair <> union, "inductive "],
+                    AllTrue[{"@Prod.rec", "@Prod.mk"}, StringContainsQ[pair, #]&] && AllTrue[{"@Sum.rec", "@Sum.inl", "@Sum.inr"}, StringContainsQ[union, #]&],
+                    First[LeanImportString[pair]["TypeTheory.PairSelf"]["KernelCheck"]],
+                    First[LeanImportString[union]["TypeTheory.UnionSelf"]["KernelCheck"]]
+                }
+            ]
+        ]
+    ]
+    ,
+    {True, True, "KernelChecked", "KernelChecked"}
+    ,
+    TestID -> "TypeTheoryToLean-pairs-and-disjoint-unions-are-Lean's-Prod-and-Sum"
+]
+
+(* a term in Lean's names is displayed in the Wolfram Language's notation, with the parentheses the operators need,
+   and in Lean's names with $LeanNotation off *)
+
+$notationTerm = TypeTheoryTerm["Eq"["HMul.hMul"["HAdd.hAdd"["a", "b"], "HMod.hMod"["c", "d"]], "OfNat.ofNat"[0]]]
+
+$notationText[boxes_] := StringJoin[Cases[boxes, _String, Infinity]]
+
+VerificationTest[
+    With[{text = $notationText[ToBoxes[$notationTerm]]},
+        {StringFreeQ[text, "HAdd" | "HMul" | "HMod" | "OfNat" | "Eq"], StringContainsQ[text, "("] && StringContainsQ[text, "+"] && StringContainsQ[text, "mod"]}
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "LeanNotation-Lean-names-are-displayed-as-operators"
+]
+
+VerificationTest[
+    Block[{$LeanNotation = False}, With[{text = $notationText[ToBoxes[$notationTerm]]}, AllTrue[{"HAdd.hAdd", "HMul.hMul", "HMod.hMod", "OfNat.ofNat", "Eq"}, StringContainsQ[text, #]&]]]
+    ,
+    True
+    ,
+    TestID -> "LeanNotation-off-shows-Lean-names"
+]
+
+(* a constant given other arguments than its notation takes is shown as it is *)
+VerificationTest[StringContainsQ[$notationText[ToBoxes[TypeTheoryTerm["Eq"["a"]]]], "Eq"], True, TestID -> "LeanNotation-leaves-other-arities"]
+
 EndTestSection[]

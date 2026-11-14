@@ -60,6 +60,7 @@ PacletObject[
           "Wolfram`LeanLink`LeanTerm",
           "Wolfram`LeanLink`LeanToFunction",
           "Wolfram`LeanLink`LeanToTypeTheory",
+          "Wolfram`LeanLink`$LeanNotation",
           "Wolfram`LeanLink`LeanTruncated",
           "Wolfram`LeanLink`LeanValue",
           "Wolfram`LeanLink`LeanVerify",

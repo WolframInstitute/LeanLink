@@ -96,12 +96,9 @@ checked["Classical.arbitrary"]
 
 <!-- => definition Classical.arbitrary : ∀_α∶Sort u_3 ∀_[h∶Nonempty[α]] α := (α∶Sort u_3) [h∶Nonempty[α]] ↦ Classical.choice[h] -->
 
-Lean's notation, such as `↔` for `Iff`, belongs to Lean's syntax, not to its constants. TypeTheory shows a constant applied to its explicit arguments by giving that expression to [MakeBoxes](), so definitions of [MakeBoxes]() give a Lean name, a string, a notation:
+Lean's notation, such as `↔` for `Iff`, belongs to Lean's syntax, not to its constants. LeanLink gives the common constants a notation of the Wolfram Language when the bridge loads ([$LeanNotation]()), so `Iff`, `Eq` and `Or` read as the Wolfram Language writes them. TypeTheory shows a constant applied to its explicit arguments by giving that expression to [MakeBoxes](), so a definition of [MakeBoxes]() gives any other Lean name, a string, a notation of its own. The theorem that a statement holds for every proof of `Nonempty α` exactly when it holds for every `a : α`:
 
 ```wl
-MakeBoxes["Iff"[a_, b_], form_] := MakeBoxes[Equivalent[a, b], form];
-MakeBoxes["Eq"[a_, b_], form_] := MakeBoxes[a == b, form];
-MakeBoxes["Or"[a_, b_], form_] := MakeBoxes[Or[a, b], form];
 TypeTheoryCheck[TypeTheoryTerm["Nonempty.forall", checked]]
 ```
 

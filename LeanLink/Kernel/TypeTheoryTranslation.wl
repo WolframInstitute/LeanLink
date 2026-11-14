@@ -1184,6 +1184,22 @@ $preludeLeanNames = <|
     ,
     HoldComplete[InductiveRecursor[List]] -> "List.rec"
     ,
+    (* TypeTheory's pairs and disjoint unions are Lean's Prod and Sum: the same universes, Type u -> Type v ->
+       Type (max u v), implicit type arguments, and the constructors, so the recursors' cases, in the same order *)
+    HoldComplete[CartesianProductType] -> "Prod"
+    ,
+    HoldComplete["pair"] -> "Prod.mk"
+    ,
+    HoldComplete[InductiveRecursor[CartesianProductType]] -> "Prod.rec"
+    ,
+    HoldComplete[DisjointUnionType] -> "Sum"
+    ,
+    HoldComplete["left"] -> "Sum.inl"
+    ,
+    HoldComplete["right"] -> "Sum.inr"
+    ,
+    HoldComplete[InductiveRecursor[DisjointUnionType]] -> "Sum.rec"
+    ,
     HoldComplete[Nonempty] -> "Nonempty"
     ,
     HoldComplete["nonempty"] -> "Nonempty.intro"
@@ -1690,6 +1706,65 @@ levelText[name : (_Symbol | _String)] := Lookup[
 levelText[other_] := bridgeFailure["UnsupportedLevel", "`1` cannot be written as a Lean universe level.", {HoldForm[other]}]
 
 heldLevelText[HoldComplete[level_]] := levelText[level]
+
+(* === Notation for constants imported from Lean === *)
+
+(* A statement imported from Lean reads in Lean's names, "Eq"["HMod.hMod"["a", "b"], "OfNat.ofNat"[0]]. TypeTheory draws
+   a constant by a MakeBoxes rule given for it, so these rules draw the common ones as the Wolfram Language writes
+   them, a mod b == 0. The whole term is rewritten, held, before it is drawn: an operand drawn by a rule of its own
+   would not get the parentheses its operator needs, as (a + b) * c. Only the display changes. Exists has no rule:
+   TypeTheory lays out a constant applied to a function itself, before any rule is asked. *)
+
+$leanNotationRules = {
+    "Eq"[a_, b_] :> Equal[a, b],
+    "Ne"[a_, b_] :> Unequal[a, b],
+    "LT.lt"[a_, b_] :> Less[a, b],
+    "LE.le"[a_, b_] :> LessEqual[a, b],
+    "GT.gt"[a_, b_] :> Greater[a, b],
+    "GE.ge"[a_, b_] :> GreaterEqual[a, b],
+    ("HAdd.hAdd" | "Nat.add")[a_, b_] :> Plus[a, b],
+    ("HSub.hSub" | "Nat.sub")[a_, b_] :> Plus[a, Times[-1, b]],
+    ("HMul.hMul" | "Nat.mul")[a_, b_] :> Times[a, b],
+    ("HDiv.hDiv" | "Nat.div")[a_, b_] :> Times[a, Power[b, -1]],
+    ("HMod.hMod" | "Nat.mod")[a_, b_] :> leanModulo[a, b],
+    ("HPow.hPow" | "Nat.pow")[a_, b_] :> Power[a, b],
+    "Neg.neg"[a_] :> Times[-1, a],
+    "OfNat.ofNat"[n_Integer] :> n,
+    "Nat.succ"[n_] :> Plus[n, 1],
+    "And"[a_, b_] :> And[a, b],
+    "Or"[a_, b_] :> Or[a, b],
+    "Not"[a_] :> Not[a],
+    "Iff"[a_, b_] :> Equivalent[a, b]
+}
+
+$leanNotationHeads = {
+    "Eq", "Ne", "LT.lt", "LE.le", "GT.gt", "GE.ge", "HAdd.hAdd", "Nat.add", "HSub.hSub", "Nat.sub", "HMul.hMul", "Nat.mul", "HDiv.hDiv", "Nat.div", "HMod.hMod", "Nat.mod", "HPow.hPow",
+    "Nat.pow", "Neg.neg", "OfNat.ofNat", "Nat.succ", "And", "Or", "Not", "Iff"
+}
+
+(* the term with its Lean constants rewritten, or the term as it is when no rule applies, as for a constant given
+   other arguments than its notation takes *)
+leanNotation[held_HoldComplete] := held //. $leanNotationRules
+
+(* A rule for each head, with the head written out and the test on the right: TypeTheory finds the constants that have
+   a notation by rules of the form MakeBoxes[head[...], form] *)
+Scan[
+    Function[head,
+        MakeBoxes[head[arguments___], form : StandardForm | TraditionalForm] := With[{rewritten = leanNotation[HoldComplete[head[arguments]]]},
+            Replace[rewritten, HoldComplete[term_] :> MakeBoxes[term, form]] /; TrueQ[$LeanNotation] && rewritten =!= HoldComplete[head[arguments]]
+        ]
+    ],
+    $leanNotationHeads
+]
+
+(* a mod b, an operand that is not one token in parentheses *)
+MakeBoxes[leanModulo[a_, b_], form_] := RowBox[{moduloOperand[MakeBoxes[a, form]], " ", "mod", " ", moduloOperand[MakeBoxes[b, form]]}]
+
+moduloOperand[boxes_RowBox] := RowBox[{"(", boxes, ")"}]
+
+moduloOperand[boxes_] := boxes
+
+If[! ValueQ[$LeanNotation], $LeanNotation = True]
 
 End[];
 

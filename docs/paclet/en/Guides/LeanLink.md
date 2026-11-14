@@ -82,6 +82,7 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 
 - [LeanToTypeTheory]() import Lean constants into the Wolfram Language proof engine [TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), whose own kernel checks them again
 - [TypeTheoryToLean]() write a TypeTheory proof as Lean source, for Lean's kernel to check
+- [$LeanNotation]() whether terms imported from Lean are displayed in Wolfram Language notation
 
 ### Compiling Lean to native code
 

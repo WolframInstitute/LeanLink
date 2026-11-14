@@ -13,6 +13,8 @@ LeanToTypeTheory::usage = "LeanToTypeTheory[env, name] imports the Lean constant
 
 TypeTheoryToLean::usage = "TypeTheoryToLean[env, name] gives Lean source declaring the constant name of the TypeTheoryEnvironment env, with every constant it depends on that Lean does not have, for LeanImportString to compile and Lean's kernel to check.\nTypeTheoryToLean[env, {name1, name2, ...}] gives the source for several constants."
 
+$LeanNotation::usage = "$LeanNotation gives whether terms imported from Lean with LeanToTypeTheory are displayed in Wolfram Language notation, a mod b == 0 for \"Eq\"[\"HMod.hMod\"[a, b], \"OfNat.ofNat\"[0]]; True by default."
+
 Begin["`Private`"];
 
 $typeTheoryTranslationFile = FileNameJoin[{DirectoryName[$InputFileName], "TypeTheoryTranslation.wl"}]
