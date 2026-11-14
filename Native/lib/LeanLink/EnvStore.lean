@@ -33,6 +33,45 @@ private initialize searchPathStore : IO.Ref (Std.HashMap UInt64 SearchPath) ← 
 -- Internal helpers
 -- ============================================================================
 
+/-- The modules already read into this process, as the importer's state after importing a list of
+    modules, by the .olean files of that list. Lean maps an .olean at the address it was saved for, and a
+    second import of the same file finds the address taken and copies the file into the heap instead,
+    never to be freed: 0.37 GB for each import of Init's modules. The importer skips a module its state
+    already has, so an import that starts from the state of its modules' own imports reads only the
+    modules that are new. -/
+private initialize importStateStore : IO.Ref (Std.HashMap String ImportState) ← IO.mkRef {}
+
+/-- What names a list of imports: the .olean file of each, with its size and the time it was written, so
+    a module built again, or another of the same name on another search path, is read afresh. -/
+def importKey (imports : Array Import) : IO String := do
+  let mut key := ""
+  for i in imports do
+    let file ← findOLean i.module
+    let data ← file.metadata
+    key := key ++ s!"{file}|{data.byteSize}|{data.modified.sec}.{data.modified.nsec};"
+  return key
+
+/-- The importer's state after importing `imports`, read once for the same files. -/
+def importState (imports : Array Import) : IO ImportState := do
+  let key ← importKey imports
+  if let some state := (← importStateStore.get)[key]? then return state
+  let (_, state) ← (importModulesCore imports).run
+  importStateStore.modify (·.insert key state)
+  return state
+
+/-- The environment of `modules`, as `importModules` with `loadExts` gives it, but starting from the
+    state of the modules' own imports, which earlier imports share: for a module compiled from a
+    source string, only its own .olean is read. -/
+def importShared (modules : Array Import) : IO Environment := do
+  let mut dependencies : Array Import := #[]
+  for m in modules do
+    let (data, _) ← readModuleData (← findOLean m.module)
+    dependencies := dependencies ++ data.imports
+  withImporting do
+    let base ← importState dependencies
+    let (_, state) ← (importModulesCore modules).run base
+    finalizeImport state modules {} 0 (leakEnv := false) (loadExts := true)
+
 /-- Load an environment from module imports with a given search path. -/
 def loadEnv (imports : Array String) (searchPath : String) : IO Environment := do
   -- Build search path from user-provided paths
@@ -54,8 +93,7 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
   -- and it runs each module's initializers at most once per process. Regions
   -- are never freed (freeEnvExport only drops the handle), as that requires.
   unsafe Lean.enableInitializersExecution
-  let env ← Lean.importModules modules {} 0 (loadExts := true)
-  return env
+  importShared modules
 
 /-- The environment loaded under a handle, with the search path it was loaded with. -/
 def loadedEnvironment? (handle : UInt64) : IO (Option (Environment × Option SearchPath)) := do
@@ -88,6 +126,40 @@ def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt
   catch e =>
     IO.eprintln s!"[LeanLink] loadEnv error: {e}"
     return 0
+
+/-- What tells one environment from another, for comparing an import that shares modules already read with
+    Lean's own: the numbers of constants and modules, a hash of every constant's name and type that does
+    not depend on their order, and the sizes of the extension states an elaborator reads, instances, simp
+    lemmas and syntax kinds. -/
+def fingerprint (env : Environment) : ByteArray :=
+  let (count, hash) := env.constants.fold (init := (0, (0 : UInt64))) fun (count, hash) name ci =>
+    (count + 1, hash + mixHash (Hashable.hash name) (Hashable.hash ci.type))
+  WXF.serialize (WXF.wlAssociation #[
+    (WXF.string "Constants", WXF.integer count),
+    (WXF.string "Modules", WXF.integer env.allImportedModuleNames.size),
+    (WXF.string "Hash", WXF.integer hash.toNat),
+    (WXF.string "Instances", WXF.integer (Meta.instanceExtension.getState env).instanceNames.toList.length),
+    (WXF.string "SimpLemmas", WXF.integer (Meta.simpExtension.getState env).lemmaNames.toList.length),
+    (WXF.string "SyntaxKinds", WXF.integer (Parser.parserExtension.getState env).kinds.toList.length)])
+
+/-- The fingerprint of a loaded environment. -/
+@[export leanlink_fingerprint]
+def fingerprintExport (handle : UInt64) : IO ByteArray := do
+  let some env := (← envStore.get)[handle]? | return WXF.serialize (WXF.string "ERROR: invalid handle")
+  return fingerprint env
+
+/-- The fingerprint of the environment Lean's own `importModules` gives for comma-separated imports, read
+    afresh and not kept: what a loaded environment's is compared with. -/
+@[export leanlink_fresh_fingerprint]
+def freshFingerprintExport (importsStr : @& String) (searchPathStr : @& String) : IO ByteArray := do
+  let separator := System.SearchPath.separator.toString
+  let userPaths : List System.FilePath := (searchPathStr.splitOn separator).filter (· ≠ "") |>.map (⟨·⟩)
+  Lean.searchPathRef.set userPaths
+  let modules : Array Import := ((importsStr.splitOn ",").toArray.filter (· ≠ "")).map fun m => { module := m.toName }
+  unsafe Lean.enableInitializersExecution
+  match (← (Lean.importModules modules {} 0 (loadExts := true)).toBaseIO) with
+  | .ok env => return fingerprint env
+  | .error e => return WXF.serialize (WXF.string s!"ERROR: {e}")
 
 /-- Free a previously loaded environment. -/
 @[export leanlink_free_env]
@@ -634,7 +706,8 @@ def kernelCheckExport (handle : UInt64) (constName : @& String) : IO ByteArray :
     | return WXF.serialize (WXF.string s!"ERROR: no module at index {idx.toNat}")
   if let some searchPath := (← searchPathStore.get)[handle]? then
     Lean.searchPathRef.set searchPath
-  let base ← match (← (Lean.importModules data.imports {} 0).toBaseIO) with
+  -- the module's imports, from the state that reading the module itself left: nothing is read again
+  let base ← match (← (withImporting do finalizeImport (← importState data.imports) data.imports {} 0 (leakEnv := false) (loadExts := false)).toBaseIO) with
     | .ok base => pure base
     | .error e => return WXF.serialize (WXF.string s!"ERROR: cannot import the imports of {module}: {e}")
   -- constNames is constants.map (·.name); iterating constants alone also keeps the

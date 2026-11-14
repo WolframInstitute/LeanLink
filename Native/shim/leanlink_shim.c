@@ -132,6 +132,8 @@ extern lean_object* leanlink_open_goal(uint64_t handle, lean_object* name);
 extern lean_object* leanlink_apply_tactic(uint64_t stateId, lean_object* tactic);
 extern lean_object* leanlink_open_goal_expr(uint64_t handle, lean_object* exprWXF);
 extern lean_object* leanlink_pp_expr(uint64_t handle, lean_object* exprWXF);
+extern lean_object* leanlink_fingerprint(uint64_t handle);
+extern lean_object* leanlink_fresh_fingerprint(lean_object* imports, lean_object* searchPath);
 extern lean_object* leanlink_evaluate_start(uint64_t handle, lean_object* source, lean_object* expression, lean_object* opens);
 extern lean_object* leanlink_evaluate_finished(uint64_t job);
 extern lean_object* leanlink_evaluate_cancel(uint64_t job);
@@ -912,4 +914,40 @@ DLLEXPORT int leanlink_wl_evaluate_release(
     lean_object* io_res = leanlink_evaluate_release((uint64_t)MArgument_getInteger(Args[0]));
     if (io_res) lean_dec_ref(io_res);
     return LIBRARY_NO_ERROR;
+}
+
+/* ======================================================================== */
+/* Fingerprints of environments, for the tests of shared imports            */
+/* ======================================================================== */
+
+/*
+ * fingerprint(handle) -> MTensor (WXF): counts and a hash of a loaded environment
+ */
+DLLEXPORT int leanlink_wl_fingerprint(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    lean_object* io_res = leanlink_fingerprint((uint64_t)MArgument_getInteger(Args[0]));
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
+}
+
+/*
+ * freshFingerprint(imports, searchPath) -> MTensor (WXF): the same for Lean's own import of the modules,
+ * read afresh and not kept
+ */
+DLLEXPORT int leanlink_wl_fresh_fingerprint(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    char* imports_cstr = MArgument_getUTF8String(Args[0]);
+    char* path_cstr = MArgument_getUTF8String(Args[1]);
+    portable_setenv("LEAN_PATH", path_cstr, 1);
+    lean_object* imports = lean_mk_string(imports_cstr);
+    lean_object* path = lean_mk_string(path_cstr);
+    libData->UTF8String_disown(imports_cstr);
+    libData->UTF8String_disown(path_cstr);
+    lean_object* io_res = leanlink_fresh_fingerprint(imports, path);
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
