@@ -1148,6 +1148,19 @@ $preludeLeanNames = <|
     ,
     HoldComplete[Plus] -> "Nat.add"
     ,
+    (* Times is Nat.mul, as Plus is Nat.add: both recurse on the second argument, m * 0 is 0 and m * (k + 1) is
+       m * k + m by rfl in Lean. Written as TypeTheory's own recursion, a product of large literals was unfolded
+       by Lean a unit at a time; Lean's kernel multiplies literals of Nat.mul with integers *)
+    HoldComplete[Times] -> "Nat.mul"
+    ,
+    (* Power, Subtract and the predecessor are Nat.pow, Nat.sub and Nat.pred the same way: m ^ 0 is 1 and
+       m ^ (k + 1) is m ^ k * m, m - 0 is m and m - (k + 1) is the predecessor of m - k, by rfl in Lean *)
+    HoldComplete[Power] -> "Nat.pow"
+    ,
+    HoldComplete[Subtract] -> "Nat.sub"
+    ,
+    HoldComplete[NaturalNumberPredecessor] -> "Nat.pred"
+    ,
     HoldComplete[Booleans] -> "Bool"
     ,
     HoldComplete["false"] -> "Bool.false"

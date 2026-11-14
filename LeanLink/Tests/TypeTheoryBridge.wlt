@@ -590,4 +590,24 @@ VerificationTest[
 (* a constant given other arguments than its notation takes is shown as it is *)
 VerificationTest[StringContainsQ[$notationText[ToBoxes[TypeTheoryTerm["Eq"["a"]]]], "Eq"], True, TestID -> "LeanNotation-leaves-other-arities"]
 
+(* Times, Power, Subtract and the predecessor are Lean's Nat.mul, Nat.pow, Nat.sub and Nat.pred, as Plus is Nat.add: the
+   prelude's theorems about them still check in Lean's kernel, and a product of large literals checks at once, where TypeTheory's own recursion was unfolded a unit at a time *)
+
+VerificationTest[
+    With[{
+        theorems = TypeTheoryToLean[$prelude, {"multiplicationCommutativity", "multiplicationAssociativity", "multiplicationDistributivityLeft", "powerAddition", "subtractionSuccessor", "subtractionSelf", "predecessorLessEqual"}],
+        large = TypeTheoryToLean[TypeTheoryEnvironment[$prelude, {TypeTheoryTheorem[LargeProduct, Subtract[2 ^ 64, 1] * 1000 == 18446744073709551615000, "equalityReflexivity"[18446744073709551615000]]}], LargeProduct]
+    },
+        {
+            StringFreeQ[theorems <> large, "TypeTheory.Times" | "TypeTheory.Power" | "TypeTheory.Subtract" | "TypeTheory.NaturalNumberPredecessor"] && AllTrue[{"@Nat.mul", "@Nat.pow", "@Nat.sub", "@Nat.pred"}, StringContainsQ[theorems, #]&],
+            First[LeanImportString[theorems]["TypeTheory.multiplicationAssociativity"]["KernelCheck"]],
+            First[LeanImportString[large]["TypeTheory.LargeProduct"]["KernelCheck"]]
+        }
+    ]
+    ,
+    {True, "KernelChecked", "KernelChecked"}
+    ,
+    TestID -> "TypeTheoryToLean-Times-Power-and-Subtract-are-Lean's"
+]
+
 EndTestSection[]
