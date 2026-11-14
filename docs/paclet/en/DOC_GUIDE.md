@@ -21,7 +21,7 @@ every output cell**. Run the build with the `wl` CLI (not `wolframscript` -
 its init can wedge kernels):
 
 ```
-wl -f build_docs.wls
+wolframscript -file build_docs.wls
 ```
 
 `build_docs.wls` auto-discovers every `docs/paclet/en/**/*.md` whose frontmatter names a
@@ -36,7 +36,7 @@ and paste the real result into the hint - a wrong hint is worse than none.
 Iterating on one page is cheap: each page's notebook is cached under a key of its
 source and the paclet's Wolfram Language code (`PacletInfo.wl`, `Kernel/`), so a
 rebuild converts only the pages that changed. The key does not cover the native
-shim: after rebuilding only the shim, run `wl -f build_docs.wls --no-cache`.
+shim: after rebuilding only the shim, run `wolframscript -file build_docs.wls --no-cache`.
 
 ## The native bridge must be live
 

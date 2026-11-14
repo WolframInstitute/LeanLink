@@ -6,6 +6,14 @@
 
 $repoDir = DirectoryName[$InputFileName]
 
+(* The documentation's outputs and the released archive come from a released Wolfram Language, 15.0 now:
+   wolframscript -file, never a prototype kernel, whatever else the machine has. *)
+
+If[ StringContainsQ[$Version, "Prototype"],
+    Print["FATAL: this kernel is ", $Version, ". Build and release with a released Wolfram Language, through wolframscript -file."];
+    Exit[1]
+]
+
 $leanlinkDir = FileNameJoin[{$repoDir, "LeanLink"}]
 
 $docsDir = FileNameJoin[{$repoDir, "docs", "paclet", "en"}]
@@ -96,7 +104,9 @@ checkBuild[result_] := Block[{unevaluated},
    the command line, and checked: a bad build stops the script. The function is
    named in full: this file is read before PacletPage is loaded. *)
 
-buildDocumentation[] := checkBuild[WolframInstitute`PacletPage`BuildPacletDocumentation[$leanlinkDir, Sequence @@ $buildOptions, Sequence @@ If[MemberQ[$ScriptCommandLine, "--no-cache"], {"UseCache" -> False}, {}]]]
+buildDocumentation[] := buildDocumentation[! MemberQ[$ScriptCommandLine, "--no-cache"]]
+
+buildDocumentation[useCache_] := checkBuild[WolframInstitute`PacletPage`BuildPacletDocumentation[$leanlinkDir, Sequence @@ $buildOptions, Sequence @@ If[useCache, {}, {"UseCache" -> False}]]]
 
 (* At load the kernel links the Lean runtime (libleanshared and its siblings,
    about 160 MB) from the user's own toolchain next to each shim. Those links must

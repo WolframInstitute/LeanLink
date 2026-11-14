@@ -5,7 +5,7 @@
    depends on one that did not check is blocked and not tried. It uses the bridge's internals, so it
    is a development tool and runs against this checkout of LeanLink.
 
-       wl -f typetheory_coverage.wls [module ...] [--modules file] [--project-dir dir] [--time-limit seconds]
+       wolframscript -file typetheory_coverage.wls [module ...] [--modules file] [--project-dir dir] [--time-limit seconds]
            [--typetheory dir] [--out file]
 
    The modules default to Init.Prelude. The project directory, a built Lake project such as Mathlib,

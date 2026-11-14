@@ -107,7 +107,7 @@ To check the Windows shim without Windows, `Native/shim/wine/test_windows_shim.s
 ### Documentation
 
 ```bash
-wl -f build_docs.wls
+wolframscript -file build_docs.wls
 ```
 
 Builds the markdown pages in `docs/paclet/en/` into notebooks under `LeanLink/Documentation/English/`, and `docs/paclet/en/ResourceDefinition.md` into `LeanLink/ResourceDefinition.nb`, with [PacletPage](https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/PacletPage) 0.3.11 or later, installed or in a checkout named by `PACLETPAGE_DIR`. The build stops on a page that does not convert, or whose section reads a variable that only an earlier section set. Unchanged pages come from a cache; pass `--no-cache` after rebuilding only the native library. [docs/paclet/en/DOC_GUIDE.md](docs/paclet/en/DOC_GUIDE.md) is the guide to writing the pages.
@@ -115,10 +115,10 @@ Builds the markdown pages in `docs/paclet/en/` into notebooks under `LeanLink/Do
 ### Publishing
 
 ```bash
-wl -f release.wls              # the documentation site and the paclet resource
-wl -f release.wls --dry-run    # build and check, deploy nothing
-wl -f release.wls --republish  # replace this version's release, as after a docs-only fix
-wolframscript -f submit.wls    # the Wolfram Paclet Repository
+wolframscript -file release.wls              # the documentation site and the paclet resource
+wolframscript -file release.wls --dry-run    # build and check, deploy nothing
+wolframscript -file release.wls --republish  # replace this version's release, as after a docs-only fix
+wolframscript -file submit.wls               # the Wolfram Paclet Repository
 ```
 
 `release.wls` builds and checks the documentation as `build_docs.wls` does, then builds the paclet archive (without the Lean runtime), checks that the archive loads on its own in a fresh kernel, deploys the paclet resource, and publishes and checks the [documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink). It publishes from a kernel connected as `wolframinstitute@wolframinstitute.org`. A dry run deploys nothing, runs under any login, and leaves the archive in `LeanLink/build/`, ready for `PacletInstall`. PacletPage refuses to replace a version already published from another commit: bump the version, or pass `--republish` for a documentation-only fix.

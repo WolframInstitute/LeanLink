@@ -17,11 +17,13 @@
    in all. --per-page evaluates each page in a kernel of its own, one after another, into
    the cache (each needs under 4 GB), then builds everything from the cache.
 
-   Run with the `wl` CLI, not wolframscript - wolframscript's init can wedge the
-   kernel mid-build:
+   With --no-cache as well, --per-page evaluates every page again.
 
-       wl -f build_docs.wls [--no-cache]
-       wl -f build_docs.wls --per-page
+   Run with wolframscript of a released Wolfram Language (15.0), which the pages'
+   own kernels are started with too; a prototype kernel is refused:
+
+       wolframscript -file build_docs.wls [--no-cache]
+       wolframscript -file build_docs.wls --per-page [--no-cache]
 *)
 
 Get[FileNameJoin[{DirectoryName[$InputFileName], "pacletpage.wl"}]]
@@ -32,18 +34,21 @@ Print["PacletPage ", loadPacletPage[]]
 documentationPages[] := Select[FileNameTake /@ FileNames["*.md", $docsDir, Infinity], Function[page, ! MemberQ[{"DOC_GUIDE.md", "ResourceDefinition.md"}, page]]]
 
 (* one page, evaluated in this kernel, into the cache: what --per-page runs for each page *)
-buildPage[page_String] := With[{result = WolframInstitute`PacletPage`BuildPacletDocumentation[$leanlinkDir, "Files" -> page, "Parallel" -> False, "Definition" -> None, Sequence @@ $buildOptions]},
+buildPage[page_String] := With[{result = WolframInstitute`PacletPage`BuildPacletDocumentation[$leanlinkDir, "Files" -> page, "Parallel" -> False, "Definition" -> None, Sequence @@ If[MemberQ[$ScriptCommandLine, "--no-cache"], {"UseCache" -> False}, {}], Sequence @@ $buildOptions]},
     Print[page, ": ", If[AssociationQ[result], {Length[result["Evaluated"]], " evaluated, failed ", result["Failed"]}, result]];
     If[! AssociationQ[result] || result["Failed"] =!= {}, Exit[1]]
 ]
 
 Which[
     MemberQ[$ScriptCommandLine, "--page"],
-        buildPage[Last[$ScriptCommandLine]]
+        buildPage[First[Select[$ScriptCommandLine, StringEndsQ[".md"]]]]
     ,
     MemberQ[$ScriptCommandLine, "--per-page"],
-        Scan[Function[page, Print[StringTrim[RunProcess[{"wl", "-f", $InputFileName, "--page", page}, "StandardOutput"]]]], documentationPages[]];
-        buildDocumentation[]
+        Scan[
+            Function[page, Print[StringTrim[RunProcess[Join[{"wolframscript", "-file", $InputFileName, "--page", page}, Cases[$ScriptCommandLine, "--no-cache"]], "StandardOutput"]]]],
+            documentationPages[]
+        ];
+        buildDocumentation[True]
     ,
     True,
         buildDocumentation[]

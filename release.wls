@@ -16,10 +16,10 @@
    first, as build_docs.wls does, so a page that would render unevaluated is
    never deployed. The Paclet Repository submission is separate: submit.wls.
 
-       wl -f release.wls [--no-cache]   build, deploy and publish
-       wl -f release.wls --dry-run      build and check the documentation and the
+       wolframscript -file release.wls [--no-cache]   build, deploy and publish
+       wolframscript -file release.wls --dry-run      build and check the documentation and the
                                         archive; deploy nothing
-       wl -f release.wls --republish    replace the deployed release of this same
+       wolframscript -file release.wls --republish    replace the deployed release of this same
                                         version, which PacletPage otherwise refuses
                                         once it was published from another commit,
                                         as after a documentation-only fix
