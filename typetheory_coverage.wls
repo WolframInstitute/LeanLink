@@ -5,7 +5,7 @@
    depends on one that did not check is blocked and not tried. It uses the bridge's internals, so it
    is a development tool and runs against this checkout of LeanLink.
 
-       wl -f typetheory_coverage.wls [module ...] [--project-dir dir] [--time-limit seconds]
+       wl -f typetheory_coverage.wls [module ...] [--modules file] [--project-dir dir] [--time-limit seconds]
            [--typetheory dir] [--out file]
 
    The modules default to Init.Prelude. The project directory, a built Lake project such as Mathlib,
@@ -23,13 +23,17 @@ $rootDirectory = DirectoryName[$InputFileName];
 
 arguments = Rest[Replace[$ScriptCommandLine, {} -> {$InputFileName}]];
 
-optionNames = {"--project-dir", "--time-limit", "--typetheory", "--out"};
+optionNames = {"--project-dir", "--time-limit", "--typetheory", "--out", "--modules"};
 
 optionValues = Association[Cases[Partition[arguments, 2, 1], {name_String, value_String} /; MemberQ[optionNames, name] :> (name -> value)]];
 
 optionPositions = Flatten[Function[position, {{position}, {position + 1}}] /@ Flatten[Position[arguments, Alternatives @@ optionNames, {1}]], 1];
 
-$modules = Replace[Delete[arguments, optionPositions], {} -> {"Init.Prelude"}];
+(* --modules names a file of module names, one a line, as coverage/mathlib-bottom.txt *)
+$modules = Replace[
+    Join[Delete[arguments, optionPositions], If[KeyExistsQ[optionValues, "--modules"], Select[StringTrim /@ ReadList[optionValues["--modules"], String], # =!= "" && ! StringStartsQ[#, "#"]&], {}]],
+    {} -> {"Init.Prelude"}
+];
 
 $projectDirectory = Lookup[optionValues, "--project-dir", FileNameJoin[{$HomeDirectory, "src", "mathlib4"}]];
 
