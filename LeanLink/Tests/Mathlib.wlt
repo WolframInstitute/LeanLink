@@ -100,6 +100,7 @@ installationFixture[run_, ready_ : (False&)] := Module[{temporary = CreateDirect
         {result, commands} = Block[
             {
                 Wolfram`LeanLink`Private`installToolchain = ("/toolchain"&),
+                Wolfram`LeanLink`Private`leanToolchainPath = ("/toolchain"&),
                 Wolfram`LeanLink`Private`mathlibRequireTool = ("/fixture/" <> #&),
                 Wolfram`LeanLink`Private`mathlibInstallationReadyQ = ready,
                 Wolfram`LeanLink`Private`installRun = (Sow[{#1, #2}]; run[#1, #2])&

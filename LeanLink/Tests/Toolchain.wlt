@@ -17,7 +17,7 @@ VerificationTest[
     TestID -> "Toolchain-ElanInstallersPinned"
 ]
 
-VerificationTest[Wolfram`LeanLink`Private`leanToolchainName[], "leanprover/lean4:v4.35.0", TestID -> "Toolchain-Name"]
+VerificationTest[Wolfram`LeanLink`Private`$LeanToolchain, "leanprover/lean4:v4.35.0", TestID -> "Toolchain-Name"]
 
 (* ---- Options and callbacks ---- *)
 

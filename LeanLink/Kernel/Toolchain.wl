@@ -20,13 +20,12 @@ Begin["`Private`"];
 
 (* elan's installers by URL and SHA-256, read from beside the loaded code *)
 
-elanPins[] := elanPins[] = Import[FileNameJoin[{$PacletRoot, "Assets", "Elan.json"}], "RawJSON"]
+elanPins[] := Import[FileNameJoin[{$PacletRoot, "Assets", "Elan.json"}], "RawJSON"]
 
-leanToolchainName[] := "leanprover/lean4:" <> $LeanToolchainVersion
+(* verified downloads, in the user's cache since they can be downloaded again, kept so that an installation run again
+   does not download them again *)
 
-(* verified downloads, kept so that an installation run again does not download them again *)
-
-installDownloadsDirectory[] := FileNameJoin[{$UserBaseDirectory, "ApplicationData", "LeanLink", "Downloads"}]
+installDownloadsDirectory[] := FileNameJoin[{cacheBase[], "LeanLink", "Downloads"}]
 
 installFailure[tag_String, message_String, data_Association : <||>] := Failure[tag, Join[<|"MessageTemplate" -> message|>, data]]
 
@@ -38,11 +37,11 @@ installVersionQ[installed_String, minimum_String] := With[{a = FromDigits /@ Str
     OrderedQ[{PadRight[b, Max[Length[a], Length[b]]], PadRight[a, Max[Length[a], Length[b]]]}]
 ]
 
-installSHA256[file_String] := IntegerString[FileHash[file, "SHA256"], 16, 64]
-
 pathDirectories[] := StringSplit[Replace[Environment["PATH"], Except[_String] -> ""], $searchPathSeparator]
 
-executableName[name_String] := name <> If[$OperatingSystem === "Windows", ".exe", ""]
+(* the first program called name in directories, as a process searches them *)
+
+findExecutable[name_String, directories_List] := SelectFirst[leanProgram[#, name]& /@ directories, FileExistsQ, Missing["NotFound", name]]
 
 (* ============================================================================ *)
 (* Progress and cancellation                                                    *)
@@ -145,14 +144,14 @@ installRun[command_List, directory_String, environment_ : Automatic, limit_ : In
 
 installDownload[asset_Association, file_String] := Block[{result},
     installCheckCancellation[];
-    If[FileExistsQ[file] && installSHA256[file] === asset["SHA256"], Return[file, Block]];
+    If[FileExistsQ[file] && fileSHA256[file] === asset["SHA256"], Return[file, Block]];
     installStage["Downloading..."];
     result = Quiet[Check[URLDownload[asset["URL"], file, CreateIntermediateDirectories -> True, ProgressReporting -> False], $Failed]];
     Which[
         ! MatchQ[result, _File] || ! FileExistsQ[file],
             Throw[installFailure["DownloadFailed", "A download did not finish.", <|"URL" -> asset["URL"]|>], "LeanLinkInstall"]
         ,
-        installSHA256[file] =!= asset["SHA256"],
+        fileSHA256[file] =!= asset["SHA256"],
             Quiet[DeleteFile[file]];
             Throw[installFailure["DownloadChecksum", "A download does not match its pinned checksum.", <|"URL" -> asset["URL"]|>], "LeanLinkInstall"]
         ,
@@ -168,11 +167,7 @@ installDownload[asset_Association, file_String] := Block[{result},
 
 (* elan: ELAN_HOME's, else one on PATH *)
 
-elanExecutable[] := SelectFirst[
-    Prepend[FileNameJoin[{#, executableName["elan"]}]& /@ pathDirectories[], leanProgram[FileNameJoin[{elanHome[], "bin"}], "elan"]],
-    FileExistsQ,
-    Missing["NotFound", "elan"]
-]
+elanExecutable[] := findExecutable["elan", Prepend[pathDirectories[], FileNameJoin[{elanHome[], "bin"}]]]
 
 (* A working elan is used as it is. Otherwise the pinned installer puts elan into ELAN_HOME, with --no-modify-path and
    no default toolchain. *)
@@ -209,14 +204,14 @@ installElan[] := Block[{elan = elanExecutable[], checked, asset, archive, tempor
 (* The toolchain is installed when its lean is. elan installs it otherwise, as elan toolchain install does in a shell,
    with no change to elan's default toolchain. *)
 
-installToolchain[] := Block[{lean = leanProgram[FileNameJoin[{leanToolchainPath[], "bin"}], "lean"], elan, result},
+installToolchain[] := Block[{lean = toolchainProgram["lean"], elan, result},
     If[ ! FileExistsQ[lean],
         elan = installElan[];
         If[FailureQ[elan], Return[elan, Block]];
         installStage["Downloading..."];
-        result = installRun[{elan, "toolchain", "install", leanToolchainName[]}, $TemporaryDirectory];
+        result = installRun[{elan, "toolchain", "install", $LeanToolchain}, $TemporaryDirectory];
         If[ ! AssociationQ[result] || result["ExitCode"] =!= 0 || ! FileExistsQ[lean],
-            Return[installFailure["ToolchainInstallFailed", "elan could not install the toolchain `1`.", <|"MessageParameters" -> {leanToolchainName[]}, "Result" -> result|>], Block]
+            Return[installFailure["ToolchainInstallFailed", "elan could not install the toolchain `1`.", <|"MessageParameters" -> {$LeanToolchain}, "Result" -> result|>], Block]
         ]
     ];
     leanToolchainPath[]

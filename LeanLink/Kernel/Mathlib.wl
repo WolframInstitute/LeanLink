@@ -61,7 +61,7 @@ $mathlibStamp = "leanlink-mathlib.json"
 
 $mathlibLog = "leanlink-mathlib.log"
 
-mathlibRecord[] := <|"Toolchain" -> leanToolchainName[], "Revision" -> mathlibPin[]["rev"], "ManifestSHA256" -> installSHA256[mathlibProjectFiles[]["lake-manifest.json"]]|>
+mathlibRecord[] := <|"Toolchain" -> $LeanToolchain, "Revision" -> mathlibPin[]["rev"], "ManifestSHA256" -> fileSHA256[mathlibProjectFiles[]["lake-manifest.json"]]|>
 
 (* ============================================================================ *)
 (* Git and curl                                                                 *)
@@ -79,11 +79,11 @@ mathlibToolDirectories[] := If[ $OperatingSystem === "Windows",
     {}
 ]
 
-mathlibExecutable[name_String] := SelectFirst[FileNameJoin[{#, executableName[name]}]& /@ Join[pathDirectories[], mathlibToolDirectories[]], FileExistsQ, Missing["NotFound", name]]
+mathlibExecutable[name_String] := findExecutable[name, Join[pathDirectories[], mathlibToolDirectories[]]]
 
 mathlibExecutables[] := <|
     "Elan" -> elanExecutable[],
-    "Lake" -> With[{lake = leanProgram[FileNameJoin[{leanToolchainPath[], "bin"}], "lake"]}, If[FileExistsQ[lake], lake, Missing["NotInstalled", "lake"]]],
+    "Lake" -> With[{lake = toolchainProgram["lake"]}, If[FileExistsQ[lake], lake, Missing["NotInstalled", "lake"]]],
     "Git" -> mathlibExecutable["git"],
     "Curl" -> mathlibExecutable["curl"]
 |>
@@ -175,7 +175,7 @@ mathlibRuntimeReadyQ[] := TrueQ[$mathlibRuntimeReady] || With[{handle = Quiet[Le
 
 mathlibProjectFilesQ[directory_String] := AllTrue[
     Normal[mathlibProjectFiles[]],
-    With[{file = FileNameJoin[{directory, First[#]}]}, FileExistsQ[file] && installSHA256[file] === installSHA256[Last[#]]]&
+    With[{file = FileNameJoin[{directory, First[#]}]}, FileExistsQ[file] && fileSHA256[file] === fileSHA256[Last[#]]]&
 ]
 
 (* Ready: the record and the project's files are the paclet's, Mathlib is checked out at the pinned commit with no
@@ -185,7 +185,7 @@ mathlibInstallationReadyQ[directory_String] := Block[
     {package = mathlibPackageDirectory[directory], stamp = FileNameJoin[{directory, $mathlibStamp}], git = mathlibExecutable["git"]}
     ,
     And[
-        AllTrue[{stamp, FileNameJoin[{package, ".lake", "build", "lib", "lean", "Mathlib.olean"}], leanProgram[FileNameJoin[{leanToolchainPath[], "bin"}], "lean"]}, FileExistsQ],
+        AllTrue[{stamp, FileNameJoin[{lakeBuildLib[package], "Mathlib.olean"}], toolchainProgram["lean"]}, FileExistsQ],
         Quiet[Check[Import[stamp, "RawJSON"] === mathlibRecord[], False]],
         mathlibProjectFilesQ[directory],
         mathlibGitWorkingQ[git],
@@ -209,7 +209,7 @@ mathlibDirectoryUsableQ[directory_String] := Or[
         Select[FileNames["*", directory], ! StringStartsQ[FileNameTake[#], "."]&] === {},
         ! FileExistsQ[FileNameJoin[{directory, "lakefile.lean"}]] && Or[
             FileExistsQ[FileNameJoin[{directory, $mathlibStamp}]],
-            With[{lakefile = FileNameJoin[{directory, "lakefile.toml"}]}, FileExistsQ[lakefile] && installSHA256[lakefile] === installSHA256[mathlibProjectFiles[]["lakefile.toml"]]]
+            With[{lakefile = FileNameJoin[{directory, "lakefile.toml"}]}, FileExistsQ[lakefile] && fileSHA256[lakefile] === fileSHA256[mathlibProjectFiles[]["lakefile.toml"]]]
         ]
     ]
 ]
@@ -237,7 +237,7 @@ installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
     log = OpenWrite[FileNameJoin[{directory, $mathlibLog}], BinaryFormat -> True];
     result = WithCleanup[
         Block[{$installLog = log},
-            Replace[mathlibClone[git, directory], Null :> mathlibBuild[leanProgram[FileNameJoin[{toolchain, "bin"}], "lake"], directory]]
+            Replace[mathlibClone[git, directory], Null :> mathlibBuild[toolchainProgram["lake"], directory]]
         ],
         Close[log]
     ];
@@ -246,7 +246,7 @@ installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
     Export[FileNameJoin[{directory, $mathlibStamp}], mathlibRecord[], "RawJSON"];
     If[ mathlibInstallationReadyQ[directory],
         File[directory],
-        installFailure["MathlibRuntimeUnavailable", "Mathlib was built, but LeanLink could not load the Lean runtime of `1`. Restart the kernel and run InstallMathlib[] again.", <|"MessageParameters" -> {leanToolchainName[]}, "Toolchain" -> leanToolchainName[]|>]
+        installFailure["MathlibRuntimeUnavailable", "Mathlib was built, but LeanLink could not load the Lean runtime of `1`. Restart the kernel and run InstallMathlib[] again.", <|"MessageParameters" -> {$LeanToolchain}, "Toolchain" -> $LeanToolchain|>]
     ]
 ]
 
@@ -315,7 +315,7 @@ mathlibBuild[lake_String, directory_String] := Block[{environment = mathlibEnvir
 mathlibOtherVersions[directory_String] := Select[
     FileNames["*", mathlibRoot[]],
     DirectoryQ[#] && # =!= directory && With[{record = Quiet[Check[Import[FileNameJoin[{#, $mathlibStamp}], "RawJSON"], $Failed]]},
-        AssociationQ[record] && StringQ[record["Toolchain"]] && record["Toolchain"] =!= leanToolchainName[]
+        AssociationQ[record] && StringQ[record["Toolchain"]] && record["Toolchain"] =!= $LeanToolchain
     ]&
 ]
 
@@ -349,7 +349,7 @@ MathlibInstallation[opts : OptionsPattern[]] := Block[{directory},
     <|
         "Status" -> Which[mathlibInstallationReadyQ[directory], "Ready", DirectoryQ[directory], "Needs setup", True, "Not installed"],
         "Directory" -> directory,
-        "Toolchain" -> leanToolchainName[],
+        "Toolchain" -> $LeanToolchain,
         "Revision" -> mathlibPin[]["rev"],
         "DocumentationURL" -> $mathlibDocumentation,
         "Executables" -> mathlibExecutables[],
