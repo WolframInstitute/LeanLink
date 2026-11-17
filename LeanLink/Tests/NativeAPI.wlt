@@ -1133,6 +1133,21 @@ VerificationTest[
     TestID -> "Import-File-With-Local-Imports"
 ]
 
+(* A file whose name is no Lean identifier, in a folder with a space in its name, has a module name in Lean's
+   escapes, which the native library reads back (issue #5) *)
+
+VerificationTest[
+    Block[{dir = CreateDirectory[FileNameJoin[{CreateDirectory[], "a folder"}]]},
+        Export[FileNameJoin[{dir, "With Space.lean"}], "def spacedValue : Nat := 3", "Text"];
+        Export[FileNameJoin[{dir, "with-hyphen.lean"}], "def hyphenedValue : Nat := 4", "Text"];
+        Keys[KeyDrop[First[LeanImport[FileNameJoin[{dir, #}]]], "_Handle"]]& /@ {"With Space.lean", "with-hyphen.lean"}
+    ]
+    ,
+    {{"spacedValue"}, {"hyphenedValue"}}
+    ,
+    TestID -> "Import-File-Whose-Name-Is-No-Identifier"
+]
+
 (* Outside any Lake project, a module of Lean's own library imports from the
    toolchain the shim is built against *)
 

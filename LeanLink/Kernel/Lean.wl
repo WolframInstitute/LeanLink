@@ -2634,6 +2634,18 @@ leanFileRoot[absFile_String] := Block[{dir = DirectoryName[absFile]},
     DirectoryName[absFile]
 ]
 
+(* A module name as Lean reads it back: a component that is not an identifier, as the
+   name of a file "my file.lean" or "my-file.lean" is, in Lean's escapes, \[LeftGuillemet]my file\[RightGuillemet].
+   String.toName, which the native library reads module names with, makes such a
+   component, unescaped, the anonymous name. *)
+
+leanModuleName[components : {__String}] := StringRiffle[
+    Function[component,
+        If[StringMatchQ[component, RegularExpression["[\\p{L}_][\\p{L}\\p{N}_'!?]*"]], component, "\[LeftGuillemet]" <> component <> "\[RightGuillemet]"]
+    ] /@ components,
+    "."
+]
+
 (* A source compiled to an olean, with module names relative to the root and the
    search path pinned. A lean that cannot run fails as a compile does. *)
 
@@ -3008,8 +3020,9 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
     projDir = OptionValue["ProjectDir"];
     (* If within a lake project, delegate to module-based import *)
     If[ projDir =!= Automatic && insideDirectoryQ[absFile, ExpandFileName[projDir]],
-        modName = StringReplace[StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"], {".lean" -> "", "/" -> ".", "\\" -> "."}];
-        Return[LeanImport["Imports" -> {modName}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", modName, OptionValue["Filter"]], opts], Block]
+        With[{components = FileNameSplit[StringDelete[StringTrim[StringDrop[absFile, StringLength[ExpandFileName[projDir]]], "/" | "\\"], ".lean" ~~ EndOfString]]},
+            Return[LeanImport["Imports" -> {leanModuleName[components]}, "ProjectDir" -> projDir, "Filter" -> If[OptionValue["Filter"] === "", StringRiffle[components, "."], OptionValue["Filter"]], opts], Block]
+        ]
     ];
     (* A source file outside the project (e.g. a LeanImportString snippet) can still
        import the project's modules: its oleans go on LEAN_PATH for the compile and
@@ -3047,10 +3060,10 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         ]
     ];
     (* Standalone file: compile via lean CLI subprocess *)
-    modName = FileBaseName[absFile];
+    modName = leanModuleName[{FileBaseName[absFile]}];
     (* a folder of its own: an environment loaded earlier from the same file may still read its olean *)
-    tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory, "leanlink_" <> modName <> "_" <> ToString[$SessionID] <> "_" <> CreateUUID[]}]];
-    oleanFile = FileNameJoin[{tmpDir, modName <> ".olean"}];
+    tmpDir = CreateDirectory[FileNameJoin[{$TemporaryDirectory, "leanlink_" <> FileBaseName[absFile] <> "_" <> ToString[$SessionID] <> "_" <> CreateUUID[]}]];
+    oleanFile = FileNameJoin[{tmpDir, FileBaseName[absFile] <> ".olean"}];
     (* Module names are relative to the root: the Lake project around the file, the
        folder a URL import downloads into, or else the file's own folder. *)
     rootDir = If[StringQ[$leanImportRoot], $leanImportRoot, leanFileRoot[absFile]];
