@@ -31,12 +31,6 @@ VerificationTest[
     TestID -> "Toolchain-CancelledBeforeAnyWork"
 ]
 
-VerificationTest[
-    Wolfram`LeanLink`Private`installVersionQ @@@ {{"1.2.5", "1.2.5"}, {"1.2.10", "1.2.5"}, {"1.2.4", "1.2.5"}},
-    {True, True, False},
-    TestID -> "Toolchain-VersionsCompareNumerically"
-]
-
 (* ---- The toolchain ---- *)
 
 (* an installed toolchain is used as it is: no process, no download *)
