@@ -915,54 +915,7 @@ LeanEvaluate[term_LeanTerm, arguments : Longest[Except[_Rule | _RuleDelayed]...]
     LeanEvaluate[LeanEnvironment[<|"_Handle" -> handle|>], StringRiffle[encoded, " "], opts]
 ]
 
-(* ---- Processes ----
-   LeanEvaluate's lean and the processes of an installation are polled rather than
-   run with RunProcess: the output is read while the process runs, since a large
-   output would otherwise fill a pipe and deadlock the wait; the process can have
-   a time limit; and the "Poll" function is given each new piece of its output,
-   {standard output, standard error}, and can end the call by throwing or
-   aborting. However the call ends, a process still running is killed, with the
-   processes it started. *)
-
 readProcessStream[stream_] := Replace[Quiet[ReadString[stream, EndOfBuffer]], Except[_String] -> ""]
-
-Options[runProcess] = {ProcessDirectory -> Inherited, ProcessEnvironment -> Inherited, TimeConstraint -> Infinity, "Poll" -> (Null&)}
-
-runProcess[command_List, opts : OptionsPattern[]] := Module[
-    {process, streams, poll = OptionValue["Poll"], limit = OptionValue[TimeConstraint], started = AbsoluteTime[], running = True, timedOut = False, chunks, output}
-    ,
-    process = Quiet[Check[StartProcess[command, ProcessDirectory -> OptionValue[ProcessDirectory], ProcessEnvironment -> OptionValue[ProcessEnvironment]], $Failed]];
-    If[! MatchQ[process, _ProcessObject], Return[$Failed, Module]];
-    streams = ProcessConnection[process, #]& /@ {"StandardOutput", "StandardError"};
-    WithCleanup[
-        (* a process can write and exit between an empty read and the status check,
-           so its pipes are read until they are empty after it has exited *)
-        output = Last[Reap[
-            While[True,
-                chunks = readProcessStream /@ streams;
-                Sow[First[chunks], "StandardOutput"];
-                Sow[Last[chunks], "StandardError"];
-                poll[chunks];
-                If[ chunks === {"", ""},
-                    If[! running, Break[]];
-                    running = ProcessStatus[process] === "Running";
-                    If[running, Pause[0.02]]
-                ];
-                If[ AbsoluteTime[] - started > limit,
-                    timedOut = True;
-                    Break[]
-                ]
-            ],
-            {"StandardOutput", "StandardError"}
-        ]];
-        If[ timedOut,
-            $TimedOut,
-            <|"ExitCode" -> ProcessInformation[process, "ExitCode"], "StandardOutput" -> StringJoin[Flatten[First[output]]], "StandardError" -> StringJoin[Flatten[Last[output]]]|>
-        ]
-        ,
-        If[ProcessStatus[process] === "Running", KillProcess[process]]
-    ]
-]
 
 (* A process's output reaches the kernel a byte a character. It is UTF-8, as
    Lean's messages and lake's check marks are, unless it does not decode. *)
@@ -970,7 +923,10 @@ runProcess[command_List, opts : OptionsPattern[]] := Module[
 utf8Text[text_String] := Quiet[Check[FromCharacterCode[ToCharacterCode[text, "ISO8859-1"], "UTF-8"], text]]
 
 (* ---- LeanEvaluate ----
-   #eval in a lean process (the pinned toolchain), value returned through JSON *)
+   #eval in a lean process (the pinned toolchain), value returned through JSON.
+   RunProcess reads both pipes while the process runs, so a large value cannot
+   fill one and deadlock the wait, and waits without polling; TimeConstrained
+   stops the process, with the processes it started, at the time limit. *)
 
 Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "Source" -> "", "TimeLimit" -> 600, "Isolated" -> False}
 
@@ -1010,10 +966,14 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searc
     ];
     file = FileNameJoin[{$TemporaryDirectory, "LeanLinkEval" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
-    res = runProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> searchPath], TimeConstraint -> OptionValue["TimeLimit"]];
+    res = TimeConstrained[
+        Quiet[Check[RunProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> searchPath]], $Failed]],
+        OptionValue["TimeLimit"],
+        $TimedOut
+    ];
     Quiet[DeleteFile[file]];
     If[res === $TimedOut, Return[Failure["TimedOut", <|"MessageTemplate" -> "Evaluation exceeded the time limit of `1` s.", "MessageParameters" -> {OptionValue["TimeLimit"]}|>], Module]];
-    If[! AssociationQ[res], Return[Failure["LeanEvaluateFailed", <|"MessageTemplate" -> "Lean could not be started from `1`.", "MessageParameters" -> {tc}|>], Module]];
+    If[! AssociationQ[res], Return[evaluationFailure["LeanEvaluateFailed", "Lean could not be started from `1`.", <|"MessageParameters" -> {tc}|>], Module]];
     (* The JSON is found in the raw output: ImportString decodes the UTF-8 itself. *)
     json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_EVAL_JSON "]&, None];
     If[ json =!= None,
