@@ -15,14 +15,14 @@ LeanLink loads a module of [Mathlib](https://github.com/leanprover-community/mat
 
 ## Prerequisites
 
-The module comes from a built Mathlib checkout, as in the tutorial *Exploring Mathlib with LeanLink*, and the paclet `WolframInstitute/TypeTheory` must be installed:
+The module comes from the Mathlib that [InstallMathlib]() installs, as in the tutorial *Exploring Mathlib with LeanLink*, and the paclet `WolframInstitute/TypeTheory` must be installed:
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-mathlibReady = DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]]
+mathlibDir = MathlibInstallation[]["Directory"];
+mathlibReady = MathlibInstallation[]["Status"] === "Ready"
 ```
 
-<!-- => True (when Mathlib is built) -->
+<!-- => True (when Mathlib is installed) -->
 
 ## Loading a Module
 

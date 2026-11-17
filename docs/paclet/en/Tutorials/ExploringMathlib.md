@@ -7,34 +7,28 @@ Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/tutorial/ExploringMathlib
 Keywords: [Lean, Mathlib, theorem, type, binder, typeclass, instance, proof]
 RelatedGuides: [LeanLink]
-RelatedTutorials: [LeanLinkIntro, ImportGraph, CheckingMathlib]
+RelatedTutorials: [LeanLinkIntro, ComputingWithMathlib, ImportGraph, CheckingMathlib]
 ---
 
 [Mathlib](https://github.com/leanprover-community/mathlib4) is Lean's community mathematics library. LeanLink imports any built Mathlib module and lets you read theorem statements, dissect their binder structure, and inspect the typeclass machinery behind them - all from the Wolfram Language. Every example below is guarded so the page still builds where Mathlib is absent.
 
-## Prerequisites: Building Mathlib
+## Prerequisites: Installing Mathlib
 
-Install `elan` (the Lean version manager), then create a project with Mathlib as a dependency and build the modules used here:
-
-```
-(* Terminal:
-   curl https://elan.lean-lang.org/install.sh | sh
-   mkdir -p ~/src/mathlib4 && cd ~/src/mathlib4
-   lake init MathlibTest math
-   lake exe cache get
-   lake build Mathlib.Algebra.Group.Basic
-   lake build Mathlib.Basic.Logic.Basic
-*)
-```
-
-Point a variable at the checkout and record whether it is built:
+[InstallMathlib]() installs the Mathlib release built with LeanLink's own Lean toolchain, with elan and the toolchain where they are missing. It downloads several gigabytes of compiled modules, once:
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-mathlibReady = DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]]
+#| eval: false
+InstallMathlib[]
 ```
 
-<!-- => True (when Mathlib is built) -->
+Point a variable at the installation and record whether it is ready:
+
+```wl
+mathlibDir = MathlibInstallation[]["Directory"];
+mathlibReady = MathlibInstallation[]["Status"] === "Ready"
+```
+
+<!-- => True (when Mathlib is installed) -->
 
 ## Loading a Module
 

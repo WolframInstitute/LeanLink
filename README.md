@@ -13,10 +13,16 @@ PacletInstall["Wolfram/LeanLink"]
 Needs["Wolfram`LeanLink`"]
 ```
 
-LeanLink loads the Lean runtime from the toolchain it is built against, installed with [elan](https://github.com/leanprover/elan):
+LeanLink loads the Lean runtime from the toolchain it is built against. `InstallLeanToolchain[]` installs it with [elan](https://github.com/leanprover/elan), as `elan toolchain install leanprover/lean4:v4.35.0` does in a shell:
 
-```bash
-elan toolchain install leanprover/lean4:v4.35.0
+```wolfram
+InstallLeanToolchain[]
+```
+
+`InstallMathlib[]` installs the Mathlib release built with that toolchain, as a Lake project, and `MathlibInstallation[]` gives its directory and status. It needs Git and curl, which Lake and Mathlib's cache tool run:
+
+```wolfram
+InstallMathlib[]
 ```
 
 The TypeTheory bridge (`LeanToTypeTheory`, `TypeTheoryToLean`) also needs the paclet [WolframInstitute/TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/TypeTheory), which it loads on first use:
@@ -29,6 +35,7 @@ PacletInstall[ResourceObject["https://www.wolframcloud.com/obj/wolframinstitute/
 
 - **Native LibraryLink bridge** — embeds the Lean runtime directly via a C shim, no subprocess overhead
 - **Environment loading** — imports modules from Lake projects (Mathlib included), `.lean` files and source strings; queries constants, theorems, types
+- **Mathlib**: `InstallMathlib` installs the Mathlib release built with LeanLink's toolchain as a Lake project, with Mathlib and its packages pinned by commit, and `InstallLeanToolchain` the toolchain, with elan
 - **Lean notation** — `"TypeForm"` prints a type with Lean's own pretty-printer, opening the namespaces you name
 - **Symbolic expressions** — Lean expressions as `LeanApp`, `LeanConst`, `LeanForall`, etc., displayed in Lean notation
 - **Interactive proofs** — `LeanState`/`LeanTactic` for step-by-step proof construction
@@ -53,9 +60,9 @@ env["id_proof"]["TypeForm"]
 LeanTactic[{"intro P", "intro h", "exact h"}][LeanState[env["id_proof"]]]["Complete"]
 (* True *)
 
-(* A theorem from a built mathlib4 checkout *)
+(* A theorem from Mathlib, installed with InstallMathlib[] *)
 alg = LeanImport["Mathlib.Algebra.Group.Basic",
-  "ProjectDir" -> FileNameJoin[{$HomeDirectory, "src", "mathlib4"}], "Filter" -> "mul_comm"];
+  "ProjectDir" -> MathlibInstallation[]["Directory"], "Filter" -> "mul_comm"];
 alg["mul_comm"]["TypeForm"]
 (* "∀ {G : Type u_1} [inst : CommMagma G] (a b : G), a * b = b * a" *)
 
@@ -69,9 +76,13 @@ LeanEvaluate["(List.range 10).map (· ^ 2)"]
 
 ## Documentation
 
-The [documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink) has a reference page for every symbol, the guide [Lean 4 from the Wolfram Language](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#guide/LeanLink), and four tutorials:
+The [documentation site](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink) has a reference page for every symbol, the guide [Lean 4 from the Wolfram Language](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#guide/LeanLink), and these tutorials:
 
 - [Getting Started with LeanLink](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/LeanLinkIntro) — environments, terms, proof states and tactics
+- [Computing with Mathlib](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ComputingWithMathlib): installing Mathlib, and exact values from its functions
+- [Exact Arithmetic Patterns](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ArithmeticPatterns): binomial coefficients, common divisors and totients, computed in Lean and plotted
+- [Observing Partial Computations](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/PartialComputations): Mathlib's partial recursive codes, run with bounded fuel
+- [Values, Types and Checked Proofs](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ValuesAndProofs): evaluations, kernel-checked theorems and noncomputable definitions
 - [Exploring Mathlib with LeanLink](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ExploringMathlib) — Mathlib theorems, their binders and typeclasses
 - [An Import Graph for Mathlib](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/ImportGraph) — Mathlib's module dependencies, by namespace
 - [Checking Mathlib with TypeTheory](https://www.wolframcloud.com/obj/wolframinstitute/LeanLink#tutorial/CheckingMathlib) — a whole module of Mathlib, checked again by TypeTheory's kernel
@@ -103,6 +114,10 @@ To check the Windows shim without Windows, `Native/shim/wine/test_windows_shim.s
 ```bash
 ./run_tests.wls
 ```
+
+### Toolchain
+
+`LeanLink/lean-toolchain` names the toolchain LeanLink is built against, the one `Native/lean-toolchain` pins. After changing both, `wolframscript -file update_mathlib.wls` pins the Lake project `InstallMathlib` installs, `LeanLink/Assets/Mathlib`, to the matching Mathlib release.
 
 ### Documentation
 
@@ -137,8 +152,10 @@ LeanLink/
 │   │   ├── ProofToLean.wl     # ProofObject -> Lean transpiler
 │   │   ├── TypeTheoryBridge.wl       # LeanToTypeTheory, TypeTheoryToLean: entry points
 │   │   ├── TypeTheoryTranslation.wl  # The bridge, loaded with TypeTheory on first use
+│   │   ├── Toolchain.wl       # InstallLeanToolchain; downloads and processes installations share
+│   │   ├── Mathlib.wl         # InstallMathlib, MathlibInstallation
 │   │   └── Utilities.wl       # ImportDOT and other helpers
-│   ├── Assets/                # Bundled .lean files, hero image
+│   ├── Assets/                # Bundled .lean files, hero image, the Mathlib project, elan pins
 │   ├── Tests/                 # .wlt test suite
 │   ├── Documentation/         # Built documentation notebooks (gitignored)
 │   └── LibraryResources/      # Built shims (per-platform, gitignored)
@@ -158,6 +175,7 @@ LeanLink/
 ├── pacletpage.wl              # Settings shared by build_docs.wls and release.wls
 ├── submit.wls                 # Paclet Repository submission
 ├── typetheory_coverage.wls    # How much of a Lean library TypeTheory checks
+├── update_mathlib.wls         # Pins the Mathlib project to the toolchain's release
 └── run_tests.wls              # Test runner
 ```
 

@@ -7,13 +7,13 @@ Paclet: Wolfram/LeanLink
 URI: Wolfram/LeanLink/guide/LeanLink
 Description: Native bridge to the Lean 4 theorem prover - import Mathlib, inspect proof terms, run tactics, transpile ProofObjects, and compile Lean to native code.
 Keywords: [Lean, Lean 4, theorem prover, proof, theorem, tactic, term, Mathlib, dependent types, type theory, LibraryLink, ProofObject, interactive proof]
-RelatedTutorials: [LeanLinkIntro, ExploringMathlib, ImportGraph, CheckingMathlib]
+RelatedTutorials: [LeanLinkIntro, ComputingWithMathlib, ExploringMathlib, ArithmeticPatterns, PartialComputations, ValuesAndProofs, ImportGraph, CheckingMathlib]
 Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)](https://github.com/leanprover-community/mathlib4)"]
 ---
 
 ## Abstract
 
-<code>Wolfram\`LeanLink\`</code> embeds the [Lean 4](https://lean-lang.org/) theorem prover in the Wolfram Language through a native [LibraryLink]() shim. [LeanImport]() and [LeanImportString]() load constants from a compiled module (Mathlib included) or a source string into a [LeanEnvironment]() of [LeanTerm]() values; each term carries its type and proof as symbolic expression trees built from the CIC heads ([LeanConst](), [LeanApp](), [LeanForall](), ...), pretty-prints as Lean source, and draws as a [Graph](). [LeanState]() and [LeanTactic]() run interactive tactic proofs, [ProofToLean]() transpiles a Wolfram [ProofObject]() into checkable Lean, [LeanToTypeTheory]() and [TypeTheoryToLean]() exchange proofs with the Wolfram Language proof engine TypeTheory, and [LeanCompile]() lowers a Lean definition to a [FunctionCompile]() function.
+<code>Wolfram\`LeanLink\`</code> embeds the [Lean 4](https://lean-lang.org/) theorem prover in the Wolfram Language through a native [LibraryLink]() shim. [InstallLeanToolchain]() installs the Lean toolchain LeanLink is built against, and [InstallMathlib]() the Mathlib release built with it. [LeanImport]() and [LeanImportString]() load constants from a compiled module (Mathlib included) or a source string into a [LeanEnvironment]() of [LeanTerm]() values; each term carries its type and proof as symbolic expression trees built from the CIC heads ([LeanConst](), [LeanApp](), [LeanForall](), ...), pretty-prints as Lean source, and draws as a [Graph](). [LeanState]() and [LeanTactic]() run interactive tactic proofs, [ProofToLean]() transpiles a Wolfram [ProofObject]() into checkable Lean, [LeanToTypeTheory]() and [TypeTheoryToLean]() exchange proofs with the Wolfram Language proof engine TypeTheory, and [LeanCompile]() lowers a Lean definition to a [FunctionCompile]() function.
 
 ## Functions
 
@@ -25,6 +25,12 @@ Links: ["[Lean 4 (lean-lang.org)](https://lean-lang.org/)", "[Mathlib4 (GitHub)]
 - [LeanEvaluate]() evaluate expressions or apply imported functions, reusing the environment between calls
 - [LeanExportString]() convert a [LeanEnvironment]() back to Lean 4 source
 - [LeanExport]() write a [LeanEnvironment]() to a `.lean` file
+
+### Toolchain and Mathlib
+
+- [InstallLeanToolchain]() install the Lean toolchain LeanLink is built against, with elan
+- [InstallMathlib]() install the Mathlib release built with LeanLink's toolchain, as a Lake project
+- [MathlibInstallation]() the status, directory and pinned versions of the installation
 
 ### Environments and terms
 

@@ -49,8 +49,8 @@ runtime through a compiled LibraryLink shim. The build only works where:
   ([LeanImport]() with a `"ProjectDir"`, [LeanExprGraph](), [LeanCallGraph]()).
 
 [LeanImportString]() and the bundled `Examples.lean` environment work from the
-dylib alone; the Mathlib pages additionally need a **built** mathlib4 checkout
-(see *Gate the heavy examples*). If the shim is missing the build will fail loudly
+dylib alone; the Mathlib pages additionally need the Mathlib that
+[InstallMathlib]() installs (see *Gate the heavy examples*). If the shim is missing the build will fail loudly
 rather than emit blank cells - that is intended.
 
 ## Where state threads: tutorials, not symbol pages
@@ -177,11 +177,14 @@ verify it by exporting a PDF and converting with `sips`, not by `Rasterize`.
 Some examples need resources that may be absent on a given machine. Gate them so
 the build degrades to an explanatory string instead of an error:
 
-- **Mathlib** pages need a built mathlib4 checkout. Guard on the build dir and
-  fall back to a one-line "run `lake exe cache get && lake build ...`" message,
-  the pattern the [Exploring Mathlib](Tutorials/ExploringMathlib.md) tutorial
-  uses. Never hardcode an absolute home path in a way that errors when it is
-  missing.
+- **Mathlib** pages read the Mathlib that [InstallMathlib]() installs in its
+  default directory, so run `InstallMathlib[]` once on the machine that builds the
+  documentation. Guard on `MathlibInstallation[]["Status"] === "Ready"` and fall
+  back to a one-line message, or to `<||>` for an environment, the pattern the
+  [Exploring Mathlib](Tutorials/ExploringMathlib.md) tutorial uses. Never
+  hardcode an absolute home path in a way that errors when it is missing, and
+  never let a page run an installation: give an [InstallMathlib]() cell
+  `#| eval: false`, or the build would download Mathlib.
 - **Slow scans** (the [Import Graph](Tutorials/ImportGraph.md) tutorial walks
   ~8000 files) are fine in a tutorial but keep them out of `## Basic Examples`
   on a Symbol page.
