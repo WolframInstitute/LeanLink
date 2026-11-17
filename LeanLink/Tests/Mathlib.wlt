@@ -2,41 +2,42 @@ BeginTestSection["Mathlib"]
 
 (* InstallMathlib and MathlibInstallation. Every test but the last few replaces the processes and directories an
    installation would use, so none of them installs anything; the last few use an installed mathlib when there is one,
-   in the default directory or in LEANLINK_MATHLIB_DIRECTORY. *)
+   in the default directory or in LEANLINK_MATHLIB_DIRECTORY. The pins are read from the paclet, so a new toolchain
+   needs no change here. *)
+
+(* body, given a new directory that is removed afterwards *)
+
+withTemporaryDirectory[body_] := Module[{directory = CreateDirectory[]}, WithCleanup[body[directory], DeleteDirectory[directory, DeleteContents -> True]]]
+
+$pin = Wolfram`LeanLink`Private`mathlibPin[]
 
 (* ---- Pins ---- *)
 
 VerificationTest[
-    KeyTake[MathlibInstallation[], {"Toolchain", "Revision"}],
-    <|"Toolchain" -> "leanprover/lean4:v4.35.0", "Revision" -> "56a005855ea17e0b0958f73ec801ae140b0a1679"|>,
-    TestID -> "Mathlib-PinnedRelease"
-]
-
-VerificationTest[
-    MathlibInstallation[]["Directory"],
-    FileNameJoin[{$UserBaseDirectory, "ApplicationData", "LeanLink", "Mathlib", "v4.35.0"}],
-    TestID -> "Mathlib-DefaultDirectory"
-]
-
-VerificationTest[
-    Keys[MathlibInstallation[]],
-    {"Status", "Directory", "Toolchain", "Revision", "DocumentationURL", "Executables", "OtherVersions"},
-    TestID -> "Mathlib-InstallationKeys"
+    With[{installation = MathlibInstallation[]},
+        {
+            Keys[installation],
+            installation["Toolchain"] === Wolfram`LeanLink`Private`$LeanToolchain,
+            installation["Revision"] === $pin["rev"],
+            installation["Directory"] === FileNameJoin[{$UserBaseDirectory, "ApplicationData", "LeanLink", "Mathlib", Wolfram`LeanLink`Private`$LeanToolchainVersion}]
+        }
+    ],
+    {{"Status", "Directory", "Toolchain", "Revision", "DocumentationURL", "Executables", "OtherVersions"}, True, True, True},
+    TestID -> "Mathlib-Installation"
 ]
 
 (* The project requires Mathlib at the tag of LeanLink's toolchain, and its manifest, which Lake wrote, pins Mathlib at
    that tag and every package by commit *)
 
 VerificationTest[
-    Module[{project = PacletObject["Wolfram/LeanLink"]["AssetLocation", "Mathlib"], lakefile, manifest, mathlib},
+    Module[{project = PacletObject["Wolfram/LeanLink"]["AssetLocation", "Mathlib"], lakefile, manifest},
         lakefile = ReadString[FileNameJoin[{project, "lakefile.toml"}]];
         manifest = Import[FileNameJoin[{project, "lake-manifest.json"}], "RawJSON"];
-        mathlib = SelectFirst[manifest["packages"], #["name"] === "mathlib"&];
         {
             StringContainsQ[lakefile, "rev = \"" <> Wolfram`LeanLink`Private`$LeanToolchainVersion <> "\""],
             StringContainsQ[lakefile, "name = \"" <> manifest["name"] <> "\""],
-            mathlib["inputRev"] === Wolfram`LeanLink`Private`$LeanToolchainVersion,
-            mathlib["url"] === "https://github.com/leanprover-community/mathlib4",
+            $pin["inputRev"] === Wolfram`LeanLink`Private`$LeanToolchainVersion,
+            $pin["url"] === "https://github.com/leanprover-community/mathlib4",
             AllTrue[manifest["packages"], #["type"] === "git" && StringMatchQ[#["rev"], RegularExpression["[0-9a-f]{40}"]]&]
         }
     ],
@@ -75,6 +76,8 @@ VerificationTest[
 
 (* ---- Installation ---- *)
 
+(* a ready installation is given as it is: no toolchain, no tools, no process *)
+
 VerificationTest[
     Block[
         {
@@ -91,12 +94,20 @@ VerificationTest[
     TestID -> "Mathlib-ReadyInstallationStartsNoProcess"
 ]
 
-(* An installation with the toolchain and the tools replaced, and installRun replaced by run, which is given
-   {command, working directory} and Sows it. The result, what was run, and the directory. *)
+(* the project's files in directory are the paclet's, byte for byte *)
 
-installationFixture[run_, ready_ : (False&)] := Module[{temporary = CreateDirectory[], directory, result, commands},
-    directory = FileNameJoin[{temporary, "mathlib"}];
-    WithCleanup[
+projectFilesQ[directory_String] := AllTrue[
+    Normal[Wolfram`LeanLink`Private`mathlibProjectFiles[]],
+    With[{file = FileNameJoin[{directory, First[#]}]}, FileExistsQ[file] && FileHash[file] === FileHash[Last[#]]]&
+]
+
+(* An installation into a directory holding files, each with the text "keep", with the toolchain and the tools
+   replaced and installRun replaced by run, which is given the command and the working directory, which are Sown. The
+   result, what was run, and what the directory holds afterwards. *)
+
+installationFixture[run_, ready_ : (False&), files_List : {}] := withTemporaryDirectory[Function[temporary,
+    Module[{directory = FileNameJoin[{temporary, "mathlib"}], result, commands},
+        If[files =!= {}, CreateDirectory[directory]; Scan[Export[FileNameJoin[{directory, #}], "keep", "Text"]&, files]];
         {result, commands} = Block[
             {
                 Wolfram`LeanLink`Private`installToolchain = ("/toolchain"&),
@@ -111,22 +122,14 @@ installationFixture[run_, ready_ : (False&)] := Module[{temporary = CreateDirect
             "Result" -> result,
             "Commands" -> Replace[commands, {{c_} :> c, {} -> {}}],
             "Directory" -> directory,
+            "Kept" -> AllTrue[files, Quiet[Import[FileNameJoin[{directory, #}], "Text"]] === "keep"&],
             "ProjectFiles" -> projectFilesQ[directory],
             "Record" -> Quiet[Check[Import[FileNameJoin[{directory, "leanlink-mathlib.json"}], "RawJSON"], None]],
             "Log" -> Quiet[Check[ReadString[FileNameJoin[{directory, "leanlink-mathlib.log"}]], None]],
             "Package" -> DirectoryQ[FileNameJoin[{directory, ".lake", "packages", "mathlib"}]]
         |>
-        ,
-        DeleteDirectory[temporary, DeleteContents -> True]
     ]
-]
-
-(* the project's files in directory are the paclet's, byte for byte *)
-
-projectFilesQ[directory_String] := AllTrue[
-    Normal[Wolfram`LeanLink`Private`mathlibProjectFiles[]],
-    With[{file = FileNameJoin[{directory, First[#]}]}, FileExistsQ[file] && FileHash[file] === FileHash[Last[#]]]&
-]
+]]
 
 (* a run where every command succeeds, and git clone checks out commit, as a clone of a tag does: HEAD names it *)
 
@@ -138,27 +141,21 @@ cloneAt[commit_String][command_List, workingDirectory_String] := (
     <|"ExitCode" -> 0, "StandardOutput" -> "", "StandardError" -> ""|>
 )
 
-pinnedClone = cloneAt[Wolfram`LeanLink`Private`mathlibPin[]["rev"]]
-
 (* The project's files are copied in; Mathlib's tag is cloned where Lake keeps the package; lake exe cache get and
    lake build Mathlib run in the directory with the toolchain's own lake; the commands go to the log; the record comes
    last *)
 
 VerificationTest[
-    Module[{checks = 0, fixture, lake, package},
-        fixture = installationFixture[pinnedClone, (checks++ > 0&)];
+    Module[{checks = 0, fixture, lake, clone},
+        fixture = installationFixture[cloneAt[$pin["rev"]], (checks++ > 0&)];
         lake = Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{"/toolchain", "bin"}], "lake"];
-        package = FileNameJoin[{fixture["Directory"], ".lake", "packages", "mathlib"}];
+        clone = {"/fixture/git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", $pin["inputRev"], $pin["url"], FileNameJoin[{fixture["Directory"], ".lake", "packages", "mathlib"}]};
         {
             fixture["Result"] === File[fixture["Directory"]],
-            fixture["Commands"] === {
-                {{"/fixture/git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", "v4.35.0", "https://github.com/leanprover-community/mathlib4", package}, fixture["Directory"]},
-                {{lake, "exe", "cache", "get"}, fixture["Directory"]},
-                {{lake, "build", "Mathlib"}, fixture["Directory"]}
-            },
+            fixture["Commands"] === {{clone, fixture["Directory"]}, {{lake, "exe", "cache", "get"}, fixture["Directory"]}, {{lake, "build", "Mathlib"}, fixture["Directory"]}},
             fixture["ProjectFiles"],
             fixture["Record"] === Wolfram`LeanLink`Private`mathlibRecord[],
-            fixture["Log"] === StringRiffle[{"/fixture/git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", "v4.35.0", "https://github.com/leanprover-community/mathlib4", package}, " "] <> "\n" <> lake <> " exe cache get\n" <> lake <> " build Mathlib\n",
+            fixture["Log"] === StringRiffle[clone, " "] <> "\n" <> lake <> " exe cache get\n" <> lake <> " build Mathlib\n",
             fixture["Package"]
         }
     ],
@@ -203,7 +200,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    With[{fixture = installationFixture[Function[{command, workingDirectory}, If[MemberQ[command, "build"], <|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "error"|>, pinnedClone[command, workingDirectory]]]]},
+    With[{fixture = installationFixture[If[MemberQ[#1, "build"], <|"ExitCode" -> 1, "StandardOutput" -> "", "StandardError" -> "error"|>, cloneAt[$pin["rev"]][#1, #2]]&]},
         {fixture["Result"]["Tag"], Rest[fixture["Result"]["Command"]], fixture["Package"], fixture["Record"]}
     ],
     {"MathlibInstallFailed", {"build", "Mathlib"}, True, None},
@@ -212,52 +209,42 @@ VerificationTest[
 
 (* a directory with other files, or a Lake project of its own such as a Mathlib checkout, is refused and left as it is *)
 
-directoryInUseFixture[files_List] := Module[{directory = CreateDirectory[], result, before},
-    Scan[Export[FileNameJoin[{directory, #}], "keep", "Text"]&, files];
-    before = FileNames["*", directory];
-    WithCleanup[
-        result = Block[
-            {
-                Wolfram`LeanLink`Private`installToolchain = ("/toolchain"&),
-                Wolfram`LeanLink`Private`mathlibRequireTool = (Null&),
-                Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (False&),
-                Wolfram`LeanLink`Private`installRun = (Throw["Unexpected process"]&)
-            },
-            InstallMathlib["Directory" -> directory]
-        ];
-        {result["Tag"], FileNames["*", directory] === before, Union[Import[#, "Text"]& /@ before]}
-        ,
-        DeleteDirectory[directory, DeleteContents -> True]
-    ]
+VerificationTest[
+    With[{fixture = installationFixture[Throw["Unexpected process"]&, False&, {"notes.txt"}]},
+        {fixture["Result"]["Tag"], fixture["Kept"]}
+    ],
+    {"MathlibDirectoryInUse", True},
+    TestID -> "Mathlib-OtherFilesKept"
 ]
 
-VerificationTest[directoryInUseFixture[{"notes.txt"}], {"MathlibDirectoryInUse", True, {"keep"}}, TestID -> "Mathlib-OtherFilesKept"]
-
-VerificationTest[directoryInUseFixture[{"lakefile.lean", "leanlink-mathlib.json"}], {"MathlibDirectoryInUse", True, {"keep"}}, TestID -> "Mathlib-LakeProjectKept"]
+VerificationTest[
+    With[{fixture = installationFixture[Throw["Unexpected process"]&, False&, {"lakefile.lean", "leanlink-mathlib.json"}]},
+        {fixture["Result"]["Tag"], fixture["Kept"]}
+    ],
+    {"MathlibDirectoryInUse", True},
+    TestID -> "Mathlib-LakeProjectKept"
+]
 
 (* ---- Readiness ---- *)
 
 (* An installation as InstallMathlib leaves it: the project's files, its record, and Mathlib's package with its build,
    beside a toolchain with lean; then without the file named, or with it changed *)
 
-readinessFixture[change_ : None] := Module[{temporary = CreateDirectory[], directory, toolchain, build},
-    directory = FileNameJoin[{temporary, "mathlib"}];
-    toolchain = FileNameJoin[{temporary, "toolchain"}];
-    build = FileNameJoin[{directory, ".lake", "packages", "mathlib", ".lake", "build", "lib", "lean"}];
-    CreateDirectory[build, CreateIntermediateDirectories -> True];
-    CreateFile[FileNameJoin[{build, "Mathlib.olean"}]];
-    CreateDirectory[FileNameJoin[{toolchain, "bin"}], CreateIntermediateDirectories -> True];
-    CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"]];
-    KeyValueMap[CopyFile[#2, FileNameJoin[{directory, #1}]]&, Wolfram`LeanLink`Private`mathlibProjectFiles[]];
-    Export[FileNameJoin[{directory, "leanlink-mathlib.json"}], Wolfram`LeanLink`Private`mathlibRecord[], "RawJSON"];
-    Replace[change, {{"Delete", file_} :> DeleteFile[FileNameJoin[{temporary, file}]], {"Change", file_} :> Export[FileNameJoin[{temporary, file}], "changed", "Text"]}];
-    WithCleanup[
+readinessFixture[change_ : None] := withTemporaryDirectory[Function[temporary,
+    Module[{directory = FileNameJoin[{temporary, "mathlib"}], toolchain = FileNameJoin[{temporary, "toolchain"}], build},
+        build = FileNameJoin[{directory, ".lake", "packages", "mathlib", ".lake", "build", "lib", "lean"}];
+        CreateDirectory[build, CreateIntermediateDirectories -> True];
+        CreateFile[FileNameJoin[{build, "Mathlib.olean"}]];
+        CreateDirectory[FileNameJoin[{toolchain, "bin"}], CreateIntermediateDirectories -> True];
+        CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"]];
+        KeyValueMap[CopyFile[#2, FileNameJoin[{directory, #1}]]&, Wolfram`LeanLink`Private`mathlibProjectFiles[]];
+        Export[FileNameJoin[{directory, "leanlink-mathlib.json"}], Wolfram`LeanLink`Private`mathlibRecord[], "RawJSON"];
+        Replace[change, {{"Delete", file_} :> DeleteFile[FileNameJoin[{temporary, file}]], {"Change", file_} :> Export[FileNameJoin[{temporary, file}], "changed", "Text"]}];
         Block[{Wolfram`LeanLink`Private`leanToolchainPath = (toolchain&), RunProcess = (Throw["Unexpected process"]&)},
             Wolfram`LeanLink`Private`mathlibInstallationReadyQ[directory]
-        ],
-        DeleteDirectory[temporary, DeleteContents -> True]
+        ]
     ]
-]
+]]
 
 VerificationTest[readinessFixture[], True, TestID -> "Mathlib-ReadyWithoutAnyProcess"]
 
@@ -345,37 +332,28 @@ VerificationTest[
 
 (* ---- Other versions ---- *)
 
-(* Installations for v4.34.0 and the current toolchain, one of them outside the default directory, and a directory
-   without a record *)
+(* In a root of its own: an installation for another toolchain, two for the current one, one of them outside the
+   default directory, and a directory without a record *)
 
-otherVersionsFixture[] := Module[{root = CreateDirectory[]},
-    Scan[CreateDirectory[FileNameJoin[{root, #}]]&, {"v4.33.0", "v4.34.0", "v4.35.0", "elsewhere"}];
-    Export[FileNameJoin[{root, "v4.34.0", "leanlink-mathlib.json"}], <|"Toolchain" -> "leanprover/lean4:v4.34.0"|>, "RawJSON"];
-    Scan[Export[FileNameJoin[{root, #, "leanlink-mathlib.json"}], <|"Toolchain" -> "leanprover/lean4:v4.35.0"|>, "RawJSON"]&, {"v4.35.0", "elsewhere"}];
-    root
-]
+otherVersionsFixture[body_] := withTemporaryDirectory[Function[root,
+    Scan[CreateDirectory[FileNameJoin[{root, #}]]&, {"older", "norecord", Wolfram`LeanLink`Private`$LeanToolchainVersion, "elsewhere"}];
+    Export[FileNameJoin[{root, "older", "leanlink-mathlib.json"}], <|"Toolchain" -> "leanprover/lean4:v4.0.0"|>, "RawJSON"];
+    Scan[Export[FileNameJoin[{root, #, "leanlink-mathlib.json"}], <|"Toolchain" -> Wolfram`LeanLink`Private`$LeanToolchain|>, "RawJSON"]&, {Wolfram`LeanLink`Private`$LeanToolchainVersion, "elsewhere"}];
+    Block[{Wolfram`LeanLink`Private`mathlibRoot = (root&)}, body[root]]
+]]
 
 VerificationTest[
-    Module[{root = otherVersionsFixture[]},
-        WithCleanup[
-            Block[{Wolfram`LeanLink`Private`mathlibRoot = (root&)}, FileNameTake /@ MathlibInstallation[]["OtherVersions"]],
-            DeleteDirectory[root, DeleteContents -> True]
-        ]
-    ],
-    {"v4.34.0"},
+    otherVersionsFixture[FileNameTake /@ MathlibInstallation[]["OtherVersions"]&],
+    {"older"},
     TestID -> "Mathlib-OtherVersionsByTheirRecord"
 ]
 
 VerificationTest[
-    Module[{root = otherVersionsFixture[]},
-        WithCleanup[
-            Block[{Wolfram`LeanLink`Private`mathlibRoot = (root&)}, Wolfram`LeanLink`Private`mathlibCleanOtherVersions[FileNameJoin[{root, "v4.35.0"}], False]];
-            FileNameTake /@ FileNames["*", root]
-            ,
-            DeleteDirectory[root, DeleteContents -> True]
-        ]
-    ],
-    {"elsewhere", "v4.33.0", "v4.34.0", "v4.35.0"},
+    otherVersionsFixture[Function[root,
+        Wolfram`LeanLink`Private`mathlibCleanOtherVersions[FileNameJoin[{root, Wolfram`LeanLink`Private`$LeanToolchainVersion}], False];
+        Length[FileNames["*", root]]
+    ]],
+    4,
     {InstallMathlib::other},
     TestID -> "Mathlib-OtherVersionsNamed"
 ]
@@ -383,21 +361,17 @@ VerificationTest[
 (* only after an installation that succeeds, and only when asked *)
 
 VerificationTest[
-    Module[{root = otherVersionsFixture[], failed, kept},
-        WithCleanup[
-            Block[{Wolfram`LeanLink`Private`mathlibRoot = (root&)},
-                Block[{Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (False&)},
-                    failed = Block[{Wolfram`LeanLink`Private`mathlibInstall = (Wolfram`LeanLink`Private`installThrow["MathlibInstallFailed", "Failed."]&)}, InstallMathlib["RemoveOtherVersions" -> True]["Tag"]];
-                    kept = DirectoryQ[FileNameJoin[{root, "v4.34.0"}]];
-                    Block[{Wolfram`LeanLink`Private`mathlibInstall = (Null&)}, InstallMathlib["RemoveOtherVersions" -> True]]
-                ]
-            ];
-            {failed, kept, FileNameTake /@ FileNames["*", root]}
-            ,
-            DeleteDirectory[root, DeleteContents -> True]
+    otherVersionsFixture[Function[root,
+        Block[{Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (False&)},
+            {
+                Block[{Wolfram`LeanLink`Private`mathlibInstall = (Wolfram`LeanLink`Private`installThrow["MathlibInstallFailed", "Failed."]&)}, InstallMathlib["RemoveOtherVersions" -> True]["Tag"]],
+                DirectoryQ[FileNameJoin[{root, "older"}]],
+                Block[{Wolfram`LeanLink`Private`mathlibInstall = (Null&)}, InstallMathlib["RemoveOtherVersions" -> True]; DirectoryQ[FileNameJoin[{root, "older"}]]],
+                Length[FileNames["*", root]]
+            }
         ]
-    ],
-    {"MathlibInstallFailed", True, {"elsewhere", "v4.33.0", "v4.35.0"}},
+    ]],
+    {"MathlibInstallFailed", True, False, 3},
     TestID -> "Mathlib-OtherVersionsRemovedWhenAsked"
 ]
 
