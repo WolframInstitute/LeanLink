@@ -278,6 +278,7 @@ VerificationTest[
 VerificationTest[
     Block[
         {
+            Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (False&),
             Wolfram`LeanLink`Private`installToolchain = ("/toolchain"&),
             Wolfram`LeanLink`Private`mathlibExecutable = ("/fixture/" <> #&),
             Wolfram`LeanLink`Private`mathlibGitWorkingQ = (True&),
