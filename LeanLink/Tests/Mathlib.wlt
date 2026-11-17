@@ -78,16 +78,16 @@ VerificationTest[
 VerificationTest[
     Block[
         {
-            Wolfram`LeanLink`Private`installToolchain = ("/toolchain"&),
-            Wolfram`LeanLink`Private`mathlibRequireTool = (Null&),
+            Wolfram`LeanLink`Private`installToolchain = (Throw["Unexpected toolchain check"]&),
+            Wolfram`LeanLink`Private`mathlibRequireTool = (Throw["Unexpected tool check"]&),
             Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (True&),
-            StartProcess = (Throw["Unexpected process"]&)
+            RunProcess = (Throw["Unexpected process"]&)
         },
         With[{result = Reap[InstallMathlib["ProgressFunction" -> Function[{stage, fraction}, Sow[{stage, fraction}]]]]},
             {MatchQ[First[result], _File], Last[result]}
         ]
     ],
-    {True, {{{"Preparing...", None}, {"Checking...", None}}}},
+    {True, {{{"Checking...", None}}}},
     TestID -> "Mathlib-ReadyInstallationStartsNoProcess"
 ]
 
@@ -111,7 +111,7 @@ installationFixture[run_, ready_ : (False&)] := Module[{temporary = CreateDirect
             "Result" -> result,
             "Commands" -> Replace[commands, {{c_} :> c, {} -> {}}],
             "Directory" -> directory,
-            "ProjectFiles" -> Wolfram`LeanLink`Private`mathlibProjectFilesQ[directory],
+            "ProjectFiles" -> projectFilesQ[directory],
             "Record" -> Quiet[Check[Import[FileNameJoin[{directory, "leanlink-mathlib.json"}], "RawJSON"], None]],
             "Log" -> Quiet[Check[ReadString[FileNameJoin[{directory, "leanlink-mathlib.log"}]], None]],
             "Package" -> DirectoryQ[FileNameJoin[{directory, ".lake", "packages", "mathlib"}]]
@@ -121,12 +121,24 @@ installationFixture[run_, ready_ : (False&)] := Module[{temporary = CreateDirect
     ]
 ]
 
-(* a run that clones the tag at the pinned commit, and where every command succeeds *)
+(* the project's files in directory are the paclet's, byte for byte *)
 
-pinnedClone[command_List, workingDirectory_String] := (
-    If[MemberQ[command, "clone"], CreateDirectory[Last[command], CreateIntermediateDirectories -> True]];
-    <|"ExitCode" -> 0, "StandardOutput" -> If[MemberQ[command, "rev-parse"], Wolfram`LeanLink`Private`mathlibPin[]["rev"] <> "\n", ""], "StandardError" -> ""|>
+projectFilesQ[directory_String] := AllTrue[
+    Normal[Wolfram`LeanLink`Private`mathlibProjectFiles[]],
+    With[{file = FileNameJoin[{directory, First[#]}]}, FileExistsQ[file] && FileHash[file] === FileHash[Last[#]]]&
+]
+
+(* a run where every command succeeds, and git clone checks out commit, as a clone of a tag does: HEAD names it *)
+
+cloneAt[commit_String][command_List, workingDirectory_String] := (
+    If[ MemberQ[command, "clone"],
+        CreateDirectory[FileNameJoin[{Last[command], ".git"}], CreateIntermediateDirectories -> True];
+        Export[FileNameJoin[{Last[command], ".git", "HEAD"}], commit <> "\n", "Text"]
+    ];
+    <|"ExitCode" -> 0, "StandardOutput" -> "", "StandardError" -> ""|>
 )
+
+pinnedClone = cloneAt[Wolfram`LeanLink`Private`mathlibPin[]["rev"]]
 
 (* The project's files are copied in; Mathlib's tag is cloned where Lake keeps the package; lake exe cache get and
    lake build Mathlib run in the directory with the toolchain's own lake; the commands go to the log; the record comes
@@ -141,7 +153,6 @@ VerificationTest[
             fixture["Result"] === File[fixture["Directory"]],
             fixture["Commands"] === {
                 {{"/fixture/git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", "v4.35.0", "https://github.com/leanprover-community/mathlib4", package}, fixture["Directory"]},
-                {{"/fixture/git", "rev-parse", "HEAD"}, package},
                 {{lake, "exe", "cache", "get"}, fixture["Directory"]},
                 {{lake, "build", "Mathlib"}, fixture["Directory"]}
             },
@@ -159,16 +170,10 @@ VerificationTest[
 
 VerificationTest[
     Module[{checks = 0, fixture},
-        fixture = installationFixture[
-            Function[{command, workingDirectory},
-                If[MemberQ[command, "clone"], CreateDirectory[Last[command], CreateIntermediateDirectories -> True]];
-                <|"ExitCode" -> 0, "StandardOutput" -> If[MemberQ[command, "rev-parse"], StringRepeat["0", 40] <> "\n", ""], "StandardError" -> ""|>
-            ],
-            (checks++ > 0&)
-        ];
+        fixture = installationFixture[cloneAt[StringRepeat["0", 40]], (checks++ > 0&)];
         {MatchQ[fixture["Result"], _File], Rest[First[#]][[;; 2]]& /@ Rest[fixture["Commands"]], fixture["Package"]}
     ],
-    {True, {{"rev-parse", "HEAD"}, {"exe", "cache"}, {"build", "Mathlib"}}, False},
+    {True, {{"exe", "cache"}, {"build", "Mathlib"}}, False},
     TestID -> "Mathlib-CloneAtAnotherCommitLeftToLake"
 ]
 
@@ -233,9 +238,9 @@ VerificationTest[directoryInUseFixture[{"lakefile.lean", "leanlink-mathlib.json"
 (* ---- Readiness ---- *)
 
 (* An installation as InstallMathlib leaves it: the project's files, its record, and Mathlib's package with its build,
-   beside a toolchain with lean. git is replaced: rev-parse gives the pinned commit, and diff the exit code given. *)
+   beside a toolchain with lean; then without the file named, or with it changed *)
 
-readinessFixture[diffExit_Integer, changed_ : None] := Module[{temporary = CreateDirectory[], directory, toolchain, build},
+readinessFixture[change_ : None] := Module[{temporary = CreateDirectory[], directory, toolchain, build},
     directory = FileNameJoin[{temporary, "mathlib"}];
     toolchain = FileNameJoin[{temporary, "toolchain"}];
     build = FileNameJoin[{directory, ".lake", "packages", "mathlib", ".lake", "build", "lib", "lean"}];
@@ -245,33 +250,22 @@ readinessFixture[diffExit_Integer, changed_ : None] := Module[{temporary = Creat
     CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{toolchain, "bin"}], "lean"]];
     KeyValueMap[CopyFile[#2, FileNameJoin[{directory, #1}]]&, Wolfram`LeanLink`Private`mathlibProjectFiles[]];
     Export[FileNameJoin[{directory, "leanlink-mathlib.json"}], Wolfram`LeanLink`Private`mathlibRecord[], "RawJSON"];
-    If[changed =!= None, Export[FileNameJoin[{directory, changed}], "changed", "Text"]];
+    Replace[change, {{"Delete", file_} :> DeleteFile[FileNameJoin[{temporary, file}]], {"Change", file_} :> Export[FileNameJoin[{temporary, file}], "changed", "Text"]}];
     WithCleanup[
-        Block[
-            {
-                Wolfram`LeanLink`Private`leanToolchainPath = (toolchain&),
-                Wolfram`LeanLink`Private`mathlibExecutable = ("git"&),
-                Wolfram`LeanLink`Private`mathlibGitWorkingQ = (True&),
-                Wolfram`LeanLink`Private`installRun = Function[{command, workingDirectory},
-                    Sow[Rest[command]];
-                    If[MemberQ[command, "diff"], <|"ExitCode" -> diffExit|>, <|"ExitCode" -> 0, "StandardOutput" -> Wolfram`LeanLink`Private`mathlibPin[]["rev"] <> "\n"|>]
-                ],
-                Wolfram`LeanLink`Private`mathlibRuntimeReadyQ = (True&)
-            },
-            Reap[Wolfram`LeanLink`Private`mathlibInstallationReadyQ[directory]]
-        ]
-        ,
+        Block[{Wolfram`LeanLink`Private`leanToolchainPath = (toolchain&), RunProcess = (Throw["Unexpected process"]&)},
+            Wolfram`LeanLink`Private`mathlibInstallationReadyQ[directory]
+        ],
         DeleteDirectory[temporary, DeleteContents -> True]
     ]
 ]
 
-VerificationTest[readinessFixture[0], {True, {{{"rev-parse", "HEAD"}, {"diff", "--quiet", "HEAD"}}}}, TestID -> "Mathlib-ReadyWhenEverythingMatches"]
+VerificationTest[readinessFixture[], True, TestID -> "Mathlib-ReadyWithoutAnyProcess"]
 
-VerificationTest[readinessFixture[1], {False, {{{"rev-parse", "HEAD"}, {"diff", "--quiet", "HEAD"}}}}, TestID -> "Mathlib-ModifiedCheckoutIsNotReady"]
+VerificationTest[readinessFixture[{"Change", "mathlib/leanlink-mathlib.json"}], False, TestID -> "Mathlib-OtherRecordIsNotReady"]
 
-VerificationTest[readinessFixture[0, "lakefile.toml"], {False, {}}, TestID -> "Mathlib-ChangedProjectIsNotReady"]
+VerificationTest[readinessFixture[{"Delete", "mathlib/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean"}], False, TestID -> "Mathlib-MissingBuildIsNotReady"]
 
-VerificationTest[readinessFixture[0, "leanlink-mathlib.json"], {False, {}}, TestID -> "Mathlib-OtherRecordIsNotReady"]
+VerificationTest[readinessFixture[{"Delete", Wolfram`LeanLink`Private`leanProgram["toolchain/bin", "lean"]}], False, TestID -> "Mathlib-MissingToolchainIsNotReady"]
 
 (* ---- Git and curl ---- *)
 

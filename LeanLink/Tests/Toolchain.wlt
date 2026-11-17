@@ -49,7 +49,8 @@ VerificationTest[
             result = Block[
                 {
                     Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
-                    StartProcess = (Throw["Unexpected process"]&),
+                    Wolfram`LeanLink`Private`leanRuntimeReadyQ = (True&),
+                    RunProcess = (Throw["Unexpected process"]&),
                     URLDownload = (Throw["Unexpected download"]&)
                 },
                 Reap[InstallLeanToolchain["ProgressFunction" -> Function[{stage, fraction}, Sow[stage]]]]
@@ -72,6 +73,7 @@ VerificationTest[
             result = Block[
                 {
                     Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
+                    Wolfram`LeanLink`Private`leanRuntimeReadyQ = (True&),
                     Wolfram`LeanLink`Private`installElan = ("/elan"&),
                     Wolfram`LeanLink`Private`installRun = Function[{command, workingDirectory},
                         Sow[command];
@@ -102,6 +104,22 @@ VerificationTest[
     ],
     "ToolchainInstallFailed",
     TestID -> "Toolchain-FailedInstallationReported"
+]
+
+(* an installed toolchain whose runtime LeanLink cannot load is reported, not given *)
+
+VerificationTest[
+    Module[{directory = CreateDirectory[], result},
+        CreateDirectory[FileNameJoin[{directory, "bin"}]];
+        CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "lean"]];
+        WithCleanup[
+            result = Block[{Wolfram`LeanLink`Private`leanToolchainPath = (directory&), Wolfram`LeanLink`Private`leanRuntimeReadyQ = (False&)}, InstallLeanToolchain[]["Tag"]],
+            DeleteDirectory[directory, DeleteContents -> True]
+        ];
+        result
+    ],
+    "RuntimeUnavailable",
+    TestID -> "Toolchain-RuntimeChecked"
 ]
 
 (* ---- elan and downloads ---- *)

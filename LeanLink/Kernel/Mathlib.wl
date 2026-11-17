@@ -61,7 +61,7 @@ $mathlibStamp = "leanlink-mathlib.json"
 
 $mathlibLog = "leanlink-mathlib.log"
 
-mathlibRecord[] := <|"Toolchain" -> $LeanToolchain, "Revision" -> mathlibPin[]["rev"], "ManifestSHA256" -> fileSHA256[mathlibProjectFiles[]["lake-manifest.json"]]|>
+mathlibRecord[] := mathlibRecord[] = <|"Toolchain" -> $LeanToolchain, "Revision" -> mathlibPin[]["rev"], "ManifestSHA256" -> fileSHA256[mathlibProjectFiles[]["lake-manifest.json"]]|>
 
 (* ============================================================================ *)
 (* Git and curl                                                                 *)
@@ -157,41 +157,14 @@ mathlibRequireTool[name_String] := With[{path = mathlibExecutable[name]},
 (* Readiness                                                                    *)
 (* ============================================================================ *)
 
-(* LeanLink can load the installation when its native library loads Lean's Init from the pinned toolchain. That runs no
-   elan and compiles nothing, and once it has passed it holds for the rest of the kernel session. *)
+(* Ready: InstallMathlib's record, written once lake build Mathlib has checked every module, names the paclet's toolchain
+   and Mathlib project; Mathlib's build is in place; and so is the toolchain. These are file checks: no process starts.
+   Lake checks the packages' commits whenever InstallMathlib runs it. *)
 
-$mathlibRuntimeReady = False
-
-mathlibRuntimeReadyQ[] := TrueQ[$mathlibRuntimeReady] || With[{handle = Quiet[LeanLoadEnvironment[{"Init"}, FileNameJoin[{leanToolchainPath[], "lib", "lean"}]]]},
-    If[ IntegerQ[handle] && handle > 0,
-        LeanFreeEnvironment[handle];
-        $mathlibRuntimeReady = True
-        ,
-        False
-    ]
-]
-
-(* the project's files in directory are the paclet's, byte for byte *)
-
-mathlibProjectFilesQ[directory_String] := AllTrue[
-    Normal[mathlibProjectFiles[]],
-    With[{file = FileNameJoin[{directory, First[#]}]}, FileExistsQ[file] && fileSHA256[file] === fileSHA256[Last[#]]]&
-]
-
-(* Ready: the record and the project's files are the paclet's, Mathlib is checked out at the pinned commit with no
-   change to a tracked file and is built, and LeanLink can load the toolchain's runtime *)
-
-mathlibInstallationReadyQ[directory_String] := Block[
-    {package = mathlibPackageDirectory[directory], stamp = FileNameJoin[{directory, $mathlibStamp}], git = mathlibExecutable["git"]}
-    ,
+mathlibInstallationReadyQ[directory_String] := With[{stamp = FileNameJoin[{directory, $mathlibStamp}]},
     And[
-        AllTrue[{stamp, FileNameJoin[{lakeBuildLib[package], "Mathlib.olean"}], toolchainProgram["lean"]}, FileExistsQ],
-        Quiet[Check[Import[stamp, "RawJSON"] === mathlibRecord[], False]],
-        mathlibProjectFilesQ[directory],
-        mathlibGitWorkingQ[git],
-        With[{head = installRun[{git, "rev-parse", "HEAD"}, package]}, AssociationQ[head] && head["ExitCode"] === 0 && StringTrim[head["StandardOutput"]] === mathlibPin[]["rev"]],
-        With[{changes = installRun[{git, "diff", "--quiet", "HEAD"}, package]}, AssociationQ[changes] && changes["ExitCode"] === 0],
-        mathlibRuntimeReadyQ[]
+        AllTrue[{stamp, FileNameJoin[{lakeBuildLib[mathlibPackageDirectory[directory]], "Mathlib.olean"}], toolchainProgram["lean"]}, FileExistsQ],
+        Quiet[Check[Import[stamp, "RawJSON"] === mathlibRecord[], False]]
     ]
 ]
 
@@ -218,13 +191,13 @@ mathlibDirectoryUsableQ[directory_String] := Or[
    stays for the run that resumes it *)
 
 installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
+    installStage["Checking..."];
+    If[mathlibInstallationReadyQ[directory], Return[File[directory], Block]];
     installStage["Preparing..."];
     toolchain = installToolchain[];
     If[FailureQ[toolchain], Return[toolchain, Block]];
-    installStage["Checking..."];
     git = mathlibRequireTool["git"];
     mathlibRequireTool["curl"];
-    If[mathlibInstallationReadyQ[directory], Return[File[directory], Block]];
     If[ ! mathlibDirectoryUsableQ[directory],
         Return[installFailure["MathlibDirectoryInUse", "`1` holds other files. Choose a new or empty directory.", <|"MessageParameters" -> {directory}, "Directory" -> directory|>], Block]
     ];
@@ -246,7 +219,7 @@ installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
     Export[FileNameJoin[{directory, $mathlibStamp}], mathlibRecord[], "RawJSON"];
     If[ mathlibInstallationReadyQ[directory],
         File[directory],
-        installFailure["MathlibRuntimeUnavailable", "Mathlib was built, but LeanLink could not load the Lean runtime of `1`. Restart the kernel and run InstallMathlib[] again.", <|"MessageParameters" -> {$LeanToolchain}, "Toolchain" -> $LeanToolchain|>]
+        installFailure["MathlibInstallFailed", "lake build Mathlib finished, but Mathlib's build is not in `1`.", <|"MessageParameters" -> {lakeBuildLib[mathlibPackageDirectory[directory]]}, "Log" -> File[FileNameJoin[{directory, $mathlibLog}]]|>]
     ]
 ]
 
@@ -256,7 +229,7 @@ installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
    is. One at another commit is removed, and Lake fetches the pinned commit itself. A clone that does not finish is
    removed too. *)
 
-mathlibClone[git_String, directory_String] := Block[{package = mathlibPackageDirectory[directory], command, result, head, complete = False},
+mathlibClone[git_String, directory_String] := Block[{package = mathlibPackageDirectory[directory], command, result, complete = False},
     If[DirectoryQ[package], Return[Null, Block]];
     installStage["Downloading..."];
     command = {git, "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", mathlibPin[]["inputRev"], mathlibPin[]["url"], package};
@@ -274,8 +247,8 @@ mathlibClone[git_String, directory_String] := Block[{package = mathlibPackageDir
                 Block
             ]
         ];
-        head = installRun[{git, "rev-parse", "HEAD"}, package];
-        complete = AssociationQ[head] && StringTrim[head["StandardOutput"]] === mathlibPin[]["rev"];
+        (* a clone of a tag has a detached HEAD: the file holds the commit *)
+        complete = Quiet[Check[StringTrim[ReadString[FileNameJoin[{package, ".git", "HEAD"}]]], ""]] === mathlibPin[]["rev"];
         Null
         ,
         If[! complete, Quiet[DeleteDirectory[package, DeleteContents -> True]]]
