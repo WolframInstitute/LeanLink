@@ -5,27 +5,22 @@
    project, and keeps the lake-manifest.json Lake writes, which pins Mathlib and each package it uses by commit.
    MATHLIB_NO_CACHE_ON_UPDATE keeps lake update from downloading Mathlib's build cache.
 
-   Run it after changing the toolchain, with that toolchain installed, then run the Mathlib tests:
+   It takes the pin, the toolchain's lake and the project's files from the paclet in this checkout, as InstallMathlib
+   does. Run it after changing the toolchain, with that toolchain installed, then run the Mathlib tests:
 
        wolframscript -file update_mathlib.wls
 *)
 
-root = DirectoryName[$InputFileName];
+PacletDirectoryLoad[FileNameJoin[{DirectoryName[$InputFileName], "LeanLink"}]];
 
-toolchainFile = FileNameJoin[{root, "LeanLink", "lean-toolchain"}];
+Needs["Wolfram`LeanLink`"];
 
-toolchain = StringTrim[ReadString[toolchainFile]];
+files = Wolfram`LeanLink`Private`mathlibProjectFiles[];
 
-project = FileNameJoin[{root, "LeanLink", "Assets", "Mathlib"}];
-
-elanHome = Replace[Environment["ELAN_HOME"], Except[_String] :> FileNameJoin[{$HomeDirectory, ".elan"}]];
-
-(* the toolchain's own lake, as InstallMathlib runs it: elan's proxy would download a missing toolchain *)
-
-lake = FileNameJoin[{elanHome, "toolchains", StringReplace[toolchain, {"/" -> "--", ":" -> "---"}], "bin", "lake" <> If[$OperatingSystem === "Windows", ".exe", ""]}];
+lake = Wolfram`LeanLink`Private`toolchainProgram["lake"];
 
 If[ ! FileExistsQ[lake],
-    Print["The toolchain ", toolchain, " is not installed. Install it with InstallLeanToolchain[] in LeanLink, or with: elan toolchain install ", toolchain];
+    Print["The toolchain ", Wolfram`LeanLink`Private`$LeanToolchain, " is not installed. Install it with: elan toolchain install ", Wolfram`LeanLink`Private`$LeanToolchain];
     Exit[1]
 ];
 
@@ -39,7 +34,7 @@ lakefile = StringRiffle[
         "[[require]]",
         "name = \"mathlib\"",
         "git = \"https://github.com/leanprover-community/mathlib4\"",
-        "rev = \"" <> Last[StringSplit[toolchain, ":"]] <> "\"",
+        "rev = \"" <> Wolfram`LeanLink`Private`$LeanToolchainVersion <> "\"",
         ""
     },
     "\n"
@@ -47,31 +42,31 @@ lakefile = StringRiffle[
 
 scratch = CreateDirectory[];
 
-manifest = WithCleanup[
-    CopyFile[toolchainFile, FileNameJoin[{scratch, "lean-toolchain"}]];
+updated = WithCleanup[
+    CopyFile[files["lean-toolchain"], FileNameJoin[{scratch, "lean-toolchain"}]];
     Export[FileNameJoin[{scratch, "lakefile.toml"}], lakefile, "String"];
     result = RunProcess[{lake, "update"}, ProcessDirectory -> scratch, ProcessEnvironment -> Association[GetEnvironment[], "MATHLIB_NO_CACHE_ON_UPDATE" -> "1"]];
     If[ ! AssociationQ[result] || result["ExitCode"] =!= 0 || ! FileExistsQ[FileNameJoin[{scratch, "lake-manifest.json"}]],
         Print["lake update failed:\n", If[AssociationQ[result], result["StandardOutput"] <> result["StandardError"], result]];
-        $Failed
+        False
         ,
-        If[! DirectoryQ[project], CreateDirectory[project]];
-        CopyFile[FileNameJoin[{scratch, #}], FileNameJoin[{project, #}], OverwriteTarget -> True]& /@ {"lakefile.toml", "lake-manifest.json"};
-        Import[FileNameJoin[{project, "lake-manifest.json"}], "RawJSON"]
+        If[! DirectoryQ[DirectoryName[files["lakefile.toml"]]], CreateDirectory[DirectoryName[files["lakefile.toml"]]]];
+        CopyFile[FileNameJoin[{scratch, #}], files[#], OverwriteTarget -> True]& /@ {"lakefile.toml", "lake-manifest.json"};
+        True
     ]
     ,
     DeleteDirectory[scratch, DeleteContents -> True]
 ];
 
-If[manifest === $Failed, Exit[1]];
+If[! updated, Exit[1]];
+
+(* read for the first time here, from the manifest just written *)
 
 Print[
     "Pinned Mathlib ",
-    Last[StringSplit[toolchain, ":"]],
+    Wolfram`LeanLink`Private`mathlibPin[]["inputRev"],
     " at ",
-    SelectFirst[manifest["packages"], #["name"] === "mathlib"&]["rev"],
-    ", with ",
-    Length[manifest["packages"]],
-    " packages, in ",
-    project
+    Wolfram`LeanLink`Private`mathlibPin[]["rev"],
+    " in ",
+    DirectoryName[files["lake-manifest.json"]]
 ];
