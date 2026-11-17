@@ -172,3 +172,10 @@ Get[FileNameJoin[{DirectoryName[$InputFileName], "ProofToLean.wl"}]];
 (* The bridge to WolframInstitute/TypeTheory: its entry points only; the rest loads on the first call *)
 
 Get[FileNameJoin[{DirectoryName[$InputFileName], "TypeTheoryBridge.wl"}]];
+
+(* InstallLeanToolchain, the toolchain the native library is built against, and InstallMathlib and
+   MathlibInstallation, mathlib for it *)
+
+Get[FileNameJoin[{DirectoryName[$InputFileName], "Toolchain.wl"}]];
+
+Get[FileNameJoin[{DirectoryName[$InputFileName], "Mathlib.wl"}]];

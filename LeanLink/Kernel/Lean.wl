@@ -114,7 +114,12 @@ Begin["`Private`"];
 (* Shim library                                                                 *)
 (* ============================================================================ *)
 
-$ShimLib := $ShimLib = Block[
+$ShimLib := $ShimLib = loadShim[]
+
+(* The shim of this system, ready to load, or $Failed. InstallLeanToolchain sets $ShimLib to call this again when it
+   was $Failed for want of the toolchain. *)
+
+loadShim[] := Block[
     {loc, pacletDir, devDir, libName, sysDir}
     ,
     (* Platform-specific library name and directory *)
@@ -150,7 +155,14 @@ $ShimLib := $ShimLib = Block[
    user's cache, not the paclet's own folder. This keeps the paclet small but
    requires the toolchain the shim was built against to be installed via elan. *)
 
-$LeanToolchainVersion = "v4.35.0";(* must match Native/lean-toolchain *)
+(* Paclet root: the directory containing PacletInfo.wl, cached at load time *)
+
+$PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
+
+(* The toolchain the shims are built against, v4.35.0 for leanprover/lean4:v4.35.0, from the paclet's lean-toolchain,
+   which names the toolchain of Native/lean-toolchain *)
+
+$LeanToolchainVersion = Last[StringSplit[StringTrim[ReadString[FileNameJoin[{$PacletRoot, "lean-toolchain"}]]], ":"]]
 
 (* elan's root: ELAN_HOME when set, else ~/.elan. Containers commonly relocate
    it (ELAN_HOME=/opt/elan with no ~/.elan at all), so every path built from the
@@ -167,7 +179,11 @@ leanProgram[dir_String, name_String] := FileNameJoin[{dir, name <> If[$Operating
 
 $searchPathSeparator = If[$OperatingSystem === "Windows", ";", ":"]
 
-leanToolchainDir[] := With[{dir = FileNameJoin[{elanHome[], "toolchains", "leanprover--lean4---" <> $LeanToolchainVersion}]},
+(* The toolchain's directory, whether or not it is installed *)
+
+leanToolchainPath[] := FileNameJoin[{elanHome[], "toolchains", "leanprover--lean4---" <> $LeanToolchainVersion}]
+
+leanToolchainDir[] := With[{dir = leanToolchainPath[]},
     If[DirectoryQ[dir], dir, $Failed]
 ]
 
@@ -186,7 +202,7 @@ leanRuntimeLibs[] := Switch[ $SystemID,
 
 (* Why the shim could not be loaded, for the ::nolib message *)
 
-$shimFailure = "install the Lean toolchain it was built against (leanprover/lean4:" <> $LeanToolchainVersion <> ") with elan, or run 'lake build' in the Native/ directory for a development build."
+$shimFailure = "install the Lean toolchain it was built against (leanprover/lean4:" <> $LeanToolchainVersion <> ") with InstallLeanToolchain[], or run 'lake build' in the Native/ directory for a development build."
 
 (* The shim runs where the Lean runtime is next to it: in place when the runtime
    is there already, as in a development build, else from a copy in the user's
@@ -266,10 +282,6 @@ addRuntimeSearchPath[libDir_String] := Module[{var, sep, cur},
 $DevProjectRoot = With[{candidate = DirectoryName[DirectoryName[DirectoryName[$InputFileName]]]},
     If[DirectoryQ[FileNameJoin[{candidate, "Native"}]], candidate, None]
 ]
-
-(* Paclet root: the directory containing PacletInfo.wl, cached at load time *)
-
-$PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
 
 (* Define the package error messages on each public entry point, so a failure is
    reported under the symbol the user actually called (LeanImport::err,
@@ -903,40 +915,69 @@ LeanEvaluate[term_LeanTerm, arguments : Longest[Except[_Rule | _RuleDelayed]...]
     LeanEvaluate[LeanEnvironment[<|"_Handle" -> handle|>], StringRiffle[encoded, " "], opts]
 ]
 
-(* ---- LeanEvaluate ----
-   #eval in a lean process (the pinned toolchain), value returned through JSON.
-   The process is polled rather than run with RunProcess, for a time limit, and
-   its output is read while it runs: a large value would otherwise fill the
-   pipe and deadlock the wait. *)
+(* ---- Processes ----
+   LeanEvaluate's lean and the processes of an installation are polled rather than
+   run with RunProcess: the output is read while the process runs, since a large
+   output would otherwise fill a pipe and deadlock the wait; the process can have
+   a time limit; and the "Poll" function is given each new piece of its output,
+   {standard output, standard error}, and can end the call by throwing or
+   aborting. However the call ends, a process still running is killed, with the
+   processes it started. *)
 
 readProcessStream[stream_] := Replace[Quiet[ReadString[stream, EndOfBuffer]], Except[_String] -> ""]
 
-runLeanProcess[cmd_List, env_Association, limit_] := Module[{p, out = "", err = "", t0 = AbsoluteTime[], stdout, stderr, newOut, newErr},
-    p = StartProcess[cmd, ProcessEnvironment -> env];
-    stdout = ProcessConnection[p, "StandardOutput"];
-    stderr = ProcessConnection[p, "StandardError"];
-    While[ProcessStatus[p] === "Running",
-        newOut = readProcessStream[stdout];
-        newErr = readProcessStream[stderr];
-        out = out <> newOut;
-        err = err <> newErr;
-        If[ AbsoluteTime[] - t0 > limit,
-            KillProcess[p];
-            Return[$TimedOut, Module]
-        ];
-        If[newOut === "" && newErr === "", Pause[0.02]]
-    ];
-    out = out <> Replace[ReadString[stdout], Except[_String] -> ""];
-    err = err <> Replace[ReadString[stderr], Except[_String] -> ""];
-    <|"ExitCode" -> ProcessInformation[p, "ExitCode"], "StandardOutput" -> out, "StandardError" -> err|>
+Options[runProcess] = {ProcessDirectory -> Inherited, ProcessEnvironment -> Inherited, TimeConstraint -> Infinity, "Poll" -> (Null&)}
+
+runProcess[command_List, opts : OptionsPattern[]] := Module[
+    {process, streams, poll = OptionValue["Poll"], limit = OptionValue[TimeConstraint], started = AbsoluteTime[], running = True, timedOut = False, chunks, output}
+    ,
+    process = Quiet[Check[StartProcess[command, ProcessDirectory -> OptionValue[ProcessDirectory], ProcessEnvironment -> OptionValue[ProcessEnvironment]], $Failed]];
+    If[! MatchQ[process, _ProcessObject], Return[$Failed, Module]];
+    streams = ProcessConnection[process, #]& /@ {"StandardOutput", "StandardError"};
+    WithCleanup[
+        (* a process can write and exit between an empty read and the status check,
+           so its pipes are read until they are empty after it has exited *)
+        output = Last[Reap[
+            While[True,
+                chunks = readProcessStream /@ streams;
+                Sow[First[chunks], "StandardOutput"];
+                Sow[Last[chunks], "StandardError"];
+                poll[chunks];
+                If[ chunks === {"", ""},
+                    If[! running, Break[]];
+                    running = ProcessStatus[process] === "Running";
+                    If[running, Pause[0.02]]
+                ];
+                If[ AbsoluteTime[] - started > limit,
+                    timedOut = True;
+                    Break[]
+                ]
+            ],
+            {"StandardOutput", "StandardError"}
+        ]];
+        If[ timedOut,
+            $TimedOut,
+            <|"ExitCode" -> ProcessInformation[process, "ExitCode"], "StandardOutput" -> StringJoin[Flatten[First[output]]], "StandardError" -> StringJoin[Flatten[Last[output]]]|>
+        ]
+        ,
+        If[ProcessStatus[process] === "Running", KillProcess[process]]
+    ]
 ]
+
+(* A process's output reaches the kernel a byte a character. It is UTF-8, as
+   Lean's messages and lake's check marks are, unless it does not decode. *)
+
+utf8Text[text_String] := Quiet[Check[FromCharacterCode[ToCharacterCode[text, "ISO8859-1"], "UTF-8"], text]]
+
+(* ---- LeanEvaluate ----
+   #eval in a lean process (the pinned toolchain), value returned through JSON *)
 
 Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "Source" -> "", "TimeLimit" -> 600, "Isolated" -> False}
 
 LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searchPath, opens, srcLines, srcImports, srcBody, script, file, res, json, diag},
     tc = leanToolchainDir[];
     If[ tc === $Failed,
-        Return[Failure["ToolchainNotInstalled", <|"MessageTemplate" -> "LeanLink's toolchain leanprover/lean4:`1` is not installed.", "MessageParameters" -> {$LeanToolchainVersion}|>], Module]
+        Return[Failure["ToolchainNotInstalled", <|"MessageTemplate" -> "LeanLink's toolchain leanprover/lean4:`1` is not installed. InstallLeanToolchain[] installs it.", "MessageParameters" -> {$LeanToolchainVersion}|>], Module]
     ];
     projDir = OptionValue["ProjectDir"];
     searchPath = StringRiffle[DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], FileNameJoin[{tc, "lib", "lean"}]}, ""], $searchPathSeparator];
@@ -969,9 +1010,10 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searc
     ];
     file = FileNameJoin[{$TemporaryDirectory, "LeanLinkEval" <> ToString[$SessionID] <> "x" <> ToString[RandomInteger[10^9]] <> ".lean"}];
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
-    res = runLeanProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, Association[GetEnvironment[], "LEAN_PATH" -> searchPath], OptionValue["TimeLimit"]];
+    res = runProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> searchPath], TimeConstraint -> OptionValue["TimeLimit"]];
     Quiet[DeleteFile[file]];
     If[res === $TimedOut, Return[Failure["TimedOut", <|"MessageTemplate" -> "Evaluation exceeded the time limit of `1` s.", "MessageParameters" -> {OptionValue["TimeLimit"]}|>], Module]];
+    If[! AssociationQ[res], Return[Failure["LeanEvaluateFailed", <|"MessageTemplate" -> "Lean could not be started from `1`.", "MessageParameters" -> {tc}|>], Module]];
     (* The JSON is found in the raw output: ImportString decodes the UTF-8 itself. *)
     json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_EVAL_JSON "]&, None];
     If[ json =!= None,
@@ -979,10 +1021,7 @@ LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searc
             If[ListQ[v] && Length[v] === 1, Return[withFloats[First[v]], Module]]
         ]
     ];
-    diag = StringTrim @ Quiet @ Check[
-        FromCharacterCode[ToCharacterCode[res["StandardOutput"] <> "\n" <> res["StandardError"], "ISO8859-1"], "UTF-8"],
-        res["StandardOutput"] <> "\n" <> res["StandardError"]
-    ];
+    diag = StringTrim[utf8Text[res["StandardOutput"] <> "\n" <> res["StandardError"]]];
     Failure[
         "LeanEvaluateFailed",
         <|"MessageTemplate" -> "Lean could not evaluate the expression: `1`", "MessageParameters" -> {StringTake[diag, UpTo[500]]}, "Output" -> diag, "ExitCode" -> res["ExitCode"]|>
@@ -1030,10 +1069,7 @@ LeanBuild[dir_String, modules : {___String} : {}] := Module[{root = ExpandFileNa
     ];
     If[StringReplace[tc["Pin"], StartOfString ~~ ___ ~~ ":" -> ""] =!= $LeanToolchainVersion, Message[LeanBuild::version, tc["Pin"], "leanprover/lean4:" <> $LeanToolchainVersion]];
     res = RunProcess[{lake, "build", Sequence @@ ("+" <> #& /@ modules)}, ProcessDirectory -> root];
-    out = StringTrim @ Quiet @ Check[
-        FromCharacterCode[ToCharacterCode[res["StandardOutput"] <> "\n" <> res["StandardError"], "ISO8859-1"], "UTF-8"],
-        res["StandardOutput"] <> "\n" <> res["StandardError"]
-    ];
+    out = StringTrim[utf8Text[res["StandardOutput"] <> "\n" <> res["StandardError"]]];
     (* A build replaces the project's oleans: drop its cached environments so the
        next LeanImport loads the new ones instead of returning stale constants. *)
     $envCache = KeySelect[$envCache, ! (StringQ[First[#]] && ExpandFileName[First[#]] === root)&];
@@ -1159,7 +1195,7 @@ frontendTypeForms[h_Integer, names_List, opens_String] := Module[{info, tc, scri
     Export[file, script, "Text", CharacterEncoding -> "UTF-8"];
     res = RunProcess[{leanProgram[FileNameJoin[{tc, "bin"}], "lean"], file}, ProcessEnvironment -> Association[GetEnvironment[], "LEAN_PATH" -> info["SearchPath"]]];
     Quiet[DeleteFile[{file, namesFile}]];
-    out = Quiet @ Check[FromCharacterCode[ToCharacterCode[res["StandardOutput"], "ISO8859-1"], "UTF-8"], res["StandardOutput"]];
+    out = utf8Text[res["StandardOutput"]];
     (* Find the JSON in the raw output: ImportString reads its argument as bytes
        and decodes the UTF-8 itself, so it must not be pre-decoded. *)
     json = SelectFirst[StringSplit[res["StandardOutput"], "\n"], StringStartsQ[#, "LEANLINK_PP_JSON "]&, None];
@@ -3078,7 +3114,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         (* lean writes diagnostics to stdout, not stderr; RunProcess decodes them as Latin-1, so they are decoded
            again as UTF-8 to keep the goal and type text readable *)
         With[{output = result["StandardOutput"] <> "\n" <> result["StandardError"], where = If[KeyExistsQ[result, "File"], " for " <> result["File"], ""]},
-            Message[LeanImport::err, "lean compilation failed" <> where <> ": " <> StringTrim[Quiet @ Check[FromCharacterCode[ToCharacterCode[output, "ISO8859-1"], "UTF-8"], output]]]
+            Message[LeanImport::err, "lean compilation failed" <> where <> ": " <> StringTrim[utf8Text[output]]]
         ];
         DeleteDirectory[tmpDir, DeleteContents -> True];
         Return[$Failed, Block]

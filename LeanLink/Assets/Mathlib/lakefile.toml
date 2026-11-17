@@ -1,0 +1,9 @@
+# The Lake project InstallMathlib installs: Mathlib at the tag of LeanLink's toolchain. lake-manifest.json pins
+# Mathlib and each package it uses by commit. update_mathlib.wls writes both.
+
+name = "LeanLinkMathlib"
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.35.0"
