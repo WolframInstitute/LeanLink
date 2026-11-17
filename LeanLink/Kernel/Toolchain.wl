@@ -33,10 +33,6 @@ installFailure[tag_String, message_String, data_Association : <||>] := Failure[t
 
 installOptionsQ[function_Symbol, options_List] := SubsetQ[Keys[Options[function]], Keys[Flatten[options]]]
 
-installVersionQ[installed_String, minimum_String] := With[{a = FromDigits /@ StringSplit[installed, "."], b = FromDigits /@ StringSplit[minimum, "."]},
-    OrderedQ[{PadRight[b, Max[Length[a], Length[b]]], PadRight[a, Max[Length[a], Length[b]]]}]
-]
-
 pathDirectories[] := StringSplit[Replace[Environment["PATH"], Except[_String] -> ""], $searchPathSeparator]
 
 (* the first program called name in directories, as a process searches them *)

@@ -318,21 +318,14 @@ If[ $OperatingSystem === "MacOSX",
     ]
 ]
 
-(* curl 7.75 or later with HTTPS, as Mathlib's cache tool takes it, and any curl with HTTPS on Linux, where it fetches
-   a newer one of its own *)
+(* any curl that runs with HTTPS: Mathlib's cache tool decides how to use it by its version *)
 
 VerificationTest[
-    Function[{output, system},
-        Block[{Wolfram`LeanLink`Private`installRun = (<|"ExitCode" -> 0, "StandardOutput" -> output|>&)}, Wolfram`LeanLink`Private`mathlibCurlWorkingQ["curl", system]]
-    ] @@@ {
-        {"curl 8.23.0 (fixture)\nProtocols: file http https\n", "MacOSX-ARM64"},
-        {"curl 7.75.0 (fixture)\nProtocols: http https\n", "Windows-x86-64"},
-        {"curl 7.74.0 (fixture)\nProtocols: http https\n", "MacOSX-ARM64"},
-        {"curl 7.61.1 (fixture)\nProtocols: http https\n", "Linux-x86-64"},
-        {"curl 8.23.0 (fixture)\nProtocols: file http\n", "Linux-x86-64"}
-    },
-    {True, True, False, True, False},
-    TestID -> "Mathlib-CurlAsTheCacheToolTakesIt"
+    Function[output,
+        Block[{Wolfram`LeanLink`Private`installRun = (<|"ExitCode" -> 0, "StandardOutput" -> output|>&)}, Wolfram`LeanLink`Private`mathlibCurlWorkingQ["curl"]]
+    ] /@ {"curl 7.61.1 (fixture)\nProtocols: file http https\n", "curl 8.23.0 (fixture)\nProtocols: file http\n"},
+    {True, False},
+    TestID -> "Mathlib-CurlNeedsHTTPS"
 ]
 
 (* the processes find the toolchain's programs first, then Git and curl where InstallMathlib found them *)

@@ -107,18 +107,11 @@ mathlibGitWorkingQ[path_String] := Block[{result},
 
 mathlibGitWorkingQ[___] := False
 
-(* Mathlib's cache tool takes curl 7.75 or later, with HTTPS; on Linux it fetches a newer curl of its own in place of an
-   older one *)
+(* Mathlib's cache tool decides by its version how to use the curl it finds, and fetches a newer one where it needs to;
+   InstallMathlib asks only for a curl that runs, with HTTPS. Should the cache tool still fail, its reason is in the log. *)
 
-mathlibCurlWorkingQ[path_String, system_String : $SystemID] := Block[{result, versions},
-    result = TimeConstrained[installRun[{path, "--version"}, Directory[]], 10, $Failed];
-    If[! AssociationQ[result] || result["ExitCode"] =!= 0, Return[False, Block]];
-    versions = StringCases[result["StandardOutput"], RegularExpression["(?m)^curl ([0-9]+\\.[0-9]+\\.[0-9]+)"] -> "$1"];
-    And[
-        Length[versions] === 1,
-        StringStartsQ[system, "Linux"] || installVersionQ[First[versions], "7.75.0"],
-        StringContainsQ[result["StandardOutput"], RegularExpression["(?m)^Protocols:[^\\n]*\\bhttps\\b"]]
-    ]
+mathlibCurlWorkingQ[path_String] := With[{result = TimeConstrained[installRun[{path, "--version"}, Directory[]], 10, $Failed]},
+    AssociationQ[result] && result["ExitCode"] === 0 && StringContainsQ[result["StandardOutput"], RegularExpression["(?m)^Protocols:[^\\n]*\\bhttps\\b"]]
 ]
 
 mathlibCurlWorkingQ[___] := False
@@ -127,7 +120,7 @@ mathlibCurlWorkingQ[___] := False
 
 mathlibToolNeed["git"] = "Git, which Lake fetches Mathlib and its packages with"
 
-mathlibToolNeed["curl"] = "curl 7.75 or later with HTTPS, which Mathlib's cache tool downloads with"
+mathlibToolNeed["curl"] = "curl with HTTPS, which Mathlib's cache tool downloads with"
 
 mathlibToolAdvice["git", "MacOSX"] = "Install Apple's command line developer tools, which include Git, by running xcode-select --install in a terminal"
 
