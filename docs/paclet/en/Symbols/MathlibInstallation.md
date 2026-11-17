@@ -19,7 +19,7 @@ RelatedTutorials: [ComputingWithMathlib]
 ## Details & Options
 
 - The result is an [Association]() with the keys `"Status"`, `"Directory"`, `"Toolchain"`, `"Revision"`, `"DocumentationURL"`, `"Executables"` and `"OtherVersions"`.
-- `"Status"` is `"Ready"`, `"Needs setup"` or `"Not installed"`. A ready installation has the project files and the record [InstallMathlib]() writes, Mathlib checked out at the pinned commit with no change to a tracked file and built, and LeanLink's native library loads the toolchain's runtime.
+- `"Status"` is `"Ready"`, `"Needs setup"` or `"Not installed"`. A ready installation has the record [InstallMathlib]() writes once Mathlib is built, for this version of LeanLink, with Mathlib's build and the toolchain in place. The check reads files only and starts no process.
 - `"Directory"` is the Lake project to give [LeanImport]() as `"ProjectDir"`. `"Toolchain"` is the pinned Lean toolchain and `"Revision"` the Mathlib commit.
 - `"DocumentationURL"` is Mathlib's documentation site, which follows Mathlib's development and can describe a newer release.
 - `"Executables"` gives the programs an installation runs, under the keys `"Elan"`, `"Lake"`, `"Git"` and `"Curl"`: a path, or [Missing]() where none is found. `"Lake"` is the toolchain's own.
