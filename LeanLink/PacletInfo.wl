@@ -18,6 +18,8 @@ PacletObject[
         "Context" -> {"Wolfram`LeanLink`"},
         "Symbols" -> {
           "Wolfram`LeanLink`ImportDOT",
+          "Wolfram`LeanLink`InstallLeanToolchain",
+          "Wolfram`LeanLink`InstallMathlib",
           "Wolfram`LeanLink`LeanApp",
           "Wolfram`LeanLink`LeanBVar",
           "Wolfram`LeanLink`LeanBuild",
@@ -64,6 +66,7 @@ PacletObject[
           "Wolfram`LeanLink`LeanTruncated",
           "Wolfram`LeanLink`LeanValue",
           "Wolfram`LeanLink`LeanVerify",
+          "Wolfram`LeanLink`MathlibInstallation",
           "Wolfram`LeanLink`ProofToLean",
           "Wolfram`LeanLink`TypeTheoryToLean"
         }
@@ -73,7 +76,9 @@ PacletObject[
         "Root" -> "Assets",
         "Assets" -> {
           {"CodeLean", "code.lean"},
-          {"Examples", "Examples.lean"}
+          {"Examples", "Examples.lean"},
+          {"Elan", "Elan.json"},
+          {"Mathlib", "Mathlib"}
         }
       },
       {
