@@ -35,7 +35,7 @@ PacletInstall[ResourceObject["https://www.wolframcloud.com/obj/wolframinstitute/
 
 - **Native LibraryLink bridge** — embeds the Lean runtime directly via a C shim, no subprocess overhead
 - **Environment loading** — imports modules from Lake projects (Mathlib included), `.lean` files and source strings; queries constants, theorems, types
-- **Mathlib**: `InstallMathlib` installs the Mathlib release built with LeanLink's toolchain as a Lake project, with Mathlib and its packages pinned by commit, and `InstallLeanToolchain` the toolchain, with elan
+- **Mathlib**: `InstallMathlib` installs the Mathlib release built with LeanLink's toolchain as a Lake project, with Mathlib and its packages pinned by commit
 - **Lean notation** — `"TypeForm"` prints a type with Lean's own pretty-printer, opening the namespaces you name
 - **Symbolic expressions** — Lean expressions as `LeanApp`, `LeanConst`, `LeanForall`, etc., displayed in Lean notation
 - **Interactive proofs** — `LeanState`/`LeanTactic` for step-by-step proof construction
