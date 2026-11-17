@@ -19,7 +19,11 @@ temporary = Path(os.environ["RUNNER_TEMP"]) / "leanlink-verification"
 temporary.mkdir(exist_ok=True)
 results = repo / "verification-results"
 results.mkdir(exist_ok=True)
-config = json.loads((here / "runtime.json").read_text())
+# The toolchain, the elan installers and the Mathlib commit that InstallLeanToolchain and InstallMathlib use
+toolchain = (repo / "LeanLink" / "lean-toolchain").read_text().strip()
+elan_pins = json.loads((repo / "LeanLink" / "Assets" / "Elan.json").read_text())
+manifest = json.loads((repo / "LeanLink" / "Assets" / "Mathlib" / "lake-manifest.json").read_text())
+mathlib_pin = next(package for package in manifest["packages"] if package["name"] == "mathlib")
 windows = platform.system() == "Windows"
 assert platform.system() in ("Windows", "Linux") and platform.machine().lower() in ("amd64", "x86_64")
 system = "Windows-x86-64" if windows else "Linux-x86-64"
@@ -28,7 +32,6 @@ environment = os.environ.copy()
 elan_home = temporary / "elan"
 environment["ELAN_HOME"] = str(elan_home)
 environment["PATH"] = str(elan_home / "bin") + os.pathsep + environment["PATH"]
-toolchain = config["LeanToolchain"]
 
 
 def run(arguments, **options):
@@ -78,7 +81,7 @@ def capped(arguments, log, cwd):
         raise RuntimeError(resource)
 
 
-asset = config["ElanArchives"][system]
+asset = elan_pins["ElanArchives"][system]
 archive = temporary / Path(asset["URL"]).name
 run(["curl", "--fail", "--location", "--retry", "3", "--output", archive, asset["URL"]])
 assert hashlib.sha256(archive.read_bytes()).hexdigest() == asset["SHA256"]
@@ -126,9 +129,9 @@ run(command)
 
 mathlib = temporary / "mathlib"
 run(["git", "clone", "-c", "core.autocrlf=false", "--depth", "1", "--branch",
-     toolchain.split(":")[-1], config["MathlibRepository"], mathlib])
+     mathlib_pin["inputRev"], mathlib_pin["url"], mathlib])
 revision = run(["git", "rev-parse", "HEAD"], cwd=mathlib, capture_output=True, text=True).stdout.strip()
-assert revision == config["MathlibRevision"]
+assert revision == mathlib_pin["rev"]
 run([lake, "+" + toolchain, "exe", "cache", "get",
      "Mathlib/Data/Nat/Choose/Basic.lean", "Mathlib/Data/Nat/Sqrt.lean"], cwd=mathlib)
 search_path = run([lake, "+" + toolchain, "env", sys.executable, "-c",

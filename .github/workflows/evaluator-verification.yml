@@ -1,13 +1,13 @@
 name: Evaluator platform verification
 
 # The native evaluator on Linux and Windows, which cannot be run on the macOS machines that build releases: on
-# changes to the native code, and on request
+# changes to the native code or to the pinned toolchain, elan and Mathlib it is checked with, and on request
 on:
   push:
     branches: [main]
-    paths: ['Native/**', '.github/workflows/evaluator-verification.yml']
+    paths: ['Native/**', 'LeanLink/lean-toolchain', 'LeanLink/Assets/Elan.json', 'LeanLink/Assets/Mathlib/**', '.github/workflows/evaluator-verification.yml']
   pull_request:
-    paths: ['Native/**', '.github/workflows/evaluator-verification.yml']
+    paths: ['Native/**', 'LeanLink/lean-toolchain', 'LeanLink/Assets/Elan.json', 'LeanLink/Assets/Mathlib/**', '.github/workflows/evaluator-verification.yml']
   workflow_dispatch:
 
 permissions:
