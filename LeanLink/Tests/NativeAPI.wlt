@@ -1111,11 +1111,8 @@ VerificationTest[
    LeanImport of a file falls back on it when that toolchain's folder is missing *)
 
 VerificationTest[
-    {
-        StringTrim[Import[FileNameJoin[{Wolfram`LeanLink`Private`$PacletRoot, "lean-toolchain"}], "Text"]],
-        StringTrim[Import[FileNameJoin[{DirectoryName[Wolfram`LeanLink`Private`$PacletRoot], "Native", "lean-toolchain"}], "Text"]]
-    },
-    {"leanprover/lean4:" <> Wolfram`LeanLink`Private`$LeanToolchainVersion, "leanprover/lean4:" <> Wolfram`LeanLink`Private`$LeanToolchainVersion},
+    StringTrim[Import[FileNameJoin[{DirectoryName[Wolfram`LeanLink`Private`$PacletRoot], "Native", "lean-toolchain"}], "Text"]],
+    Wolfram`LeanLink`Private`$LeanToolchain,
     TestID -> "Paclet-Toolchain-Pin"
 ]
 

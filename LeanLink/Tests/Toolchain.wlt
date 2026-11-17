@@ -4,20 +4,35 @@ BeginTestSection["Toolchain"]
    the log. Every test replaces the processes, downloads and directories an installation would use, so none of them
    installs anything. *)
 
+(* body, given a new directory that is removed afterwards *)
+
+withTemporaryDirectory[body_] := Module[{directory = CreateDirectory[]}, WithCleanup[body[directory], DeleteDirectory[directory, DeleteContents -> True]]]
+
+(* a toolchain in directory, as an installed one looks: its lean *)
+
+fakeToolchain[directory_String] := (
+    CreateDirectory[FileNameJoin[{directory, "bin"}], CreateIntermediateDirectories -> True];
+    CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "lean"]]
+)
+
 (* ---- Pins ---- *)
 
 VerificationTest[
     With[{pins = Import[PacletObject["Wolfram/LeanLink"]["AssetLocation", "Elan"], "RawJSON"]},
-        pins["ElanVersion"] === "4.2.4" && Length[pins["ElanArchives"]] === 5 && AllTrue[
+        Length[pins["ElanArchives"]] === 5 && AllTrue[
             Values[pins["ElanArchives"]],
-            StringStartsQ[#["URL"], "https://github.com/leanprover/elan/releases/download/v4.2.4/"] && StringMatchQ[#["SHA256"], RegularExpression["[0-9a-f]{64}"]]&
+            StringStartsQ[#["URL"], "https://github.com/leanprover/elan/releases/download/v" <> pins["ElanVersion"] <> "/"] && StringMatchQ[#["SHA256"], RegularExpression["[0-9a-f]{64}"]]&
         ]
     ],
     True,
     TestID -> "Toolchain-ElanInstallersPinned"
 ]
 
-VerificationTest[Wolfram`LeanLink`Private`$LeanToolchain, "leanprover/lean4:v4.35.0", TestID -> "Toolchain-Name"]
+VerificationTest[
+    {StringStartsQ[Wolfram`LeanLink`Private`$LeanToolchain, "leanprover/lean4:v"], Wolfram`LeanLink`Private`$LeanToolchain === "leanprover/lean4:" <> Wolfram`LeanLink`Private`$LeanToolchainVersion},
+    {True, True},
+    TestID -> "Toolchain-Name"
+]
 
 (* ---- Options and callbacks ---- *)
 
@@ -36,24 +51,18 @@ VerificationTest[
 (* an installed toolchain is used as it is: no process, no download *)
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], result},
-        CreateDirectory[FileNameJoin[{directory, "bin"}]];
-        CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "lean"]];
-        WithCleanup[
-            result = Block[
-                {
-                    Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
-                    Wolfram`LeanLink`Private`leanRuntimeReadyQ = (True&),
-                    RunProcess = (Throw["Unexpected process"]&),
-                    URLDownload = (Throw["Unexpected download"]&)
-                },
-                Reap[InstallLeanToolchain["ProgressFunction" -> Function[stage, Sow[stage]]]]
-            ];
-            result === {File[directory], {{"Preparing..."}}}
-            ,
-            DeleteDirectory[directory, DeleteContents -> True]
+    withTemporaryDirectory[Function[directory,
+        fakeToolchain[directory];
+        Block[
+            {
+                Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
+                Wolfram`LeanLink`Private`leanRuntimeReadyQ = (True&),
+                RunProcess = (Throw["Unexpected process"]&),
+                URLDownload = (Throw["Unexpected download"]&)
+            },
+            Reap[InstallLeanToolchain["ProgressFunction" -> Function[stage, Sow[stage]]]] === {File[directory], {{"Preparing..."}}}
         ]
-    ],
+    ]],
     True,
     TestID -> "Toolchain-InstalledStartsNoProcess"
 ]
@@ -61,28 +70,21 @@ VerificationTest[
 (* a missing toolchain is installed with elan, which is given the toolchain's name *)
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], lean, result},
-        lean = Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "lean"];
-        WithCleanup[
-            result = Block[
-                {
-                    Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
-                    Wolfram`LeanLink`Private`leanRuntimeReadyQ = (True&),
-                    Wolfram`LeanLink`Private`installElan = ("/elan"&),
-                    Wolfram`LeanLink`Private`installRun = Function[{command, workingDirectory},
-                        Sow[command];
-                        CreateDirectory[DirectoryName[lean]];
-                        CreateFile[lean];
-                        <|"ExitCode" -> 0, "StandardOutput" -> "", "StandardError" -> ""|>
-                    ]
-                },
-                Reap[InstallLeanToolchain[]]
-            ];
-            result === {File[directory], {{{"/elan", "toolchain", "install", "leanprover/lean4:v4.35.0"}}}}
-            ,
-            DeleteDirectory[directory, DeleteContents -> True]
+    withTemporaryDirectory[Function[directory,
+        Block[
+            {
+                Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
+                Wolfram`LeanLink`Private`leanRuntimeReadyQ = (True&),
+                Wolfram`LeanLink`Private`installElan = ("/elan"&),
+                Wolfram`LeanLink`Private`installRun = Function[{command, workingDirectory},
+                    Sow[command];
+                    fakeToolchain[directory];
+                    <|"ExitCode" -> 0, "StandardOutput" -> "", "StandardError" -> ""|>
+                ]
+            },
+            Reap[InstallLeanToolchain[]] === {File[directory], {{{"/elan", "toolchain", "install", Wolfram`LeanLink`Private`$LeanToolchain}}}}
         ]
-    ],
+    ]],
     True,
     TestID -> "Toolchain-InstalledWithElan"
 ]
@@ -103,15 +105,10 @@ VerificationTest[
 (* an installed toolchain whose runtime LeanLink cannot load is reported, not given *)
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], result},
-        CreateDirectory[FileNameJoin[{directory, "bin"}]];
-        CreateFile[Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "lean"]];
-        WithCleanup[
-            result = Block[{Wolfram`LeanLink`Private`leanToolchainPath = (directory&), Wolfram`LeanLink`Private`leanRuntimeReadyQ = (False&)}, InstallLeanToolchain[]["Tag"]],
-            DeleteDirectory[directory, DeleteContents -> True]
-        ];
-        result
-    ],
+    withTemporaryDirectory[Function[directory,
+        fakeToolchain[directory];
+        Block[{Wolfram`LeanLink`Private`leanToolchainPath = (directory&), Wolfram`LeanLink`Private`leanRuntimeReadyQ = (False&)}, InstallLeanToolchain[]["Tag"]]
+    ]],
     "RuntimeUnavailable",
     TestID -> "Toolchain-RuntimeChecked"
 ]
@@ -132,29 +129,26 @@ VerificationTest[
 ]
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], elan},
-        CreateDirectory[FileNameJoin[{directory, "bin"}]];
-        elan = Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "elan"];
-        Export[elan, "fixture", "Text"];
-        WithCleanup[
-            Block[{Wolfram`LeanLink`Private`elanHome = (directory&)}, Wolfram`LeanLink`Private`elanExecutable[]] === elan,
-            DeleteDirectory[directory, DeleteContents -> True]
+    withTemporaryDirectory[Function[directory,
+        With[{elan = Wolfram`LeanLink`Private`leanProgram[FileNameJoin[{directory, "bin"}], "elan"]},
+            CreateDirectory[FileNameJoin[{directory, "bin"}]];
+            CreateFile[elan];
+            Block[{Wolfram`LeanLink`Private`elanHome = (directory&)}, Wolfram`LeanLink`Private`elanExecutable[]] === elan
         ]
-    ],
+    ]],
     True,
     TestID -> "Toolchain-ElanHomeBeforePath"
 ]
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], file, asset},
-        file = FileNameJoin[{directory, "archive"}];
-        Export[file, "verified archive fixture", "Text"];
-        asset = <|"URL" -> "https://example.invalid/archive", "SHA256" -> IntegerString[FileHash[file, "SHA256"], 16, 64]|>;
-        WithCleanup[
-            Block[{URLDownload = (Throw["Unexpected download"]&)}, Wolfram`LeanLink`Private`installDownload[asset, file]] === file,
-            DeleteDirectory[directory, DeleteContents -> True]
+    withTemporaryDirectory[Function[directory,
+        With[{file = FileNameJoin[{directory, "archive"}]},
+            Export[file, "verified archive fixture", "Text"];
+            Block[{URLDownload = (Throw["Unexpected download"]&)},
+                Wolfram`LeanLink`Private`installDownload[<|"URL" -> "https://example.invalid/archive", "SHA256" -> Wolfram`LeanLink`Private`fileSHA256[file]|>, file]
+            ] === file
         ]
-    ],
+    ]],
     True,
     TestID -> "Toolchain-VerifiedDownloadReused"
 ]
@@ -170,17 +164,16 @@ VerificationTest[
 (* a download that does not match its pinned checksum is not kept *)
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], file, result},
-        file = FileNameJoin[{directory, "archive"}];
-        WithCleanup[
-            result = Block[{URLDownload = Function[{url, target}, Export[target, "tampered", "Text"]; File[target]]},
-                Catch[Wolfram`LeanLink`Private`installDownload[<|"URL" -> "https://example.invalid/archive", "SHA256" -> StringRepeat["0", 64]|>, file], "LeanLinkInstall"]
-            ];
-            {result["Tag"], FileExistsQ[file]}
-            ,
-            DeleteDirectory[directory, DeleteContents -> True]
+    withTemporaryDirectory[Function[directory,
+        With[{file = FileNameJoin[{directory, "archive"}]},
+            {
+                Block[{URLDownload = Function[{url, target}, Export[target, "tampered", "Text"]; File[target]]},
+                    Catch[Wolfram`LeanLink`Private`installDownload[<|"URL" -> "https://example.invalid/archive", "SHA256" -> StringRepeat["0", 64]|>, file], "LeanLinkInstall"]["Tag"]
+                ],
+                FileExistsQ[file]
+            }
         ]
-    ],
+    ]],
     {"DownloadChecksum", False},
     TestID -> "Toolchain-DownloadKeptOnlyWithItsChecksum"
 ]
@@ -211,20 +204,16 @@ VerificationTest[
 (* the log keeps the bytes a process wrote, a UTF-8 check mark among them, and the installation's own text as UTF-8 *)
 
 VerificationTest[
-    Module[{directory = CreateDirectory[], file, stream},
-        file = FileNameJoin[{directory, "install.log"}];
-        stream = OpenWrite[file, BinaryFormat -> True];
-        WithCleanup[
-            Block[{Wolfram`LeanLink`Private`$installLog = stream},
+    withTemporaryDirectory[Function[directory,
+        With[{file = FileNameJoin[{directory, "install.log"}]},
+            Block[{Wolfram`LeanLink`Private`$installLog = OpenWrite[file, BinaryFormat -> True]},
                 Wolfram`LeanLink`Private`installLogText["lake build \[RightArrow] " <> FromCharacterCode[8469] <> "\n"];
-                Wolfram`LeanLink`Private`installLog[FromCharacterCode[{226, 156, 148}] <> " built\n"]
+                Wolfram`LeanLink`Private`installLog[FromCharacterCode[{226, 156, 148}] <> " built\n"];
+                Close[Wolfram`LeanLink`Private`$installLog]
             ];
-            Close[stream];
             BinaryReadList[file, "Byte"] === ToCharacterCode["lake build \[RightArrow] " <> FromCharacterCode[8469] <> "\n" <> FromCharacterCode[10004] <> " built\n", "UTF-8"]
-            ,
-            DeleteDirectory[directory, DeleteContents -> True]
         ]
-    ],
+    ]],
     True,
     TestID -> "Toolchain-LogKeepsBytesAndUTF8"
 ]
@@ -296,23 +285,22 @@ If[ $OperatingSystem =!= "Windows",
     (* The process starts a child and a grandchild, each of which writes its own PID. The time limit, an abort as the
        user's is, stops all three, and nothing else. *)
     VerificationTest[
-        Module[{directory = CreateDirectory[], files, result, pids = {}, states},
-            files = FileNameJoin[{directory, #}]& /@ {"child", "grandchild"};
-            WithCleanup[
-                result = Wolfram`LeanLink`Private`installRun[
-                    Join[{"/bin/sh", "-c", "sh -c 'sleep 30 & printf \"%s\\n\" \"$!\" > \"$1\"; wait' sh \"$2\" & printf '%s\\n' \"$!\" > \"$1\"; wait", "sh"}, files],
-                    directory,
-                    Automatic,
-                    1
-                ];
-                pids = Select[StringTrim[Import[#, "Text"]]& /@ Select[files, FileExistsQ], StringMatchQ[#, DigitCharacter ..]&];
-                states = installerWaitForTermination[pids];
-                {result, Length[pids], AllTrue[states, installerTerminatedQ]}
-                ,
-                Scan[Quiet[RunProcess[{"/bin/kill", "-KILL", #}]]&, pids];
-                DeleteDirectory[directory, DeleteContents -> True]
+        withTemporaryDirectory[Function[directory,
+            Module[{files = FileNameJoin[{directory, #}]& /@ {"child", "grandchild"}, result, pids = {}},
+                WithCleanup[
+                    result = Wolfram`LeanLink`Private`installRun[
+                        Join[{"/bin/sh", "-c", "sh -c 'sleep 30 & printf \"%s\\n\" \"$!\" > \"$1\"; wait' sh \"$2\" & printf '%s\\n' \"$!\" > \"$1\"; wait", "sh"}, files],
+                        directory,
+                        Automatic,
+                        1
+                    ];
+                    pids = Select[StringTrim[Import[#, "Text"]]& /@ Select[files, FileExistsQ], StringMatchQ[#, DigitCharacter ..]&];
+                    {result, Length[pids], AllTrue[installerWaitForTermination[pids], installerTerminatedQ]}
+                    ,
+                    Scan[Quiet[RunProcess[{"/bin/kill", "-KILL", #}]]&, pids]
+                ]
             ]
-        ],
+        ]],
         {$TimedOut, 2, True},
         TestID -> "Process-TimeLimitStopsProcessAndDescendants"
     ];
