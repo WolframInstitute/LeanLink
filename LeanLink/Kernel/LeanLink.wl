@@ -33,10 +33,6 @@ $LeanBin = FileNameJoin[{$ElanBin, If[$OperatingSystem === "Windows", "lean.exe"
 
 $CodeLean = PacletObject["Wolfram/LeanLink"]["AssetLocation", "CodeLean"]
 
-(* RunProcess reads stdout as Latin-1; re-encode to UTF-8 *)
-
-decodeUTF8[s_String] := FromCharacterCode[ToCharacterCode[s, "ISO8859-1"], "UTF-8"]
-
 isLakeProject[dir_String] := AnyTrue[{"lakefile.lean", "lakefile.toml", "lean-toolchain"}, FileExistsQ[FileNameJoin[{dir, #}]]&]
 
 runLean[projDir_String, args_List] := Block[{cmd, res},
@@ -105,7 +101,7 @@ LeanExprGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, ar
         Message[LeanExprGraph::err, res["StandardError"]];
         Return[$Failed]
     ];
-    dotStr = decodeUTF8[extractDOT[res["StandardOutput"]]];
+    dotStr = utf8Text[extractDOT[res["StandardOutput"]]];
     If[TrueQ[OptionValue["RawDOT"]], dotStr, dotToGraph[dotStr, FilterRules[{opts}, Options[Graph]]]]
 ]
 
@@ -128,7 +124,7 @@ LeanCallGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, ar
         Message[LeanCallGraph::err, res["StandardError"]];
         Return[$Failed]
     ];
-    dotStr = decodeUTF8[extractDOT[res["StandardOutput"]]];
+    dotStr = utf8Text[extractDOT[res["StandardOutput"]]];
     If[TrueQ[OptionValue["RawDOT"]], dotStr, dotToGraph[dotStr, FilterRules[{opts}, Options[Graph]]]]
 ]
 
@@ -151,7 +147,7 @@ LeanListTheorems[opts : OptionsPattern[]] := Block[{projDir, files, args, res, l
         Message[LeanListTheorems::err, res["StandardError"]];
         Return[$Failed]
     ];
-    lines = extractListing[decodeUTF8[res["StandardOutput"]]];
+    lines = extractListing[utf8Text[res["StandardOutput"]]];
     Dataset[Association @@@ (StringSplit[#, "\t"]& /@ lines /. {k_, n_} :> {"Kind" -> k, "Name" -> n})]
 ]
 
