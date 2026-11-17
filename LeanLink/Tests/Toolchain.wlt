@@ -219,26 +219,14 @@ VerificationTest[
 
 (* ---- Processes ---- *)
 
-(* a fast command can write both pipes and exit between an empty read and the status check; its last bytes still
-   reach the caller *)
+(* a cancelled installation starts no process *)
 
 VerificationTest[
-    Module[{finished = False, reads = 0, remaining = <|"StandardOutput" -> "git version fixture\n", "StandardError" -> "last error\n"|>},
-        Block[
-            {
-                StartProcess = (ProcessObject[<|"Fixture" -> True|>]&),
-                ProcessConnection = Function[{process, name}, name],
-                ProcessStatus = Function[process, If[reads >= 2, finished = True]; If[finished, "Finished", "Running"]],
-                ProcessInformation = (0&),
-                Pause = (Null&),
-                KillProcess = (Throw["Unexpected kill"]&),
-                ReadString = Function[{stream, terminator}, reads++; If[finished, With[{text = remaining[stream]}, AssociateTo[remaining, stream -> ""]; text], ""]]
-            },
-            Wolfram`LeanLink`Private`runProcess[{"fixture"}]
-        ]
+    Block[{Wolfram`LeanLink`Private`$installCancellation = (True&), RunProcess = (Throw["Unexpected process"]&)},
+        Catch[Wolfram`LeanLink`Private`installRun[{"/bin/echo"}, Directory[]], "LeanLinkInstall"]["Tag"]
     ],
-    <|"ExitCode" -> 0, "StandardOutput" -> "git version fixture\n", "StandardError" -> "last error\n"|>,
-    TestID -> "Process-OutputWrittenWhileExitingIsKept"
+    "InstallCancelled",
+    TestID -> "Process-NotStartedOnceCancelled"
 ]
 
 (* kill -0 also succeeds for a Linux zombie waiting for its parent, so /proc is read on Linux. An unknown or live state
@@ -275,38 +263,6 @@ installerWaitForTermination[pids_List] := Module[{deadline = AbsoluteTime[] + 2,
     states
 ]
 
-(* The process starts a child and a grandchild, each of which writes its own PID; cleanup never targets another
-   process *)
-
-installerProcessFixture[mode_String] := Module[{directory = CreateDirectory[], files, started = AbsoluteTime[], result, pids = {}, states},
-    files = FileNameJoin[{directory, #}]& /@ {"child", "grandchild"};
-    WithCleanup[
-        result = Block[
-            {
-                Wolfram`LeanLink`Private`$installCancellation = Function[Null,
-                    If[AllTrue[files, FileExistsQ] || AbsoluteTime[] - started > 5, If[mode === "Abort", Abort[], True], False]
-                ]
-            },
-            CheckAbort[
-                Catch[
-                    Wolfram`LeanLink`Private`installRun[
-                        Join[{"/bin/sh", "-c", "sh -c 'sleep 30 & printf \"%s\\n\" \"$!\" > \"$1\"; wait' sh \"$2\" & printf '%s\\n' \"$!\" > \"$1\"; wait", "sh"}, files],
-                        directory
-                    ],
-                    "LeanLinkInstall"
-                ],
-                "Aborted"
-            ]
-        ];
-        pids = Select[StringTrim[Import[#, "Text"]]& /@ Select[files, FileExistsQ], StringMatchQ[#, DigitCharacter ..]&];
-        states = installerWaitForTermination[pids];
-        {If[FailureQ[result], result["Tag"], result], Length[pids], AllTrue[states, installerTerminatedQ]}
-        ,
-        Scan[Quiet[RunProcess[{"/bin/kill", "-KILL", #}]]&, pids];
-        DeleteDirectory[directory, DeleteContents -> True]
-    ]
-]
-
 If[ $OperatingSystem =!= "Windows",
     VerificationTest[
         Module[{process, pid, before, after},
@@ -325,31 +281,38 @@ If[ $OperatingSystem =!= "Windows",
         {False, True},
         TestID -> "Process-CleanupCheckTellsLiveFromTerminated"
     ];
-    VerificationTest[installerProcessFixture["Cancel"], {"InstallCancelled", 2, True}, TestID -> "Process-CancellationStopsProcessAndDescendants"];
-    VerificationTest[installerProcessFixture["Abort"], {"Aborted", 2, True}, TestID -> "Process-AbortStopsProcessAndDescendants"];
+    (* The process starts a child and a grandchild, each of which writes its own PID. The time limit, an abort as the
+       user's is, stops all three, and nothing else. *)
     VerificationTest[
-        Module[{directory = CreateDirectory[], file, result, pid},
-            file = FileNameJoin[{directory, "pid"}];
+        Module[{directory = CreateDirectory[], files, result, pids = {}, states},
+            files = FileNameJoin[{directory, #}]& /@ {"child", "grandchild"};
             WithCleanup[
-                result = Wolfram`LeanLink`Private`runProcess[{"/bin/sh", "-c", "printf '%s\\n' \"$$\" > \"$1\"; exec sleep 30", "sh", file}, TimeConstraint -> 1];
-                pid = StringTrim[Import[file, "Text"]];
-                {result, AllTrue[installerWaitForTermination[{pid}], installerTerminatedQ]}
+                result = Wolfram`LeanLink`Private`installRun[
+                    Join[{"/bin/sh", "-c", "sh -c 'sleep 30 & printf \"%s\\n\" \"$!\" > \"$1\"; wait' sh \"$2\" & printf '%s\\n' \"$!\" > \"$1\"; wait", "sh"}, files],
+                    directory,
+                    Automatic,
+                    1
+                ];
+                pids = Select[StringTrim[Import[#, "Text"]]& /@ Select[files, FileExistsQ], StringMatchQ[#, DigitCharacter ..]&];
+                states = installerWaitForTermination[pids];
+                {result, Length[pids], AllTrue[states, installerTerminatedQ]}
                 ,
+                Scan[Quiet[RunProcess[{"/bin/kill", "-KILL", #}]]&, pids];
                 DeleteDirectory[directory, DeleteContents -> True]
             ]
         ],
-        {$TimedOut, True},
-        TestID -> "Process-TimeLimitStopsProcess"
+        {$TimedOut, 2, True},
+        TestID -> "Process-TimeLimitStopsProcessAndDescendants"
     ];
-    VerificationTest[
-        KeyTake[Wolfram`LeanLink`Private`installRun[{"/bin/sh", "-c", "printf 'out\\n'; printf 'err\\n' >&2; exit 7"}, Directory[]], {"ExitCode", "StandardOutput", "StandardError"}],
-        <|"ExitCode" -> 7, "StandardOutput" -> "out\n", "StandardError" -> "err\n"|>,
-        TestID -> "Process-BothStreamsAndExitCode"
-    ];
+    (* both pipes are read while the process runs, so a large output on each does not block it *)
     VerificationTest[
         Module[{out = StringRepeat["o", 256], err = StringRepeat["e", 256]},
-            Wolfram`LeanLink`Private`runProcess[
-                {"/bin/sh", "-c", "i=0; while [ $i -lt 4096 ]; do printf '" <> out <> "'; printf '" <> err <> "' >&2; i=$((i+1)); done; exit 7"}
+            KeyTake[
+                Wolfram`LeanLink`Private`installRun[
+                    {"/bin/sh", "-c", "i=0; while [ $i -lt 4096 ]; do printf '" <> out <> "'; printf '" <> err <> "' >&2; i=$((i+1)); done; exit 7"},
+                    Directory[]
+                ],
+                {"ExitCode", "StandardOutput", "StandardError"}
             ] === <|"ExitCode" -> 7, "StandardOutput" -> StringRepeat[out, 4096], "StandardError" -> StringRepeat[err, 4096]|>
         ],
         True,

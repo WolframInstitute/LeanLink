@@ -109,28 +109,28 @@ installEnvironment[path_List, extra_Association : <||>] := Join[
     extra
 ]
 
-(* The log of an installation, an output stream, or None. It takes the bytes the processes write, which reach the
+(* The log of an installation, an output stream, or None. It takes the bytes the processes wrote, which reach the
    kernel a byte a character, and the installation's own text as UTF-8. *)
 
 $installLog = None
 
 installLog[bytes_String] := If[$installLog =!= None && bytes =!= "", BinaryWrite[$installLog, ToCharacterCode[bytes, "ISO8859-1"]]]
 
-installLogText[text_String] := installLog[FromCharacterCode[ToCharacterCode[text, "UTF-8"], "ISO8859-1"]]
+installLogText[text_String] := If[$installLog =!= None, BinaryWrite[$installLog, ToCharacterCode[text, "UTF-8"]]]
 
-(* A process of an installation, run by runProcess: the installation can be cancelled while it runs, and its output
-   goes to the log as it arrives. Its output in the result is decoded. *)
+(* A process of an installation, run with RunProcess, which reads both pipes while the process runs and waits without
+   polling. It is not started once the installation is cancelled; an abort, or the time limit given, stops it with the
+   processes it started. Its output goes to the log, and is decoded for the result. *)
 
-installRun[command_List, directory_String, environment_ : Automatic] := Block[{result},
+installRun[command_List, directory_String, environment_ : Automatic, limit_ : Infinity] := Block[{result},
     installCheckCancellation[];
-    result = runProcess[
-        command,
-        ProcessDirectory -> directory,
-        ProcessEnvironment -> Replace[environment, Automatic :> installEnvironment[pathDirectories[]]],
-        "Poll" -> Function[chunks, installCheckCancellation[]; installLog[StringJoin[chunks]]]
+    result = TimeConstrained[
+        Quiet[Check[RunProcess[command, ProcessDirectory -> directory, ProcessEnvironment -> Replace[environment, Automatic :> installEnvironment[pathDirectories[]]]], $Failed]],
+        limit,
+        $TimedOut
     ];
-    installCheckCancellation[];
     If[ AssociationQ[result],
+        installLog[result["StandardOutput"] <> result["StandardError"]];
         Join[result, <|"StandardOutput" -> utf8Text[result["StandardOutput"]], "StandardError" -> utf8Text[result["StandardError"]]|>],
         result
     ]
