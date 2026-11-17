@@ -201,8 +201,22 @@ installElan[] := Block[{elan = elanExecutable[], checked, asset, archive, tempor
     ]
 ]
 
+(* LeanLink can use the toolchain when its native library loads Lean's Init from it. That compiles nothing, and once it
+   has passed it holds for the rest of the kernel session. *)
+
+$leanRuntimeReady = False
+
+leanRuntimeReadyQ[] := TrueQ[$leanRuntimeReady] || With[{handle = Quiet[LeanLoadEnvironment[{"Init"}, FileNameJoin[{leanToolchainPath[], "lib", "lean"}]]]},
+    If[ IntegerQ[handle] && handle > 0,
+        LeanFreeEnvironment[handle];
+        $leanRuntimeReady = True
+        ,
+        False
+    ]
+]
+
 (* The toolchain is installed when its lean is. elan installs it otherwise, as elan toolchain install does in a shell,
-   with no change to elan's default toolchain. *)
+   with no change to elan's default toolchain. Either way LeanLink must then load its runtime. *)
 
 installToolchain[] := Block[{lean = toolchainProgram["lean"], elan, result},
     If[ ! FileExistsQ[lean],
@@ -213,6 +227,9 @@ installToolchain[] := Block[{lean = toolchainProgram["lean"], elan, result},
         If[ ! AssociationQ[result] || result["ExitCode"] =!= 0 || ! FileExistsQ[lean],
             Return[installFailure["ToolchainInstallFailed", "elan could not install the toolchain `1`.", <|"MessageParameters" -> {$LeanToolchain}, "Result" -> result|>], Block]
         ]
+    ];
+    If[ ! leanRuntimeReadyQ[],
+        Return[installFailure["RuntimeUnavailable", "The toolchain `1` is installed, but LeanLink's native library could not load its Lean runtime.", <|"MessageParameters" -> {$LeanToolchain}|>], Block]
     ];
     leanToolchainPath[]
 ]
