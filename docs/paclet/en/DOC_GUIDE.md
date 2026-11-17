@@ -184,7 +184,9 @@ the build degrades to an explanatory string instead of an error:
   [Exploring Mathlib](Tutorials/ExploringMathlib.md) tutorial uses. Never
   hardcode an absolute home path in a way that errors when it is missing, and
   never let a page run an installation: give an [InstallMathlib]() cell
-  `#| eval: false`, or the build would download Mathlib.
+  `#| eval: false`, or the build would download Mathlib. A page is cached by its
+  source, not by what is installed: pages built before Mathlib was installed keep
+  their fallback output until built again with `--no-cache`.
 - **Slow scans** (the [Import Graph](Tutorials/ImportGraph.md) tutorial walks
   ~8000 files) are fine in a tutorial but keep them out of `## Basic Examples`
   on a Symbol page.
