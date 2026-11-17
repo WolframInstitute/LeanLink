@@ -27,12 +27,6 @@ elanPins[] := Import[FileNameJoin[{$PacletRoot, "Assets", "Elan.json"}], "RawJSO
 
 installDownloadsDirectory[] := FileNameJoin[{cacheBase[], "LeanLink", "Downloads"}]
 
-installFailure[tag_String, message_String, data_Association : <||>] := Failure[tag, Join[<|"MessageTemplate" -> message|>, data]]
-
-(* an option the function does not have is reported, not ignored *)
-
-installOptionsQ[function_Symbol, options_List] := SubsetQ[Keys[Options[function]], Keys[Flatten[options]]]
-
 pathDirectories[] := StringSplit[Replace[Environment["PATH"], Except[_String] -> ""], $searchPathSeparator]
 
 (* the first program called name in directories, as a process searches them *)
@@ -40,7 +34,7 @@ pathDirectories[] := StringSplit[Replace[Environment["PATH"], Except[_String] ->
 findExecutable[name_String, directories_List] := SelectFirst[leanProgram[#, name]& /@ directories, FileExistsQ, Missing["NotFound", name]]
 
 (* ============================================================================ *)
-(* Progress and cancellation                                                    *)
+(* Options, progress, cancellation and failures                                 *)
 (* ============================================================================ *)
 
 Options[InstallLeanToolchain] = {"ProgressFunction" -> (Null&), "CancellationFunction" -> (False&)}
@@ -51,43 +45,48 @@ $installProgress = (Null&)
 
 $installCancellation = (False&)
 
-(* The callbacks of an installation function, {progress, cancellation}, or a Failure. The options are checked before
-   OptionValue reads them, which would report an unknown one with a message. *)
+(* an option the function does not have is reported, not ignored *)
 
-installCallbacks[function_Symbol, options_List] := Block[{callbacks},
-    If[! installOptionsQ[function, options], Return[installFailure["InvalidOption", "Unknown installation option."], Block]];
+installOptionsQ[function_Symbol, options_List] := SubsetQ[Keys[Options[function]], Keys[Flatten[options]]]
+
+(* A failure of an installation is thrown to the function the user called, which gives it *)
+
+installThrow[tag_String, message_String, data_Association : <||>] := Throw[evaluationFailure[tag, message, data], "LeanLinkInstall"]
+
+(* An installation function: its options are checked before OptionValue reads them, which would report an unknown one
+   with a message, then body runs with the callbacks, and what it throws is the result *)
+
+SetAttributes[installFrame, HoldRest]
+
+installFrame[function_Symbol, options_List, body_] := Block[{callbacks},
+    If[! installOptionsQ[function, options], Return[evaluationFailure["InvalidOption", "Unknown installation option."], Block]];
     callbacks = OptionValue[function, options, {"ProgressFunction", "CancellationFunction"}];
-    If[ AllTrue[callbacks, MatchQ[#, _Function | _Symbol] && ! MemberQ[{True, False, None, Null}, #]&],
-        callbacks,
-        installFailure["InvalidOption", "\"ProgressFunction\" and \"CancellationFunction\" must be functions."]
+    If[ ! AllTrue[callbacks, MatchQ[#, _Function | _Symbol] && ! MemberQ[{True, False, None, Null}, #]&],
+        Return[evaluationFailure["InvalidOption", "\"ProgressFunction\" and \"CancellationFunction\" must be functions."], Block]
+    ];
+    Catch[
+        Block[{$installFunction = SymbolName[function], $installProgress = First[callbacks], $installCancellation = Last[callbacks]}, body],
+        "LeanLinkInstall"
     ]
 ]
 
-(* An installation asks the cancellation function between its steps and while it waits for a download or a process.
-   Its failures are thrown to the function the user called, which catches them. *)
+(* The cancellation function is asked at each stage and before each process *)
 
 installCheckCancellation[] := With[{cancelled = Quiet[Check[$installCancellation[], $Failed]]},
     Which[
         TrueQ[cancelled],
-            Throw[installFailure["InstallCancelled", "The installation was cancelled. Run `1`[] to resume.", <|"MessageParameters" -> {$installFunction}|>], "LeanLinkInstall"]
+            installThrow["InstallCancelled", "The installation was cancelled. Run `1`[] to resume.", <|"MessageParameters" -> {$installFunction}|>]
         ,
-        cancelled === False,
-            Null
-        ,
-        True,
-            Throw[installFailure["InvalidCallback", "\"CancellationFunction\" must return True or False."], "LeanLinkInstall"]
+        cancelled =!= False,
+            installThrow["InvalidCallback", "\"CancellationFunction\" must return True or False."]
     ]
 ]
 
-installReportProgress[stage_String, fraction_] := If[ Quiet[Check[$installProgress[stage, fraction], $Failed]] === $Failed,
-    installFailure["InvalidCallback", "\"ProgressFunction\" could not report the installation stage."],
-    Null
-]
+(* the progress function is given each stage, such as "Downloading..." *)
 
-installStage[stage_String, fraction_ : None] := (
+installStage[stage_String] := (
     installCheckCancellation[];
-    With[{reported = installReportProgress[stage, fraction]}, If[FailureQ[reported], Throw[reported, "LeanLinkInstall"]]];
-    installCheckCancellation[]
+    If[Quiet[Check[$installProgress[stage], $Failed]] === $Failed, installThrow["InvalidCallback", "\"ProgressFunction\" could not report the installation stage."]]
 )
 
 (* ============================================================================ *)
@@ -131,6 +130,26 @@ installRun[command_List, directory_String, environment_ : Automatic, limit_ : In
     ]
 ]
 
+installSucceededQ[result_] := AssociationQ[result] && result["ExitCode"] === 0
+
+(* A process that must succeed, logged by its command: a failure is thrown with tag and message, the command and its
+   result *)
+
+installStep[tag_String, message_String, command_List, directory_String, environment_ : Automatic, data_Association : <||>] := Block[{result},
+    installLogText[StringRiffle[command, " "] <> "\n"];
+    result = installRun[command, directory, environment];
+    If[! installSucceededQ[result], installThrow[tag, message, Join[<|"Command" -> command, "Result" -> result|>, data]]];
+    result
+]
+
+(* what a program prints for --version, within ten seconds, or "" when it does not run *)
+
+installVersionText[program_String] := With[{result = installRun[{program, "--version"}, $TemporaryDirectory, Automatic, 10]},
+    If[installSucceededQ[result], result["StandardOutput"], ""]
+]
+
+installVersionText[_] := ""
+
 (* ============================================================================ *)
 (* Downloads                                                                    *)
 (* ============================================================================ *)
@@ -145,16 +164,14 @@ installDownload[asset_Association, file_String] := Block[{result},
     result = Quiet[Check[URLDownload[asset["URL"], file, CreateIntermediateDirectories -> True, ProgressReporting -> False], $Failed]];
     Which[
         ! MatchQ[result, _File] || ! FileExistsQ[file],
-            Throw[installFailure["DownloadFailed", "A download did not finish.", <|"URL" -> asset["URL"]|>], "LeanLinkInstall"]
+            installThrow["DownloadFailed", "A download did not finish.", <|"URL" -> asset["URL"]|>]
         ,
         fileSHA256[file] =!= asset["SHA256"],
             Quiet[DeleteFile[file]];
-            Throw[installFailure["DownloadChecksum", "A download does not match its pinned checksum.", <|"URL" -> asset["URL"]|>], "LeanLinkInstall"]
-        ,
-        True,
-            installCheckCancellation[];
-            file
-    ]
+            installThrow["DownloadChecksum", "A download does not match its pinned checksum.", <|"URL" -> asset["URL"]|>]
+    ];
+    installCheckCancellation[];
+    file
 ]
 
 (* ============================================================================ *)
@@ -165,32 +182,25 @@ installDownload[asset_Association, file_String] := Block[{result},
 
 elanExecutable[] := findExecutable["elan", Prepend[pathDirectories[], FileNameJoin[{elanHome[], "bin"}]]]
 
+elanWorkingQ[elan_] := StringStartsQ[StringTrim[installVersionText[elan]], "elan "]
+
 (* A working elan is used as it is. Otherwise the pinned installer puts elan into ELAN_HOME, with --no-modify-path and
    no default toolchain. *)
 
-installElan[] := Block[{elan = elanExecutable[], checked, asset, archive, temporary, installer, result},
-    If[ StringQ[elan],
-        checked = installRun[{elan, "--version"}, $TemporaryDirectory];
-        If[AssociationQ[checked] && checked["ExitCode"] === 0 && StringStartsQ[StringTrim[checked["StandardOutput"]], "elan "], Return[elan, Block]]
-    ];
+installElan[] := Block[{elan = elanExecutable[], asset, archive, temporary, installer},
+    If[elanWorkingQ[elan], Return[elan, Block]];
     asset = Lookup[elanPins[]["ElanArchives"], $SystemID, None];
-    If[! AssociationQ[asset], Return[installFailure["UnsupportedPlatform", "No pinned elan installer is available for this system.", <|"SystemID" -> $SystemID|>], Block]];
+    If[! AssociationQ[asset], installThrow["UnsupportedPlatform", "No pinned elan installer is available for this system.", <|"SystemID" -> $SystemID|>]];
     archive = installDownload[asset, FileNameJoin[{installDownloadsDirectory[], Last[StringSplit[asset["URL"], "/"]]}]];
     temporary = CreateDirectory[];
     WithCleanup[
         installStage["Installing..."];
-        result = Quiet[Check[ExtractArchive[archive, temporary], $Failed]];
         installer = leanProgram[temporary, "elan-init"];
-        If[result === $Failed || ! FileExistsQ[installer], Return[installFailure["ElanInstallFailed", "The elan installer could not be extracted."], Block]];
-        If[ $OperatingSystem =!= "Windows",
-            result = installRun[{"/bin/chmod", "u+x", installer}, temporary];
-            If[! AssociationQ[result] || result["ExitCode"] =!= 0, Return[installFailure["ElanInstallFailed", "The elan installer could not be made executable."], Block]]
-        ];
-        result = installRun[{installer, "-y", "--no-modify-path", "--default-toolchain", "none"}, temporary];
-        If[! AssociationQ[result] || result["ExitCode"] =!= 0, Return[installFailure["ElanInstallFailed", "The elan installation did not finish.", <|"Result" -> result|>], Block]];
+        If[Quiet[Check[ExtractArchive[archive, temporary], $Failed]] === $Failed || ! FileExistsQ[installer], installThrow["ElanInstallFailed", "The elan installer could not be extracted."]];
+        If[$OperatingSystem =!= "Windows", installStep["ElanInstallFailed", "The elan installer could not be made executable.", {"/bin/chmod", "u+x", installer}, temporary]];
+        installStep["ElanInstallFailed", "The elan installation did not finish.", {installer, "-y", "--no-modify-path", "--default-toolchain", "none"}, temporary];
         elan = leanProgram[FileNameJoin[{elanHome[], "bin"}], "elan"];
-        checked = installRun[{elan, "--version"}, temporary];
-        If[! AssociationQ[checked] || checked["ExitCode"] =!= 0, Return[installFailure["ElanInstallFailed", "The installed elan could not run.", <|"Result" -> checked|>], Block]];
+        If[! elanWorkingQ[elan], installThrow["ElanInstallFailed", "The installed elan could not run."]];
         elan
         ,
         DeleteDirectory[temporary, DeleteContents -> True]
@@ -214,19 +224,14 @@ leanRuntimeReadyQ[] := TrueQ[$leanRuntimeReady] || With[{handle = Quiet[LeanLoad
 (* The toolchain is installed when its lean is. elan installs it otherwise, as elan toolchain install does in a shell,
    with no change to elan's default toolchain. Either way LeanLink must then load its runtime. *)
 
-installToolchain[] := Block[{lean = toolchainProgram["lean"], elan, result},
+installToolchain[] := Block[{lean = toolchainProgram["lean"], elan},
     If[ ! FileExistsQ[lean],
         elan = installElan[];
-        If[FailureQ[elan], Return[elan, Block]];
         installStage["Downloading..."];
-        result = installRun[{elan, "toolchain", "install", $LeanToolchain}, $TemporaryDirectory];
-        If[ ! AssociationQ[result] || result["ExitCode"] =!= 0 || ! FileExistsQ[lean],
-            Return[installFailure["ToolchainInstallFailed", "elan could not install the toolchain `1`.", <|"MessageParameters" -> {$LeanToolchain}, "Result" -> result|>], Block]
-        ]
+        installStep["ToolchainInstallFailed", "elan could not install the toolchain `1`.", {elan, "toolchain", "install", $LeanToolchain}, $TemporaryDirectory, Automatic, <|"MessageParameters" -> {$LeanToolchain}|>];
+        If[! FileExistsQ[lean], installThrow["ToolchainInstallFailed", "elan did not install the toolchain `1`.", <|"MessageParameters" -> {$LeanToolchain}|>]]
     ];
-    If[ ! leanRuntimeReadyQ[],
-        Return[installFailure["RuntimeUnavailable", "The toolchain `1` is installed, but LeanLink's native library could not load its Lean runtime.", <|"MessageParameters" -> {$LeanToolchain}|>], Block]
-    ];
+    If[! leanRuntimeReadyQ[], installThrow["RuntimeUnavailable", "The toolchain `1` is installed, but LeanLink's native library could not load its Lean runtime.", <|"MessageParameters" -> {$LeanToolchain}|>]];
     leanToolchainPath[]
 ]
 
@@ -234,16 +239,7 @@ installToolchain[] := Block[{lean = toolchainProgram["lean"], elan, result},
 (* Public API                                                                   *)
 (* ============================================================================ *)
 
-InstallLeanToolchain[opts : OptionsPattern[]] := Block[{callbacks = installCallbacks[InstallLeanToolchain, {opts}]},
-    If[FailureQ[callbacks], Return[callbacks, Block]];
-    Catch[
-        Block[{$installFunction = "InstallLeanToolchain", $installProgress = First[callbacks], $installCancellation = Last[callbacks]},
-            installStage["Preparing..."];
-            Replace[installToolchain[], directory_String :> File[directory]]
-        ],
-        "LeanLinkInstall"
-    ]
-]
+InstallLeanToolchain[opts : OptionsPattern[]] := installFrame[InstallLeanToolchain, {opts}, installStage["Preparing..."]; File[installToolchain[]]]
 
 End[];
 
