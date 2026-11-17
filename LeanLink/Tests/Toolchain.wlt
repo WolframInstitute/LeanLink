@@ -63,8 +63,7 @@ VerificationTest[
     TestID -> "Toolchain-InstalledStartsNoProcess"
 ]
 
-(* a missing toolchain is installed with elan, which is given the toolchain's name; the native library is then tried
-   again *)
+(* a missing toolchain is installed with elan, which is given the toolchain's name *)
 
 VerificationTest[
     Module[{directory = CreateDirectory[], lean, result},
@@ -74,7 +73,6 @@ VerificationTest[
                 {
                     Wolfram`LeanLink`Private`leanToolchainPath = (directory&),
                     Wolfram`LeanLink`Private`installElan = ("/elan"&),
-                    Wolfram`LeanLink`Private`resetShim = (Sow["reset"]&),
                     Wolfram`LeanLink`Private`installRun = Function[{command, workingDirectory},
                         Sow[command];
                         CreateDirectory[DirectoryName[lean]];
@@ -84,7 +82,7 @@ VerificationTest[
                 },
                 Reap[InstallLeanToolchain[]]
             ];
-            result === {File[directory], {{{"/elan", "toolchain", "install", "leanprover/lean4:v4.35.0"}, "reset"}}}
+            result === {File[directory], {{{"/elan", "toolchain", "install", "leanprover/lean4:v4.35.0"}}}}
             ,
             DeleteDirectory[directory, DeleteContents -> True]
         ]
@@ -104,23 +102,6 @@ VerificationTest[
     ],
     "ToolchainInstallFailed",
     TestID -> "Toolchain-FailedInstallationReported"
-]
-
-(* A native library that could not load for want of the toolchain is tried again on its next use; a loaded one is kept *)
-
-VerificationTest[
-    Block[{Wolfram`LeanLink`Private`$ShimLib = $Failed},
-        Wolfram`LeanLink`Private`resetShim[];
-        MatchQ[OwnValues[Wolfram`LeanLink`Private`$ShimLib], {_ :> HoldPattern[Set[_, Wolfram`LeanLink`Private`loadShim[]]]}]
-    ],
-    True,
-    TestID -> "Toolchain-FailedLoadTriedAgain"
-]
-
-VerificationTest[
-    Block[{Wolfram`LeanLink`Private`$ShimLib = "/loaded/libLeanLinkShim"}, Wolfram`LeanLink`Private`resetShim[]; Wolfram`LeanLink`Private`$ShimLib],
-    "/loaded/libLeanLinkShim",
-    TestID -> "Toolchain-LoadedLibraryKept"
 ]
 
 (* ---- elan and downloads ---- *)

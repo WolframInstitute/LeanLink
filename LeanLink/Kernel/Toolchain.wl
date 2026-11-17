@@ -219,14 +219,8 @@ installToolchain[] := Block[{lean = leanProgram[FileNameJoin[{leanToolchainPath[
             Return[installFailure["ToolchainInstallFailed", "elan could not install the toolchain `1`.", <|"MessageParameters" -> {leanToolchainName[]}, "Result" -> result|>], Block]
         ]
     ];
-    resetShim[];
     leanToolchainPath[]
 ]
-
-(* The native library remembers a failed load. One that failed before the toolchain was installed is tried again on its
-   next use. *)
-
-resetShim[] := If[MatchQ[OwnValues[$ShimLib], {_ :> $Failed}], $ShimLib := $ShimLib = loadShim[]]
 
 (* ============================================================================ *)
 (* Public API                                                                   *)
