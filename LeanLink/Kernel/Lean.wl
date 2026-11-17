@@ -114,10 +114,10 @@ Begin["`Private`"];
 (* Shim library                                                                 *)
 (* ============================================================================ *)
 
-$ShimLib := $ShimLib = loadShim[]
+(* The shim of this system, ready to load. Only a load that succeeds is kept: one that failed, as for want of the
+   toolchain, is tried again on the next use, so a toolchain installed later needs no new kernel. *)
 
-(* The shim of this system, ready to load, or $Failed. InstallLeanToolchain sets $ShimLib to call this again when it
-   was $Failed for want of the toolchain. *)
+$ShimLib := Replace[loadShim[], shim_String :> ($ShimLib = shim)]
 
 loadShim[] := Block[
     {loc, pacletDir, devDir, libName, sysDir}
