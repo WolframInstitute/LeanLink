@@ -48,7 +48,7 @@ mathlibDirectory[Automatic] := FileNameJoin[{mathlibRoot[], $LeanToolchainVersio
 
 mathlibDirectory[directory_String] := ExpandFileName[directory]
 
-mathlibDirectory[_] := installFailure["InvalidOption", "\"Directory\" must be Automatic or a directory."]
+mathlibDirectory[_] := evaluationFailure["InvalidOption", "\"Directory\" must be Automatic or a directory."]
 
 (* Mathlib itself, where Lake puts a package the project requires *)
 
@@ -96,25 +96,15 @@ mathlibEnvironment[] := installEnvironment[Join[{FileNameJoin[{leanToolchainPath
 (* Apple's /usr/bin/git is a launcher that can open the developer tools installer. It is run only when xcode-select
    names a developer directory. *)
 
-mathlibGitWorkingQ[path_String] := Block[{result},
-    If[ $OperatingSystem === "MacOSX" && path === "/usr/bin/git",
-        result = TimeConstrained[installRun[{"/usr/bin/xcode-select", "-p"}, Directory[]], 10, $Failed];
-        If[! AssociationQ[result] || result["ExitCode"] =!= 0, Return[False, Block]]
-    ];
-    result = TimeConstrained[installRun[{path, "--version"}, Directory[]], 10, $Failed];
-    AssociationQ[result] && result["ExitCode"] === 0 && StringStartsQ[StringTrim[result["StandardOutput"]], "git version "]
+mathlibGitWorkingQ[git_] := And[
+    $OperatingSystem =!= "MacOSX" || git =!= "/usr/bin/git" || installSucceededQ[installRun[{"/usr/bin/xcode-select", "-p"}, $TemporaryDirectory, Automatic, 10]],
+    StringStartsQ[installVersionText[git], "git version "]
 ]
-
-mathlibGitWorkingQ[___] := False
 
 (* Mathlib's cache tool decides by its version how to use the curl it finds, and fetches a newer one where it needs to;
    InstallMathlib asks only for a curl that runs, with HTTPS. Should the cache tool still fail, its reason is in the log. *)
 
-mathlibCurlWorkingQ[path_String] := With[{result = TimeConstrained[installRun[{path, "--version"}, Directory[]], 10, $Failed]},
-    AssociationQ[result] && result["ExitCode"] === 0 && StringContainsQ[result["StandardOutput"], RegularExpression["(?m)^Protocols:[^\\n]*\\bhttps\\b"]]
-]
-
-mathlibCurlWorkingQ[___] := False
+mathlibCurlWorkingQ[curl_] := StringContainsQ[installVersionText[curl], RegularExpression["(?m)^Protocols:[^\\n]*\\bhttps\\b"]]
 
 (* What a tool is for, and how to install it, for the failure that names a missing one *)
 
@@ -133,17 +123,14 @@ mathlibToolAdvice["curl", "Windows"] = "Install a current curl from https://curl
 mathlibToolAdvice["curl", _] = "Install a current curl with the system's package manager"
 
 mathlibRequireTool[name_String] := With[{path = mathlibExecutable[name]},
-    If[ If[name === "git", mathlibGitWorkingQ[path], mathlibCurlWorkingQ[path]],
-        path,
-        Throw[
-            installFailure[
-                Capitalize[name] <> "Unavailable",
-                "InstallMathlib needs `1`. `2`, then run InstallMathlib[] again.",
-                <|"MessageParameters" -> {mathlibToolNeed[name], mathlibToolAdvice[name, $OperatingSystem]}, "Executable" -> path|>
-            ],
-            "LeanLinkInstall"
+    If[ ! If[name === "git", mathlibGitWorkingQ[path], mathlibCurlWorkingQ[path]],
+        installThrow[
+            Capitalize[name] <> "Unavailable",
+            "InstallMathlib needs `1`. `2`, then run InstallMathlib[] again.",
+            <|"MessageParameters" -> {mathlibToolNeed[name], mathlibToolAdvice[name, $OperatingSystem]}, "Executable" -> path|>
         ]
-    ]
+    ];
+    path
 ]
 
 (* ============================================================================ *)
@@ -180,41 +167,21 @@ mathlibDirectoryUsableQ[directory_String] := Or[
     ]
 ]
 
-(* The record goes first and comes back last, so an installation that does not finish leaves none; what it fetched
-   stays for the run that resumes it *)
+mathlibDirectoryFailure[message_String, directory_String] := installThrow["MathlibDirectoryInUse", message, <|"MessageParameters" -> {directory}, "Directory" -> directory|>]
 
-installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
-    installStage["Checking..."];
-    If[mathlibInstallationReadyQ[directory], Return[File[directory], Block]];
-    installStage["Preparing..."];
-    toolchain = installToolchain[];
-    If[FailureQ[toolchain], Return[toolchain, Block]];
-    git = mathlibRequireTool["git"];
-    mathlibRequireTool["curl"];
-    If[ ! mathlibDirectoryUsableQ[directory],
-        Return[installFailure["MathlibDirectoryInUse", "`1` holds other files. Choose a new or empty directory.", <|"MessageParameters" -> {directory}, "Directory" -> directory|>], Block]
-    ];
-    If[ ! DirectoryQ[directory] && ! StringQ[Quiet[Check[CreateDirectory[directory, CreateIntermediateDirectories -> True], $Failed]]],
-        Return[installFailure["MathlibDirectoryInUse", "`1` could not be created.", <|"MessageParameters" -> {directory}, "Directory" -> directory|>], Block]
-    ];
-    Quiet[DeleteFile[FileNameJoin[{directory, $mathlibStamp}]]];
-    copied = KeyValueMap[Quiet[CopyFile[#2, FileNameJoin[{directory, #1}], OverwriteTarget -> True]]&, mathlibProjectFiles[]];
-    If[! AllTrue[copied, StringQ], Return[installFailure["MathlibDirectoryInUse", "The project files could not be written into `1`.", <|"MessageParameters" -> {directory}, "Directory" -> directory|>], Block]];
-    log = OpenWrite[FileNameJoin[{directory, $mathlibLog}], BinaryFormat -> True];
-    result = WithCleanup[
-        Block[{$installLog = log},
-            Replace[mathlibClone[git, directory], Null :> mathlibBuild[toolchainProgram["lake"], directory]]
-        ],
-        Close[log]
-    ];
-    If[FailureQ[result], Return[result, Block]];
-    installStage["Checking..."];
-    Export[FileNameJoin[{directory, $mathlibStamp}], mathlibRecord[], "RawJSON"];
-    If[ mathlibInstallationReadyQ[directory],
-        File[directory],
-        installFailure["MathlibInstallFailed", "lake build Mathlib finished, but Mathlib's build is not in `1`.", <|"MessageParameters" -> {lakeBuildLib[mathlibPackageDirectory[directory]]}, "Log" -> File[FileNameJoin[{directory, $mathlibLog}]]|>]
+(* A step of the installation, in its directory with the processes' PATH; its failure names the log *)
+
+mathlibStep[stage_String, command_List, directory_String] := (
+    installStage[stage];
+    installStep[
+        "MathlibInstallFailed",
+        "Mathlib's installation did not finish. Run InstallMathlib[] again after resolving the error in the log.",
+        command,
+        directory,
+        mathlibEnvironment[],
+        <|"Log" -> File[FileNameJoin[{directory, $mathlibLog}]]|>
     ]
-]
+)
 
 (* Lake fetches a package as a partial clone of its pinned commit, with the whole history: for Mathlib, tens of
    thousands of commits, then the files of the checkout, in several minutes. A shallow clone of the pinned tag, in the
@@ -222,52 +189,46 @@ installMathlib[directory_String] := Block[{toolchain, git, copied, log, result},
    is. One at another commit is removed, and Lake fetches the pinned commit itself. A clone that does not finish is
    removed too. *)
 
-mathlibClone[git_String, directory_String] := Block[{package = mathlibPackageDirectory[directory], command, result, complete = False},
+mathlibClone[git_String, directory_String] := Block[{package = mathlibPackageDirectory[directory], complete = False},
     If[DirectoryQ[package], Return[Null, Block]];
-    installStage["Downloading..."];
-    command = {git, "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", mathlibPin[]["inputRev"], mathlibPin[]["url"], package};
-    installLogText[StringRiffle[command, " "] <> "\n"];
     WithCleanup[
         Quiet[CreateDirectory[DirectoryName[package], CreateIntermediateDirectories -> True]];
-        result = installRun[command, directory, mathlibEnvironment[]];
-        If[ ! AssociationQ[result] || result["ExitCode"] =!= 0,
-            Return[
-                installFailure[
-                    "MathlibInstallFailed",
-                    "Mathlib's installation did not finish. Run InstallMathlib[] again after resolving the error in the log.",
-                    <|"Command" -> command, "Log" -> File[FileNameJoin[{directory, $mathlibLog}]], "Result" -> result|>
-                ],
-                Block
-            ]
-        ];
+        mathlibStep["Downloading...", {git, "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", mathlibPin[]["inputRev"], mathlibPin[]["url"], package}, directory];
         (* a clone of a tag has a detached HEAD: the file holds the commit *)
-        complete = Quiet[Check[StringTrim[ReadString[FileNameJoin[{package, ".git", "HEAD"}]]], ""]] === mathlibPin[]["rev"];
-        Null
+        complete = Quiet[Check[StringTrim[ReadString[FileNameJoin[{package, ".git", "HEAD"}]]], ""]] === mathlibPin[]["rev"]
         ,
         If[! complete, Quiet[DeleteDirectory[package, DeleteContents -> True]]]
-    ]
+    ];
 ]
 
-(* lake exe cache get fetches the packages the manifest pins, at their commits, and Mathlib's build cache, every module
-   compiled; lake build Mathlib checks it, and builds what the cache lacks *)
+(* The record goes first and comes back last, so an installation that does not finish leaves none; what it fetched
+   stays for the run that resumes it. lake exe cache get fetches the packages the manifest pins, at their commits, and
+   Mathlib's build cache, every module compiled; lake build Mathlib checks it, and builds what the cache lacks. *)
 
-mathlibBuild[lake_String, directory_String] := Block[{environment = mathlibEnvironment[], result},
-    Do[
-        installStage[First[step]];
-        installLogText[StringRiffle[Last[step], " "] <> "\n"];
-        result = installRun[Last[step], directory, environment];
-        If[ ! AssociationQ[result] || result["ExitCode"] =!= 0,
-            Return[
-                installFailure[
-                    "MathlibInstallFailed",
-                    "Mathlib's installation did not finish. Run InstallMathlib[] again after resolving the error in the log.",
-                    <|"Command" -> Last[step], "Log" -> File[FileNameJoin[{directory, $mathlibLog}]], "Result" -> result|>
-                ],
-                Block
-            ]
-        ]
-        ,
-        {step, {{"Downloading...", {lake, "exe", "cache", "get"}}, {"Installing...", {lake, "build", "Mathlib"}}}}
+mathlibInstall[directory_String] := Block[{git, log},
+    installStage["Preparing..."];
+    installToolchain[];
+    git = mathlibRequireTool["git"];
+    mathlibRequireTool["curl"];
+    If[! mathlibDirectoryUsableQ[directory], mathlibDirectoryFailure["`1` holds other files. Choose a new or empty directory.", directory]];
+    If[! DirectoryQ[directory] && ! StringQ[Quiet[Check[CreateDirectory[directory, CreateIntermediateDirectories -> True], $Failed]]], mathlibDirectoryFailure["`1` could not be created.", directory]];
+    Quiet[DeleteFile[FileNameJoin[{directory, $mathlibStamp}]]];
+    If[ ! AllTrue[KeyValueMap[Quiet[CopyFile[#2, FileNameJoin[{directory, #1}], OverwriteTarget -> True]]&, mathlibProjectFiles[]], StringQ],
+        mathlibDirectoryFailure["The project files could not be written into `1`.", directory]
+    ];
+    log = OpenWrite[FileNameJoin[{directory, $mathlibLog}], BinaryFormat -> True];
+    WithCleanup[
+        Block[{$installLog = log},
+            mathlibClone[git, directory];
+            mathlibStep["Downloading...", {toolchainProgram["lake"], "exe", "cache", "get"}, directory];
+            mathlibStep["Installing...", {toolchainProgram["lake"], "build", "Mathlib"}, directory]
+        ],
+        Close[log]
+    ];
+    installStage["Checking..."];
+    Export[FileNameJoin[{directory, $mathlibStamp}], mathlibRecord[], "RawJSON"];
+    If[ ! mathlibInstallationReadyQ[directory],
+        installThrow["MathlibInstallFailed", "lake build Mathlib finished, but Mathlib's build is not in `1`.", <|"MessageParameters" -> {lakeBuildLib[mathlibPackageDirectory[directory]]}, "Log" -> File[FileNameJoin[{directory, $mathlibLog}]]|>]
     ]
 ]
 
@@ -304,12 +265,12 @@ mathlibCleanOtherVersions[directory_String, remove_] := With[{others = mathlibOt
 (* Public API                                                                   *)
 (* ============================================================================ *)
 
-Options[InstallMathlib] = {"Directory" -> Automatic, "ProgressFunction" -> (Null&), "CancellationFunction" -> (False&), "RemoveOtherVersions" -> False}
+Options[InstallMathlib] = Join[{"Directory" -> Automatic, "RemoveOtherVersions" -> False}, Options[InstallLeanToolchain]]
 
 Options[MathlibInstallation] = {"Directory" -> Automatic}
 
 MathlibInstallation[opts : OptionsPattern[]] := Block[{directory},
-    If[! installOptionsQ[MathlibInstallation, {opts}], Return[installFailure["InvalidOption", "Unknown installation option."], Block]];
+    If[! installOptionsQ[MathlibInstallation, {opts}], Return[evaluationFailure["InvalidOption", "Unknown installation option."], Block]];
     directory = mathlibDirectory[OptionValue["Directory"]];
     If[FailureQ[directory], Return[directory, Block]];
     <|
@@ -323,19 +284,18 @@ MathlibInstallation[opts : OptionsPattern[]] := Block[{directory},
     |>
 ]
 
-InstallMathlib[opts : OptionsPattern[]] := Block[{callbacks = installCallbacks[InstallMathlib, {opts}], directory, remove, result},
-    If[FailureQ[callbacks], Return[callbacks, Block]];
-    {directory, remove} = OptionValue[{"Directory", "RemoveOtherVersions"}];
-    directory = mathlibDirectory[directory];
-    If[FailureQ[directory], Return[directory, Block]];
-    If[! BooleanQ[remove], Return[installFailure["InvalidOption", "\"RemoveOtherVersions\" must be True or False."], Block]];
-    result = Catch[
-        Block[{$installFunction = "InstallMathlib", $installProgress = First[callbacks], $installCancellation = Last[callbacks]}, installMathlib[directory]],
-        "LeanLinkInstall"
-    ];
-    If[MatchQ[result, _File], mathlibCleanOtherVersions[directory, remove]];
-    result
+(* The options are checked first; a ready installation is given as it is, without the toolchain or the tools *)
+
+installMathlib[directoryOption_, remove_] := Block[{directory = mathlibDirectory[directoryOption]},
+    If[FailureQ[directory], Throw[directory, "LeanLinkInstall"]];
+    If[! BooleanQ[remove], installThrow["InvalidOption", "\"RemoveOtherVersions\" must be True or False."]];
+    installStage["Checking..."];
+    If[! mathlibInstallationReadyQ[directory], mathlibInstall[directory]];
+    mathlibCleanOtherVersions[directory, remove];
+    File[directory]
 ]
+
+InstallMathlib[opts : OptionsPattern[]] := installFrame[InstallMathlib, {opts}, installMathlib @@ OptionValue[InstallMathlib, {opts}, {"Directory", "RemoveOtherVersions"}]]
 
 End[];
 

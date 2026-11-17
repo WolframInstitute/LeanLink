@@ -83,11 +83,11 @@ VerificationTest[
             Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (True&),
             RunProcess = (Throw["Unexpected process"]&)
         },
-        With[{result = Reap[InstallMathlib["ProgressFunction" -> Function[{stage, fraction}, Sow[{stage, fraction}]]]]},
+        With[{result = Reap[InstallMathlib["ProgressFunction" -> Function[stage, Sow[stage]]]]},
             {MatchQ[First[result], _File], Last[result]}
         ]
     ],
-    {True, {{{"Checking...", None}}}},
+    {True, {{"Checking..."}}},
     TestID -> "Mathlib-ReadyInstallationStartsNoProcess"
 ]
 
@@ -181,7 +181,7 @@ VerificationTest[
    leaves no record *)
 
 VerificationTest[
-    With[{fixture = installationFixture[Throw[Wolfram`LeanLink`Private`installFailure["InstallCancelled", "Cancelled."], "LeanLinkInstall"]&]},
+    With[{fixture = installationFixture[Wolfram`LeanLink`Private`installThrow["InstallCancelled", "Cancelled."]&]},
         {fixture["Result"]["Tag"], fixture["ProjectFiles"], fixture["Package"], fixture["Record"]}
     ],
     {"InstallCancelled", True, False, None},
@@ -386,9 +386,11 @@ VerificationTest[
     Module[{root = otherVersionsFixture[], failed, kept},
         WithCleanup[
             Block[{Wolfram`LeanLink`Private`mathlibRoot = (root&)},
-                failed = Block[{Wolfram`LeanLink`Private`installMathlib = (Wolfram`LeanLink`Private`installFailure["MathlibInstallFailed", "Failed."]&)}, InstallMathlib["RemoveOtherVersions" -> True]["Tag"]];
-                kept = DirectoryQ[FileNameJoin[{root, "v4.34.0"}]];
-                Block[{Wolfram`LeanLink`Private`installMathlib = (File[#]&)}, InstallMathlib["RemoveOtherVersions" -> True]]
+                Block[{Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (False&)},
+                    failed = Block[{Wolfram`LeanLink`Private`mathlibInstall = (Wolfram`LeanLink`Private`installThrow["MathlibInstallFailed", "Failed."]&)}, InstallMathlib["RemoveOtherVersions" -> True]["Tag"]];
+                    kept = DirectoryQ[FileNameJoin[{root, "v4.34.0"}]];
+                    Block[{Wolfram`LeanLink`Private`mathlibInstall = (Null&)}, InstallMathlib["RemoveOtherVersions" -> True]]
+                ]
             ];
             {failed, kept, FileNameTake /@ FileNames["*", root]}
             ,

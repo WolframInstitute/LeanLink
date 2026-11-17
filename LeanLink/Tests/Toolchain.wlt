@@ -47,7 +47,7 @@ VerificationTest[
                     RunProcess = (Throw["Unexpected process"]&),
                     URLDownload = (Throw["Unexpected download"]&)
                 },
-                Reap[InstallLeanToolchain["ProgressFunction" -> Function[{stage, fraction}, Sow[stage]]]]
+                Reap[InstallLeanToolchain["ProgressFunction" -> Function[stage, Sow[stage]]]]
             ];
             result === {File[directory], {{"Preparing..."}}}
             ,
