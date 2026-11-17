@@ -159,10 +159,12 @@ loadShim[] := Block[
 
 $PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
 
-(* The toolchain the shims are built against, v4.35.0 for leanprover/lean4:v4.35.0, from the paclet's lean-toolchain,
-   which names the toolchain of Native/lean-toolchain *)
+(* The toolchain the shims are built against, leanprover/lean4:v4.35.0, from the paclet's lean-toolchain, which names the
+   toolchain of Native/lean-toolchain; and its version, v4.35.0 *)
 
-$LeanToolchainVersion = Last[StringSplit[StringTrim[ReadString[FileNameJoin[{$PacletRoot, "lean-toolchain"}]]], ":"]]
+$LeanToolchain = StringTrim[ReadString[FileNameJoin[{$PacletRoot, "lean-toolchain"}]]]
+
+$LeanToolchainVersion = Last[StringSplit[$LeanToolchain, ":"]]
 
 (* elan's root: ELAN_HOME when set, else ~/.elan. Containers commonly relocate
    it (ELAN_HOME=/opt/elan with no ~/.elan at all), so every path built from the
@@ -179,9 +181,14 @@ leanProgram[dir_String, name_String] := FileNameJoin[{dir, name <> If[$Operating
 
 $searchPathSeparator = If[$OperatingSystem === "Windows", ";", ":"]
 
-(* The toolchain's directory, whether or not it is installed *)
+(* The directory elan installs a toolchain in, leanprover--lean4---v4.35.0 for leanprover/lean4:v4.35.0, whether or not
+   it is installed; LeanLink's own toolchain's, and a program of it *)
 
-leanToolchainPath[] := FileNameJoin[{elanHome[], "toolchains", "leanprover--lean4---" <> $LeanToolchainVersion}]
+toolchainDirectory[pin_String] := FileNameJoin[{elanHome[], "toolchains", StringReplace[pin, {"/" -> "--", ":" -> "---"}]}]
+
+leanToolchainPath[] := toolchainDirectory[$LeanToolchain]
+
+toolchainProgram[name_String] := leanProgram[FileNameJoin[{leanToolchainPath[], "bin"}], name]
 
 leanToolchainDir[] := With[{dir = leanToolchainPath[]},
     If[DirectoryQ[dir], dir, $Failed]
@@ -202,7 +209,7 @@ leanRuntimeLibs[] := Switch[ $SystemID,
 
 (* Why the shim could not be loaded, for the ::nolib message *)
 
-$shimFailure = "install the Lean toolchain it was built against (leanprover/lean4:" <> $LeanToolchainVersion <> ") with InstallLeanToolchain[], or run 'lake build' in the Native/ directory for a development build."
+$shimFailure = "install the Lean toolchain it was built against (" <> $LeanToolchain <> ") with InstallLeanToolchain[], or run 'lake build' in the Native/ directory for a development build."
 
 (* The shim runs where the Lean runtime is next to it: in place when the runtime
    is there already, as in a development build, else from a copy in the user's
@@ -212,7 +219,7 @@ $shimFailure = "install the Lean toolchain it was built against (leanprover/lean
 
 runnableShim[shim_String] := Block[{dir, copy},
     If[FileExistsQ[FileNameJoin[{DirectoryName[shim], First[First[leanRuntimeLibs[]]]}]], Return[If[provisionLeanRuntime[shim], shim, $Failed], Block]];
-    dir = FileNameJoin[{cacheBase[], "LeanLink", $LeanToolchainVersion, $SystemID, StringTake[IntegerString[FileHash[shim, "SHA256"], 16, 64], 16]}];
+    dir = FileNameJoin[{cacheBase[], "LeanLink", $LeanToolchainVersion, $SystemID, StringTake[fileSHA256[shim], 16]}];
     copy = FileNameJoin[{dir, FileNameTake[shim]}];
     If[ ! FileExistsQ[copy],
         If[! DirectoryQ[dir], Quiet[CreateDirectory[dir, CreateIntermediateDirectories -> True]]];
@@ -232,6 +239,8 @@ runnableShim[shim_String] := Block[{dir, copy},
 (* The user's cache, for files LeanLink makes and can make again *)
 
 cacheBase[] := If[StringQ[$CacheBaseDirectory], $CacheBaseDirectory, $UserBaseDirectory]
+
+fileSHA256[file_String] := IntegerString[FileHash[file, "SHA256"], 16, 64]
 
 provisionLeanRuntime[shimPath_String] := Module[{libDir = DirectoryName[shimPath], libs, sub, tc, srcDir, primary},
     {libs, sub} = leanRuntimeLibs[];
@@ -428,13 +437,12 @@ lakePathDependencies[projDir_String] := Rest @ FixedPoint[DeleteDuplicates[Join[
    dependencies), its path dependencies wherever they live, then its toolchain's library. *)
 
 resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".lake", "packages"}], leanLib},
-    leanLib = Block[{dir = projDir, tc, version, toolchainDir},
+    leanLib = Block[{dir = projDir, tc, version},
         While[StringLength[dir] > 1,
             tc = FileNameJoin[{dir, "lean-toolchain"}];
             If[ FileExistsQ[tc],
                 version = StringTrim[Import[tc, "Text"]];
-                toolchainDir = StringReplace[version, {"/" -> "--", ":" -> "---"}];
-                Return[FileNameJoin[{elanHome[], "toolchains", toolchainDir, "lib", "lean"}], Block]
+                Return[FileNameJoin[{toolchainDirectory[version], "lib", "lean"}], Block]
             ];
             dir = DirectoryName[dir]
         ];
@@ -933,7 +941,7 @@ Options[LeanEvaluate] = {"ProjectDir" -> None, "Imports" -> {}, "Open" -> {}, "S
 LeanEvaluate[expr_String, opts : OptionsPattern[]] := Module[{tc, projDir, searchPath, opens, srcLines, srcImports, srcBody, script, file, res, json, diag},
     tc = leanToolchainDir[];
     If[ tc === $Failed,
-        Return[Failure["ToolchainNotInstalled", <|"MessageTemplate" -> "LeanLink's toolchain leanprover/lean4:`1` is not installed. InstallLeanToolchain[] installs it.", "MessageParameters" -> {$LeanToolchainVersion}|>], Module]
+        Return[Failure["ToolchainNotInstalled", <|"MessageTemplate" -> "LeanLink's toolchain `1` is not installed. InstallLeanToolchain[] installs it.", "MessageParameters" -> {$LeanToolchain}|>], Module]
     ];
     projDir = OptionValue["ProjectDir"];
     searchPath = StringRiffle[DeleteCases[{If[StringQ[projDir], resolveSearchPath[resolveProjDir[projDir]], ""], FileNameJoin[{tc, "lib", "lean"}]}, ""], $searchPathSeparator];
@@ -1007,8 +1015,8 @@ withFloats[value_] := value
    elan proxy would download a missing toolchain, and a build must never do that. *)
 
 projectToolchain[dir_String] := Module[{tcFile = FileNameJoin[{dir, "lean-toolchain"}], pin},
-    pin = If[FileExistsQ[tcFile], StringTrim[Import[tcFile, "Text"]], "leanprover/lean4:" <> $LeanToolchainVersion];
-    <|"Pin" -> pin, "Dir" -> FileNameJoin[{elanHome[], "toolchains", StringReplace[pin, {"/" -> "--", ":" -> "---"}]}]|>
+    pin = If[FileExistsQ[tcFile], StringTrim[Import[tcFile, "Text"]], $LeanToolchain];
+    <|"Pin" -> pin, "Dir" -> toolchainDirectory[pin]|>
 ]
 
 LeanBuild[dir_String, module_String] := LeanBuild[dir, {module}]
@@ -1027,7 +1035,7 @@ LeanBuild[dir_String, modules : {___String} : {}] := Module[{root = ExpandFileNa
             Module
         ]
     ];
-    If[StringReplace[tc["Pin"], StartOfString ~~ ___ ~~ ":" -> ""] =!= $LeanToolchainVersion, Message[LeanBuild::version, tc["Pin"], "leanprover/lean4:" <> $LeanToolchainVersion]];
+    If[StringReplace[tc["Pin"], StartOfString ~~ ___ ~~ ":" -> ""] =!= $LeanToolchainVersion, Message[LeanBuild::version, tc["Pin"], $LeanToolchain]];
     res = RunProcess[{lake, "build", Sequence @@ ("+" <> #& /@ modules)}, ProcessDirectory -> root];
     out = StringTrim[utf8Text[res["StandardOutput"] <> "\n" <> res["StandardError"]]];
     (* A build replaces the project's oleans: drop its cached environments so the
@@ -3011,7 +3019,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
 
 (* LeanImport[file, opts] -- standalone .lean file: compile via lean CLI *)
 
-LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringEndsQ[file, ".lean"] := Block[{absFile, projDir, modName, tmpDir, oleanFile, result, searchPath, tcFile, tcName, leanBin, leanLibDir, content, names, projSearch, rootDir, leanPath},
+LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringEndsQ[file, ".lean"] := Block[{absFile, projDir, modName, tmpDir, oleanFile, result, searchPath, tcFile, tcDir, leanBin, leanLibDir, content, names, projSearch, rootDir, leanPath},
     absFile = ExpandFileName[file];
     projDir = OptionValue["ProjectDir"];
     (* If within a lake project, delegate to module-based import *)
@@ -3042,10 +3050,9 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
                 tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]
             ];
             If[ FileExistsQ[tcFile],
-                tcName = StringTrim[Import[tcFile, "Text"]];
-                tcName = StringReplace[tcName, {"/" -> "--", ":" -> "---"}];
-                leanBin = leanProgram[FileNameJoin[{elanHome[], "toolchains", tcName, "bin"}], "lean"];
-                leanLibDir = FileNameJoin[{elanHome[], "toolchains", tcName, "lib", "lean"}]
+                tcDir = toolchainDirectory[StringTrim[Import[tcFile, "Text"]]];
+                leanBin = leanProgram[FileNameJoin[{tcDir, "bin"}], "lean"];
+                leanLibDir = FileNameJoin[{tcDir, "lib", "lean"}]
                 ,
                 (* No toolchain file at all: try elan default, then bare lean *)
                 leanBin = leanProgram[FileNameJoin[{elanHome[], "bin"}], "lean"];
