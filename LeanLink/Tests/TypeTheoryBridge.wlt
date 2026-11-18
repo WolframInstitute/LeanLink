@@ -602,6 +602,23 @@ VerificationTest[
 (* a constant given other arguments than its notation takes is shown as it is *)
 VerificationTest[StringContainsQ[$notationText[ToBoxes[TypeTheoryTerm["Eq"["a"]]]], "Eq"], True, TestID -> "LeanNotation-leaves-other-arities"]
 
+(* where TypeTheory shows types on mouseover, as in a notebook, a literal comes to the notation with its type's tooltip
+   (TypeTheory 0.48), and is still shown as the number *)
+VerificationTest[
+    Block[{env = LeanToTypeTheory[LeanImportString["theorem notationTooltipLiteral : 2 ^ 5 = 32 := rfl"], "notationTooltipLiteral"], previous = Environment["TYPETHEORY_NOTEBOOK_BOXES"], text},
+        WithCleanup[
+            SetEnvironment["TYPETHEORY_NOTEBOOK_BOXES" -> "True"],
+            text = $notationText[ToBoxes[TypeTheoryCheck[TypeTheoryTerm["notationTooltipLiteral", env]]] //. TooltipBox[shown_, ___] :> shown],
+            SetEnvironment["TYPETHEORY_NOTEBOOK_BOXES" -> If[StringQ[previous], previous, None]]
+        ];
+        {StringFreeQ[text, "OfNat"], StringContainsQ[text, "32"]}
+    ]
+    ,
+    {True, True}
+    ,
+    TestID -> "LeanNotation-literals-with-type-tooltips"
+]
+
 (* Times, Power, Subtract and the predecessor are Lean's Nat.mul, Nat.pow, Nat.sub and Nat.pred, as Plus is Nat.add: the
    prelude's theorems about them still check in Lean's kernel, and a product of large literals checks at once, where TypeTheory's own recursion was unfolded a unit at a time *)
 

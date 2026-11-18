@@ -1728,6 +1728,10 @@ heldLevelText[HoldComplete[level_]] := levelText[level]
    would not get the parentheses its operator needs, as (a + b) * c. Only the display changes. Since TypeTheory 0.45 a
    constant with a rule, applied to a function, gives the rule the function, so Exists has one too. *)
 
+(* A natural number literal: an integer, or, where TypeTheory shows types on mouseover, as in a notebook since TypeTheory
+   0.48, the integer with its type's tooltip, a head of TypeTheory's applied to it and the tooltip's RawBoxes *)
+$leanLiteral = _Integer | _Symbol[_Integer, _RawBoxes]
+
 $leanNotationRules = {
     "Eq"[a_, b_] :> Equal[a, b],
     "Ne"[a_, b_] :> Unequal[a, b],
@@ -1742,7 +1746,7 @@ $leanNotationRules = {
     ("HMod.hMod" | "Nat.mod")[a_, b_] :> leanModulo[a, b],
     ("HPow.hPow" | "Nat.pow")[a_, b_] :> Power[a, b],
     "Neg.neg"[a_] :> Times[-1, a],
-    "OfNat.ofNat"[n_Integer] :> n,
+    "OfNat.ofNat"[n : $leanLiteral] :> n,
     "Nat.succ"[n_] :> Plus[n, 1],
     "And"[a_, b_] :> And[a, b],
     "Or"[a_, b_] :> Or[a, b],

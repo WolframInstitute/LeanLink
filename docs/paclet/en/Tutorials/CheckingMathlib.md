@@ -190,7 +190,7 @@ The statement, checked:
 TypeTheoryCheck[TypeTheoryTerm["USize.size_eq", words]]
 ```
 
-<!-- => USize.size == OfNat.ofNat[4294967296] ∨ USize.size == OfNat.ofNat[18446744073709551616] -->
+<!-- => USize.size == 4294967296 ∨ USize.size == 18446744073709551616 -->
 
 ## Beyond the Prelude
 
