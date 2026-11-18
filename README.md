@@ -60,9 +60,8 @@ env["id_proof"]["TypeForm"]
 LeanTactic[{"intro P", "intro h", "exact h"}][LeanState[env["id_proof"]]]["Complete"]
 (* True *)
 
-(* A theorem from Mathlib, installed with InstallMathlib[] *)
-alg = LeanImport["Mathlib.Algebra.Group.Basic",
-  "ProjectDir" -> MathlibInstallation[]["Directory"], "Filter" -> "mul_comm"];
+(* A theorem from Mathlib, installed with InstallMathlib[]: LeanImport finds it *)
+alg = LeanImport["Mathlib.Algebra.Group.Basic", "Filter" -> "mul_comm"];
 alg["mul_comm"]["TypeForm"]
 (* "∀ {G : Type u_1} [inst : CommMagma G] (a b : G), a * b = b * a" *)
 
