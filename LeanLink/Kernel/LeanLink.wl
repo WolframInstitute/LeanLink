@@ -88,7 +88,7 @@ LeanExprGraph[file_String, root_String, opts : OptionsPattern[]] := LeanExprGrap
 
 LeanExprGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, args, res, dotStr},
     files = OptionValue["Files"];
-    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
+    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], defaultProjectDirectory[]]];
     args = Join[
         {"expr", "+constdepth=" <> ToString[OptionValue["ConstDepth"]], "+depth=" <> ToString[OptionValue["Depth"]], "+maxnodes=" <> ToString[OptionValue["MaxNodes"]]},
         If[TrueQ[OptionValue["ShowLevels"]], {"+showlevels"}, {"-showlevels"}],
@@ -117,7 +117,7 @@ LeanCallGraph[file_String, root_String, opts : OptionsPattern[]] := LeanCallGrap
 
 LeanCallGraph[root_String, opts : OptionsPattern[]] := Block[{projDir, files, args, res, dotStr},
     files = OptionValue["Files"];
-    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
+    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], defaultProjectDirectory[]]];
     args = Join[{"call", "+depth=" <> ToString[OptionValue["Depth"]]}, leanFileArgs[files], leanImportArgs[OptionValue["Imports"]], {root}];
     res = runLean[projDir, args];
     If[ res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"]] == 0,
@@ -140,7 +140,7 @@ LeanListTheorems[file_String, opts : OptionsPattern[]] := LeanListTheorems["File
 
 LeanListTheorems[opts : OptionsPattern[]] := Block[{projDir, files, args, res, lines},
     files = OptionValue["Files"];
-    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], Directory[]]];
+    projDir = Replace[OptionValue["ProjectDir"], Automatic :> If[files =!= {}, DirectoryName[First[files]], defaultProjectDirectory[]]];
     args = Join[{"list"}, If[OptionValue["Filter"] =!= "", {"+filter=" <> OptionValue["Filter"]}, {}], leanFileArgs[files], leanImportArgs[OptionValue["Imports"]]];
     res = runLean[projDir, args];
     If[ res["ExitCode"] =!= 0 && StringLength[res["StandardOutput"]] == 0,

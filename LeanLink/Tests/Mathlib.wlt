@@ -376,6 +376,48 @@ VerificationTest[
     TestID -> "Mathlib-OtherVersionsRemovedWhenAsked"
 ]
 
+(* ---- The default project ---- *)
+
+(* "ProjectDir" -> Automatic, resolved from a new current directory holding files, while a Mathlib installation is ready
+   in the default directory or not: "current" or "mathlib" *)
+
+defaultProject[files_List, ready_] := withTemporaryDirectory[Function[directory,
+    Scan[Export[FileNameJoin[{directory, #}], "", "Text"]&, files];
+    WithCleanup[
+        SetDirectory[directory],
+        Block[{Wolfram`LeanLink`Private`mathlibInstallationReadyQ = Function[mathlib, ready && mathlib === Wolfram`LeanLink`Private`mathlibDirectory[Automatic]]},
+            Replace[Wolfram`LeanLink`Private`resolveProjDir[Automatic], {Directory[] -> "current", Wolfram`LeanLink`Private`mathlibDirectory[Automatic] -> "mathlib"}]
+        ],
+        ResetDirectory[]
+    ]
+]]
+
+VerificationTest[
+    {defaultProject[{"lakefile.toml"}, True], defaultProject[{"lean-toolchain"}, False]},
+    {"current", "current"},
+    TestID -> "Mathlib-DefaultProject-LakeProject"
+]
+
+VerificationTest[
+    defaultProject[{"Main.lean"}, True],
+    "mathlib",
+    TestID -> "Mathlib-DefaultProject-Mathlib"
+]
+
+VerificationTest[
+    defaultProject[{"Main.lean"}, False],
+    "current",
+    TestID -> "Mathlib-DefaultProject-Current"
+]
+
+VerificationTest[
+    Block[{Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (True&)},
+        Wolfram`LeanLink`Private`resolveProjDir /@ {"/a/project", "~/project"}
+    ],
+    {"/a/project", FileNameJoin[{$HomeDirectory, "project"}]},
+    TestID -> "Mathlib-DefaultProject-Explicit"
+]
+
 (* ---- An installed mathlib ---- *)
 
 $mathlibTestDirectory = Replace[Environment["LEANLINK_MATHLIB_DIRECTORY"], Except[_String] -> Automatic]
@@ -401,6 +443,20 @@ VerificationTest[
     ],
     True,
     TestID -> "Mathlib-Installed-Verify"
+]
+
+(* without "ProjectDir", from a directory that is not a Lake project, the installation in the default directory is used *)
+
+VerificationTest[
+    If[ MathlibInstallation[]["Status"] =!= "Ready",
+        True
+        ,
+        withTemporaryDirectory[Function[directory,
+            WithCleanup[SetDirectory[directory], LeanEvaluate[LeanImport["Mathlib.Data.Nat.Choose.Basic"]["Nat.choose"], 10, 4], ResetDirectory[]]
+        ]] === 210
+    ],
+    True,
+    TestID -> "Mathlib-Installed-DefaultProject"
 ]
 
 If[$mathlibInstallation["Status"] === "Ready", LeanFreeEnvironment[$mathlibEnv]]

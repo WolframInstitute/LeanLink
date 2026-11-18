@@ -148,6 +148,16 @@ mathlibInstallationReadyQ[directory_String] := With[{stamp = FileNameJoin[{direc
     ]
 ]
 
+(* "ProjectDir" -> Automatic: the current directory when it is a Lake project, else the Mathlib that InstallMathlib
+   installed in its default directory when it is ready, else the current directory. An explicit "ProjectDir" always
+   wins. Readiness reads files only, so this costs a millisecond or two. *)
+
+defaultProjectDirectory[] := Which[
+    isLakeProject[Directory[]], Directory[],
+    mathlibInstallationReadyQ[mathlibDirectory[Automatic]], mathlibDirectory[Automatic],
+    True, Directory[]
+]
+
 (* ============================================================================ *)
 (* Installation                                                                 *)
 (* ============================================================================ *)
