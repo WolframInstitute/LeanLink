@@ -521,7 +521,7 @@ callNative[fn_, args_List, projDir_, imports_, head_ : LeanImport] := Block[{han
     decodeWXF[result]
 ]
 
-resolveProjDir[pd_] := Replace[pd, {Automatic -> Directory[], s_String /; StringStartsQ[s, "~/"] :> FileNameJoin[{$HomeDirectory, StringDrop[s, 2]}]}]
+resolveProjDir[pd_] := Replace[pd, {Automatic :> defaultProjectDirectory[], s_String /; StringStartsQ[s, "~/"] :> FileNameJoin[{$HomeDirectory, StringDrop[s, 2]}]}]
 
 (* ============================================================================ *)
 (* LeanTerm                                                                     *)
