@@ -128,10 +128,8 @@ rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure[
         data
         ,
         <|
-            "MessageTemplate" -> StringJoin[
-                "TypeTheory rejects the Lean constant ",
-                name,
-                ": ",
+            "MessageTemplate" -> enclosedTemplate[
+                "TypeTheory rejects the Lean constant " <> name <> ": ",
                 Lookup[data, "MessageTemplate", tag],
                 If[quotientsQ, " It depends on Lean's quotient types, whose computation needs an environment whose rules have quotients.", ""]
             ]
@@ -142,6 +140,14 @@ rejection[name_String, Failure[tag_, data_Association], quotientsQ_] := Failure[
         |>
     ]
 ]
+
+(* a failure's message template between two texts: a string, or, as TypeTheory gives since 0.54, a TemplateObject, its
+   slots and options kept *)
+enclosedTemplate[before_String, template_String, after_String] := before <> template <> after
+
+enclosedTemplate[before_String, TemplateObject[parts_List, rest___], after_String] := TemplateObject[Join[{before}, parts, {after}], rest]
+
+enclosedTemplate[before_String, other_, after_String] := before <> ToString[other] <> after
 
 locateFailure[baseEnvironment_, order_List, failure_] := Block[{environment = baseEnvironment},
     Scan[
