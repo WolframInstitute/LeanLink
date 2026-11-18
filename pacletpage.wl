@@ -32,9 +32,14 @@ $siteAccount = "wolframinstitute@wolframinstitute.org"
    builds), and lets a dry run that does not build report the account check
    rather than refuse. 0.3.11 stops a deploy at the first failed cloud write and
    replaces the documentation in place, so a deploy that stops leaves the live
-   pages served; an older one could leave the resource without them. *)
+   pages served; an older one could leave the resource without them. 0.3.80
+   is the first release fit to build on Wolfram 15.0: 0.3.74 and 0.3.75 stop
+   a page kernel crashing on network access (it fetches with curl), 0.3.78
+   fixes the converter's warm cache, 0.3.79 keys an example's cache by the
+   kernel and links only to pages that exist, and 0.3.80 keeps building the
+   archive from hanging. 0.3.74 itself fails a release's site check. *)
 
-$minPacletPage = "0.3.11"
+$minPacletPage = "0.3.80"
 
 $pacletPageResource = "https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/WolframInstitute/PacletPage"
 
