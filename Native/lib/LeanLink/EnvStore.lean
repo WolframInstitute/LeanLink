@@ -59,10 +59,11 @@ def importState (imports : Array Import) : IO ImportState := do
   importStateStore.modify (·.insert key state)
   return state
 
-/-- The environment of `modules`, as `importModules` with `loadExts` gives it, but starting from the
-    state of the modules' own imports, which earlier imports share: for a module compiled from a
-    source string, only its own .olean is read. -/
-def importShared (modules : Array Import) : IO Environment := do
+/-- The environment of `modules`, as `importModules` gives it, but starting from the state of the
+    modules' own imports, which earlier imports share: for a module compiled from a source string, only
+    its own .olean is read. The importer's state does not depend on `loadExts`, so imports with and
+    without extensions share it. -/
+def importShared (modules : Array Import) (loadExts : Bool := true) : IO Environment := do
   let mut dependencies : Array Import := #[]
   for m in modules do
     let (data, _) ← readModuleData (← findOLean m.module)
@@ -70,10 +71,16 @@ def importShared (modules : Array Import) : IO Environment := do
   withImporting do
     let base ← importState dependencies
     let (_, state) ← (importModulesCore modules).run base
-    finalizeImport state modules {} 0 (leakEnv := false) (loadExts := true)
+    finalizeImport state modules {} 0 (leakEnv := false) (loadExts := loadExts)
 
-/-- Load an environment from module imports with a given search path. -/
-def loadEnv (imports : Array String) (searchPath : String) : IO Environment := do
+/-- Why the last load failed, in Lean's words, for LeanImport's message: what the shim prints on
+    standard error reaches neither a notebook nor EvaluationData. Empty after a load that worked. -/
+private initialize lastLoadError : IO.Ref String ← IO.mkRef ""
+
+/-- Load an environment from module imports with a given search path. Without `loadExts` the
+    environment has its constants but none of the extensions' state (notation, simp sets, instances), which
+    is enough for reading constants and the TypeTheory bridge, and skips what dominates a large import. -/
+def loadEnv (imports : Array String) (searchPath : String) (loadExts : Bool := true) : IO Environment := do
   -- Build search path from user-provided paths
   -- the separator of the platform: ";" on Windows, whose paths hold ":" after the drive letter
   let separator := System.SearchPath.separator.toString
@@ -92,8 +99,8 @@ def loadEnv (imports : Array String) (searchPath : String) : IO Environment := d
   -- import: importModules turns it off again when it finishes (withImporting),
   -- and it runs each module's initializers at most once per process. Regions
   -- are never freed (freeEnvExport only drops the handle), as that requires.
-  unsafe Lean.enableInitializersExecution
-  importShared modules
+  if loadExts then unsafe Lean.enableInitializersExecution
+  importShared modules loadExts
 
 /-- The environment loaded under a handle, with the search path it was loaded with. -/
 def loadedEnvironment? (handle : UInt64) : IO (Option (Environment × Option SearchPath)) := do
@@ -110,13 +117,15 @@ def loadedEnvironment? (handle : UInt64) : IO (Option (Environment × Option Sea
 def initLeanLink : IO UInt32 := do
   return 0
 
-/-- Load an environment from comma-separated imports and colon-separated search paths.
-    Returns a handle (UInt64) for the loaded environment. Returns 0 on failure. -/
+/-- Load an environment from comma-separated imports and colon-separated search paths, with the
+    extensions' state when `loadExts` is not 0. Returns a handle (UInt64) for the loaded environment.
+    Returns 0 on failure, with Lean's reason kept for `leanlink_last_load_error`. -/
 @[export leanlink_load_env]
-def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt64 := do
+def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) (loadExts : UInt8) : IO UInt64 := do
   let imports := (importsStr.splitOn ",").toArray.filter (· ≠ "")
+  lastLoadError.set ""
   try
-    let env ← loadEnv imports searchPathStr
+    let env ← loadEnv imports searchPathStr (loadExts != 0)
     let handle ← nextHandle.get
     nextHandle.set (handle + 1)
     envStore.modify fun m => m.insert handle env
@@ -124,8 +133,14 @@ def loadEnvExport (importsStr : @& String) (searchPathStr : @& String) : IO UInt
     searchPathStore.modify fun m => m.insert handle searchPath
     return handle
   catch e =>
+    lastLoadError.set (toString e)
     IO.eprintln s!"[LeanLink] loadEnv error: {e}"
     return 0
+
+/-- Why the last `leanlink_load_env` failed, as a WXF string, empty when it did not. -/
+@[export leanlink_last_load_error]
+def lastLoadErrorExport : IO ByteArray := do
+  return WXF.serialize (WXF.string (← lastLoadError.get))
 
 /-- What tells one environment from another, for comparing an import that shares modules already read with
     Lean's own: the numbers of constants and modules, a hash of every constant's name and type that does

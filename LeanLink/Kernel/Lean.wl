@@ -307,7 +307,10 @@ Scan[
     {LeanImport, LeanExpr, LeanValue, LeanConstantInfo, LeanListConstants, LeanTactic, LeanTerm}
 ]
 
-$loadEnvFn := $loadEnvFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_load_env", {"UTF8String", "UTF8String"}, Integer]
+$loadEnvFn := $loadEnvFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_load_env", {"UTF8String", "UTF8String", Integer}, Integer]
+
+(* why the last load failed, in Lean's words (LeanLink 1.3.0) *)
+$lastLoadErrorFn := $lastLoadErrorFn = Quiet[LibraryFunctionLoad[$ShimLib, "leanlink_wl_last_load_error", {}, {Integer, 1}]]
 
 $freeEnvFn := $freeEnvFn = LibraryFunctionLoad[$ShimLib, "leanlink_wl_free_env", {Integer}, "Void"]
 
@@ -460,13 +463,18 @@ resolveSearchPath[projDir_String] := Block[{pkgsRoot = FileNameJoin[{projDir, ".
 
 $envCache = <||>
 
-(* Lean's loader names a module it cannot find only on standard error, so the message names the imports
-   for which no directory of the search path has an .olean file *)
+(* The message names the imports for which no directory of the search path has an .olean file, and otherwise gives
+   Lean's own reason, which the shim keeps since what it prints on standard error reaches neither a notebook nor EvaluationData *)
 
 loadFailureText[imports_List, searchPath_String] := Replace[
     Select[imports, Function[module, NoneTrue[StringSplit[searchPath, $searchPathSeparator], Function[dir, FileExistsQ[FileNameJoin[Prepend[StringSplit[module, "."], dir]] <> ".olean"]]]]],
-    {{} -> "Failed to load environment", missing_ :> "Failed to load environment: no directory of the search path has the module " <> StringRiffle[missing, ", "]}
+    {
+        {} :> "Failed to load environment" <> Replace[lastLoadError[], {reason_String :> ": " <> reason, _ -> ""}],
+        missing_ :> "Failed to load environment: no directory of the search path has the module " <> StringRiffle[missing, ", "]
+    }
 ]
+
+lastLoadError[] := Replace[Quiet[decodeWXF[$lastLoadErrorFn[]]], {reason_String /; StringLength[reason] > 0 :> reason, _ -> None}]
 
 (* Lean reads LEAN_PATH while it imports modules, so the shim sets it for the whole
    kernel process when it loads an environment, and KernelCheck, which imports the
@@ -484,7 +492,9 @@ withLeanPath[searchPath_, body_] := With[{saved = Environment["LEAN_PATH"]},
     ]
 ]
 
-loadEnvironment[imports_String, searchPath_String] := withLeanPath[searchPath, $loadEnvFn[imports, searchPath]]
+(* without extensions an environment has its constants but no notation, simp sets or instances: enough for reading constants and
+   the TypeTheory bridge, and much cheaper for a large import *)
+loadEnvironment[imports_String, searchPath_String, loadExtensions_ : True] := withLeanPath[searchPath, $loadEnvFn[imports, searchPath, Boole[TrueQ[loadExtensions]]]]
 
 (* A shim that exists but that the operating system cannot load, as on Windows one that imports a symbol
    from a DLL that does not export it, would otherwise be reported as a failed environment load. Callers that
@@ -494,12 +504,13 @@ shimLoadableQ[head_] := $ShimLib =!= $Failed && MatchQ[$loadEnvFn, _LibraryFunct
     False
 )
 
-getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport] := Block[{key, searchPath, handle},
-    key = {projDir, imports};
+getOrLoadEnv[projDir_String, imports_List, head_ : LeanImport, loadExtensions_ : True] := Block[{key, searchPath, handle},
+    (* an import without extensions is cached apart, so that a later import with them does not get it *)
+    key = If[TrueQ[loadExtensions], {projDir, imports}, {projDir, imports, "LoadExtensions" -> False}];
     If[KeyExistsQ[$envCache, key], Return[$envCache[key]]];
     searchPath = resolveSearchPath[projDir];
     If[! shimLoadableQ[head], Return[$Failed]];
-    handle = loadEnvironment[StringRiffle[imports, ","], searchPath];
+    handle = loadEnvironment[StringRiffle[imports, ","], searchPath, loadExtensions];
     If[ handle === 0 || ! IntegerQ[handle],
         Message[head::err, loadFailureText[imports, searchPath]];
         Return[$Failed]
@@ -2960,7 +2971,7 @@ LeanFreeEnvironment[environment_LeanEnvironment, opts : OptionsPattern[]] := Sca
 
 (* --- LeanImport --- *)
 
-Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False, "PrepareEvaluation" -> False}
+Options[LeanImport] = {"ProjectDir" -> Automatic, "Imports" -> {}, "Filter" -> "", "IncludeInternal" -> False, "PrepareEvaluation" -> False, "LoadExtensions" -> True}
 
 (* Internal name patterns to filter out *)
 
@@ -2993,7 +3004,7 @@ LeanImport[module_String, opts : OptionsPattern[]] /; ! StringContainsQ[module, 
             Block[{envAssoc = <||>, handles, kinds},
                 handles = First[
                     Last[Reap[Do[
-                        With[{h = Quiet[getOrLoadEnv[projDir, {imp}]]},
+                        With[{h = Quiet[getOrLoadEnv[projDir, {imp}, LeanImport, OptionValue["LoadExtensions"]]]},
                             If[ IntegerQ[h] && h > 0,
                                 Sow[h];
                                 kinds = If[TrueQ[OptionValue["IncludeInternal"]], Quiet[decodeWXF[$listConstantKindsFn[h, filter]]], shownKinds[h, filter]];
@@ -3095,7 +3106,7 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
         ];
         handle = loadEnvironment[modName, searchPath];
         If[ handle === 0 || ! IntegerQ[handle],
-            Message[LeanImport::err, "Failed to load compiled file"];
+            Message[LeanImport::err, "Failed to load compiled file" <> Replace[lastLoadError[], {reason_String :> ": " <> reason, _ -> ""}]];
             DeleteDirectory[tmpDir, DeleteContents -> True];
             Return[$Failed, Block]
         ];
@@ -3159,9 +3170,13 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
     If[TrueQ[OptionValue["PrepareEvaluation"]] && OptionValue["Imports"] === {} && Length[imports] > 1,
         Return[evaluationFailure["SeparateEnvironments", "Select the modules together with Imports before preparing evaluation."]]
     ];
+    (* evaluation elaborates, which needs the extensions' notation, instances and simp sets *)
+    If[TrueQ[OptionValue["PrepareEvaluation"]] && ! TrueQ[OptionValue["LoadExtensions"]],
+        Return[evaluationFailure["NoExtensions", "Evaluation needs the extensions; import with \"LoadExtensions\" -> True."]]
+    ];
     withEvaluationPreparation[Block[{loadBatches = If[OptionValue["Imports"] === {}, List /@ imports, {imports}], envAssoc = <||>, handles = {}},
         Do[
-            With[{h = Quiet[getOrLoadEnv[projDir, batch]]},
+            With[{h = Quiet[getOrLoadEnv[projDir, batch, LeanImport, OptionValue["LoadExtensions"]]]},
                 If[ IntegerQ[h] && h > 0,
                     AppendTo[handles, h];
                     kinds = If[ TrueQ[OptionValue["IncludeInternal"]],

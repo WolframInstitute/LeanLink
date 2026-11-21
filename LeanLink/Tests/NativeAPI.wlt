@@ -1018,6 +1018,40 @@ VerificationTest[
     TestID -> "LeanImport-filter-that-keeps-nothing-is-not-a-failed-load"
 ]
 
+(* without the extensions' state an import has the same constants, under a handle of its own, and the bridge reads it *)
+VerificationTest[
+    Module[{with = LeanImport["Init.Prelude"], without = LeanImport["Init.Prelude", "LoadExtensions" -> False]},
+        {
+            Head[without],
+            Sort[Keys[First[with]]] === Sort[Keys[First[without]]],
+            Wolfram`LeanLink`Private`extractHandle[with] =!= Wolfram`LeanLink`Private`extractHandle[without],
+            FailureQ[LeanImport["Init.Prelude", "LoadExtensions" -> False, "PrepareEvaluation" -> True]]
+        }
+    ]
+    ,
+    {LeanEnvironment, True, True, True}
+    ,
+    TestID -> "LeanImport-without-extensions-has-the-same-constants"
+]
+
+(* a load Lean rejects says why, in Lean's words *)
+VerificationTest[
+    Module[{dir = CreateDirectory[], lib, evaluation},
+        lib = CreateDirectory[FileNameJoin[{dir, ".lake", "build", "lib", "lean"}], CreateIntermediateDirectories -> True];
+        BinaryWrite[FileNameJoin[{lib, "Broken.olean"}], ConstantArray[7, 4096]];
+        Close[FileNameJoin[{lib, "Broken.olean"}]];
+        evaluation = EvaluationData[LeanImport["Imports" -> {"Broken"}, "ProjectDir" -> dir]];
+        DeleteDirectory[dir, DeleteContents -> True];
+        {evaluation["Result"], AnyTrue[evaluation["MessagesText"], StringContainsQ["Broken.olean"]]}
+    ]
+    ,
+    {$Failed, True}
+    ,
+    {LeanImport::err}
+    ,
+    TestID -> "LeanImport-gives-Lean's-reason-for-a-failed-load"
+]
+
 VerificationTest[
     Module[{env, back},
         env = LeanImportString[

@@ -104,7 +104,8 @@ extern lean_object* initialize_leanlink_LeanLink(uint8_t builtin);
 
 /* Lean @[export] functions (Lean 4.29 ABI: no world token) */
 extern lean_object* leanlink_init(void);
-extern lean_object* leanlink_load_env(lean_object* imports, lean_object* searchPath);
+extern lean_object* leanlink_load_env(lean_object* imports, lean_object* searchPath, uint8_t loadExts);
+extern lean_object* leanlink_last_load_error(void);
 extern lean_object* leanlink_free_env(uint64_t handle);
 extern lean_object* leanlink_list_theorems(uint64_t handle, lean_object* filter);
 extern lean_object* leanlink_get_type(uint64_t handle, lean_object* name, uint32_t depth);
@@ -260,7 +261,8 @@ DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) {
 }
 
 /*
- * loadEnv(importsStr, searchPathStr) -> handle (Integer)
+ * loadEnv(importsStr, searchPathStr, loadExts) -> handle (Integer), 0 on failure; loadExts 0 skips the
+ * extensions' state
  */
 DLLEXPORT int leanlink_wl_load_env(
     WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
@@ -276,6 +278,7 @@ DLLEXPORT int leanlink_wl_load_env(
 
     const char* imports_cstr = MArgument_getUTF8String(Args[0]);
     const char* path_cstr = MArgument_getUTF8String(Args[1]);
+    uint8_t load_exts = MArgument_getInteger(Args[2]) != 0;
 
     /* Lean 4.29: importModules reads LEAN_PATH via IO.getEnv internally.
        Without it, module loading panics. Set it from the search path. */
@@ -283,8 +286,11 @@ DLLEXPORT int leanlink_wl_load_env(
 
     lean_object* imports = lean_mk_string(imports_cstr);
     lean_object* path = lean_mk_string(path_cstr);
+    /* lean_mk_string copied them; the kernel's strings go back as the other functions give theirs */
+    libData->UTF8String_disown((char*)imports_cstr);
+    libData->UTF8String_disown((char*)path_cstr);
 
-    lean_object* io_res = leanlink_load_env(imports, path);
+    lean_object* io_res = leanlink_load_env(imports, path, load_exts);
     /* imports and path consumed by leanlink_load_env */
 
     if (!io_res) {
@@ -304,6 +310,18 @@ DLLEXPORT int leanlink_wl_load_env(
     lean_dec_ref(io_res);
     MArgument_setInteger(Res, (mint)handle);
     return LIBRARY_NO_ERROR;
+}
+
+/*
+ * lastLoadError() -> MTensor (WXF bytes of a string): why the last loadEnv failed, "" when it did not
+ */
+DLLEXPORT int leanlink_wl_last_load_error(
+    WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res)
+{
+    ensure_thread();
+    int ierr = lazy_lean_init(); if (ierr) return ierr;
+    lean_object* io_res = leanlink_last_load_error();
+    return io_bytearray_to_mtensor(libData, io_res, &Res);
 }
 
 /*
