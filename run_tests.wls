@@ -2,7 +2,8 @@
 (* run_tests.wls -- Run all .wlt test files and report results; with file names after it, as
    wolframscript -file run_tests.wls TypeTheoryBridge.wlt, only those *)
 
-$rootDir = DirectoryName[$ScriptCommandLine[[1]]];
+(* expanded, so that a relative path to the script works *)
+$rootDir = DirectoryName[ExpandFileName[$ScriptCommandLine[[1]]]];
 
 $pacletDir = FileNameJoin[{$rootDir, "LeanLink"}];
 
@@ -14,8 +15,9 @@ PacletDirectoryLoad[$pacletDir];
 
 (* The TypeTheory bridge's tests need WolframInstitute/TypeTheory: installed, or a checkout next to this one *)
 
-With[{typeTheory = FileNameJoin[{ParentDirectory[$rootDir], "TypeTheory", "TypeTheory"}]},
-    If[PacletFind["WolframInstitute/TypeTheory"] === {} && DirectoryQ[typeTheory], PacletDirectoryLoad[typeTheory]]
+(* $TYPETHEORY_DIR names a TypeTheory paclet folder to use instead, as from a worktree, where no checkout is next to this one *)
+With[{typeTheory = Replace[Environment["TYPETHEORY_DIR"], Except[_String] :> FileNameJoin[{ParentDirectory[$rootDir], "TypeTheory", "TypeTheory"}]]},
+    If[(StringQ[Environment["TYPETHEORY_DIR"]] || PacletFind["WolframInstitute/TypeTheory"] === {}) && DirectoryQ[typeTheory], PacletDirectoryLoad[typeTheory]]
 ];
 
 Needs["Wolfram`LeanLink`"];

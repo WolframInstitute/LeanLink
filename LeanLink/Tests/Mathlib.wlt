@@ -84,6 +84,8 @@ VerificationTest[
             Wolfram`LeanLink`Private`installToolchain = (Throw["Unexpected toolchain check"]&),
             Wolfram`LeanLink`Private`mathlibRequireTool = (Throw["Unexpected tool check"]&),
             Wolfram`LeanLink`Private`mathlibInstallationReadyQ = (True&),
+            (* the machine's installations of other toolchains would add a message *)
+            Wolfram`LeanLink`Private`mathlibOtherVersions = ({}&),
             RunProcess = (Throw["Unexpected process"]&)
         },
         With[{result = Reap[InstallMathlib["ProgressFunction" -> Function[stage, Sow[stage]]]]},
@@ -110,6 +112,8 @@ installationFixture[run_, ready_ : (False&), files_List : {}] := withTemporaryDi
         If[files =!= {}, CreateDirectory[directory]; Scan[Export[FileNameJoin[{directory, #}], "keep", "Text"]&, files]];
         {result, commands} = Block[
             {
+                (* the installations of the machine running the tests, of other toolchains, stay out of it *)
+                Wolfram`LeanLink`Private`mathlibRoot = (temporary&),
                 Wolfram`LeanLink`Private`installToolchain = ("/toolchain"&),
                 Wolfram`LeanLink`Private`leanToolchainPath = ("/toolchain"&),
                 Wolfram`LeanLink`Private`mathlibRequireTool = ("/fixture/" <> #&),
