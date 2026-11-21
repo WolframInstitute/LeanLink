@@ -27,8 +27,9 @@
    message} | {"Blocked", dependency}|>, which Get reads back; it is saved every 100 constants as well,
    and the constant being checked is in the file of the same name with ".current" added, so a run that
    crashes leaves what it found and where it stopped. Every constant's seconds go to the file of the same
-   name with ".seconds.wl" added, <|name -> seconds|>, and the constants that took longest to check are
-   listed at the end. *)
+   name with ".seconds.wl" added, <|name -> seconds|>, and the verdicts and times also to ".tsv", in UTF-8
+   for readers outside Wolfram: name, verdict, tag (a failure's, or the dependency that blocks), milliseconds.
+   The constants that took longest to check are listed at the end. *)
 
 $RecursionLimit = 20000;
 
@@ -250,6 +251,26 @@ If[StringQ[$statusFile], Put[status, $statusFile]];
 
 (* every constant's seconds, beside the verdicts, for finding the slow ones *)
 If[StringQ[$statusFile], Put[seconds, $statusFile <> ".seconds.wl"]];
+
+(* the same for readers outside Wolfram, whom the escapes Put writes for names such as IsG\[Delta] would stop: UTF-8, one
+   constant a line; the tag is a failure's tag or the dependency that blocks a constant, and the time whole milliseconds *)
+verdictColumns["OK"] := {"OK", ""}
+
+verdictColumns[{"Failed", tag_, _}] := {"Failed", ToString[tag]}
+
+verdictColumns[{"Blocked", dependency_}] := {"Blocked", ToString[dependency]}
+
+If[ StringQ[$statusFile],
+    Export[
+        $statusFile <> ".tsv",
+        Prepend[
+            KeyValueMap[Function[{name, verdict}, Join[{name}, verdictColumns[verdict], {Replace[Lookup[seconds, name, ""], s_?NumericQ :> Round[1000 s]]}]], status],
+            {"name", "verdict", "tag", "milliseconds"}
+        ],
+        "TSV",
+        CharacterEncoding -> "UTF8"
+    ]
+];
 
 If[ stopped,
     Print["stopped by the budget at ", Round[SessionTime[]], " s: ", Length[status], " constants done, ", Count[status, "OK"], " check; run again with --resume"];
