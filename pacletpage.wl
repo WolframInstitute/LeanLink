@@ -69,7 +69,22 @@ loadPacletPage[] := Block[{dir = Environment["PACLETPAGE_DIR"], paclet},
         Exit[1]
     ];
     Needs["WolframInstitute`PacletPage`"];
+    loadTypeTheory[];
     paclet["Version"]
+]
+
+(* The TypeTheory bridge's pages need WolframInstitute/TypeTheory: installed, or a paclet folder named by
+   TYPETHEORY_DIR, as the test runners take it, so a build need not install one into the folder every kernel of
+   the machine shares *)
+
+loadTypeTheory[] := With[{dir = Environment["TYPETHEORY_DIR"]},
+    If[ StringQ[dir],
+        If[ ! DirectoryQ[dir],
+            Print["FATAL: TYPETHEORY_DIR is not a directory: ", dir];
+            Exit[1]
+        ];
+        PacletDirectoryLoad[dir]
+    ]
 ]
 
 (* The pages build from docs/paclet/en with PacletPage's defaults, on as many parallel kernels as
