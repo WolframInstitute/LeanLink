@@ -777,13 +777,14 @@ static int cone(const char *dir, const char *out_path, const char *roots_text, c
         if (parent[d] == -2) { parent[d] = -1; via[d] = (uint32_t)m; origin[d] = (uint32_t)m; queue[tail++] = d; }
     }
 
-    /* breadth first, a declaration's expressions walked once each with a stamp, so shared subterms are not walked again */
-    uint32_t *stamp = calloc(expr_total, sizeof(uint32_t));
+    /* breadth first, every expression walked once in all: a constant under an expression two declarations share was
+       reached from the first of them, which names it as surely as the second, so walking it again finds nothing new.
+       One bit an expression marks it. */
+    uint8_t *seen = calloc(expr_total / 8 + 1, 1);
+    if (!seen) { fprintf(stderr, "leanexport: out of memory\n"); return 1; }
     uint32_t *stack = NULL; size_t stack_capacity = 0;
-    uint32_t current = 0;
     while (head < tail) {
         uint32_t d = queue[head++];
-        current++;
         Decl *decl = &g_decl_list[d];
         size_t top = 0;
         for (uint32_t k = 0; k < decl->root_count; k++) {
@@ -793,8 +794,8 @@ static int cone(const char *dir, const char *out_path, const char *roots_text, c
         while (top) {
             uint32_t e = stack[--top];
             if (e >= expr_total) { fprintf(stderr, "leanexport: expression %u out of range\n", e); return 1; }
-            if (stamp[e] == current) continue;
-            stamp[e] = current;
+            if (seen[e >> 3] & (1u << (e & 7))) continue;
+            seen[e >> 3] |= (uint8_t)(1u << (e & 7));
             uint32_t row[5];
             expr_row(e, row);
             uint32_t children[3], count = 0;
