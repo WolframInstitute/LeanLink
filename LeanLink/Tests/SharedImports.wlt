@@ -52,7 +52,7 @@ VerificationTest[
 VerificationTest[
     Module[{dir = CreateDirectory[], first, second},
         Export[FileNameJoin[{dir, "lakefile.toml"}], "name = \"shared\"\ndefaultTargets = [\"Top\"]\n[[lean_lib]]\nname = \"Base\"\n[[lean_lib]]\nname = \"Top\"\n", "Text"];
-        Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.35.0", "Text"];
+        Export[FileNameJoin[{dir, "lean-toolchain"}], "leanprover/lean4:v4.36.0", "Text"];
         Export[FileNameJoin[{dir, "Base.lean"}], "def Base.value : Nat := 1\n", "Text"];
         Export[FileNameJoin[{dir, "Top.lean"}], "import Base\ndef Top.value : Nat := Base.value + 1\n", "Text"];
         LeanBuild[dir];

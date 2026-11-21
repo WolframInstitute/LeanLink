@@ -39,7 +39,7 @@ mathlibPin[] := mathlibPin[] = SelectFirst[Import[mathlibProjectFiles[]["lake-ma
 
 $mathlibDocumentation = "https://leanprover-community.github.io/mathlib4_docs/"
 
-(* Mathlib tags each release with the version of the toolchain it is built with, v4.35.0 for leanprover/lean4:v4.35.0;
+(* Mathlib tags each release with the version of the toolchain it is built with, v4.36.0 for leanprover/lean4:v4.36.0;
    the installation for each has a directory of its own *)
 
 mathlibRoot[] := FileNameJoin[{$UserBaseDirectory, "ApplicationData", "LeanLink", "Mathlib"}]

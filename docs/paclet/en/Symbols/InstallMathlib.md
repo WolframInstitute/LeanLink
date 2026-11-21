@@ -18,11 +18,11 @@ RelatedTutorials: [ComputingWithMathlib, ExploringMathlib]
 
 ## Details & Options
 
-- [LeanImport]() loads compiled modules built with the toolchain LeanLink's native library is built against, `leanprover/lean4:v4.35.0`. [InstallMathlib]() installs the Mathlib release of that toolchain, the tag `v4.35.0`, at commit `56a005855ea17e0b0958f73ec801ae140b0a1679`.
+- [LeanImport]() loads compiled modules built with the toolchain LeanLink's native library is built against, `leanprover/lean4:v4.36.0`. [InstallMathlib]() installs the Mathlib release of that toolchain, the tag `v4.36.0`, at commit `56a005855ea17e0b0958f73ec801ae140b0a1679`.
 - It installs the toolchain first, as [InstallLeanToolchain]() does.
 - The installation is a Lake project that requires Mathlib, which Lake keeps in its `.lake/packages/mathlib`. The project's `lake-manifest.json` comes with LeanLink and pins Mathlib and each package Mathlib uses by commit. Mathlib itself comes from a shallow Git clone of the tag, which Lake uses as it is. `lake exe cache get` fetches the other packages and Mathlib's build cache, every module compiled, several gigabytes, and `lake build Mathlib` then checks it.
 - Git and curl must be installed: Lake fetches the packages with Git, and Mathlib's cache tool downloads with curl, which must support HTTPS. Where one is missing, [InstallMathlib]() gives a `"GitUnavailable"` or `"CurlUnavailable"` [Failure]() that says how to install it.
-- The default directory is <code>[$UserBaseDirectory]()/ApplicationData/LeanLink/Mathlib/v4.35.0</code>. A *dir* that holds other files, or a Lake project of its own, gives a [Failure]() and is left as it is.
+- The default directory is <code>[$UserBaseDirectory]()/ApplicationData/LeanLink/Mathlib/v4.36.0</code>. A *dir* that holds other files, or a Lake project of its own, gives a [Failure]() and is left as it is.
 - [InstallMathlib]() never runs `lake update`, which would move the packages past the pinned commits. It writes `leanlink-mathlib.json`, its record of the installation, and `leanlink-mathlib.log`, the output of its commands, into the project.
 - Run again, [InstallMathlib]() resumes where it stopped, keeping what it fetched. On a ready installation it starts no process, downloads nothing and gives the directory; it needs neither Git nor curl then.
 - Loading LeanLink and calling [MathlibInstallation]() install nothing.

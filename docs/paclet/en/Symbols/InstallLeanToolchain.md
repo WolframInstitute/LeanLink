@@ -16,7 +16,7 @@ RelatedTutorials: [LeanLinkIntro]
 
 ## Details & Options
 
-- LeanLink's native library loads the Lean runtime of the toolchain it is built against, `leanprover/lean4:v4.35.0`, and [LeanEvaluate]() and [LeanBuild]() run its `lean` and `lake`. [InstallLeanToolchain]() installs that toolchain with [elan](https://github.com/leanprover/elan), Lean's toolchain manager, as `elan toolchain install leanprover/lean4:v4.35.0` does in a shell.
+- LeanLink's native library loads the Lean runtime of the toolchain it is built against, `leanprover/lean4:v4.36.0`, and [LeanEvaluate]() and [LeanBuild]() run its `lean` and `lake`. [InstallLeanToolchain]() installs that toolchain with [elan](https://github.com/leanprover/elan), Lean's toolchain manager, as `elan toolchain install leanprover/lean4:v4.36.0` does in a shell.
 - It installs elan when there is no working elan, from an installer pinned by URL and SHA-256. elan goes into `ELAN_HOME` when that is set, else `~/.elan`, with no change to the shell profile, the `PATH` of the kernel, or elan's default toolchain.
 - Whether the toolchain was already installed or it installs it, LeanLink's native library must then load the toolchain's Lean runtime; otherwise [InstallLeanToolchain]() gives a `"RuntimeUnavailable"` [Failure](). On an installed toolchain it starts no process and downloads nothing.
 - A native library that could not load because the toolchain was missing loads on its next use once the toolchain is installed, however it was installed.
@@ -39,7 +39,7 @@ Install the toolchain, or find it installed:
 FileNameTake[InstallLeanToolchain[]]
 ```
 
-<!-- => "leanprover--lean4---v4.35.0" -->
+<!-- => "leanprover--lean4---v4.36.0" -->
 
 ## Options
 

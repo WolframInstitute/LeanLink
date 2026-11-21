@@ -21,9 +21,9 @@ quotes its figures for the module lists here.
 What a machine needs:
 
 - **Wolfram 15.0** with `wolframscript`.
-- **Lean v4.35.0**, installed with elan as the toolchain `leanprover/lean4:v4.35.0` (`elan toolchain install
-  leanprover/lean4:v4.35.0`). LeanLink finds it under `~/.elan/toolchains`, or under `$ELAN_HOME`.
-- **Mathlib at the tag `v4.35.0`** (commit `56a005855e`), built: `git clone --branch v4.35.0 --depth 1
+- **Lean v4.36.0**, installed with elan as the toolchain `leanprover/lean4:v4.36.0` (`elan toolchain install
+  leanprover/lean4:v4.36.0`). LeanLink finds it under `~/.elan/toolchains`, or under `$ELAN_HOME`.
+- **Mathlib at the tag `v4.36.0`** (commit `fc4f59e577`), built: `git clone --branch v4.36.0 --depth 1
   https://github.com/leanprover-community/mathlib4`, then `lake exe cache get` in it, which downloads the compiled
   `.olean` files, about 6 GB under `.lake/build/lib`, with no compilation.
 - **This repository** at `main`, with the native shim of the machine's platform in

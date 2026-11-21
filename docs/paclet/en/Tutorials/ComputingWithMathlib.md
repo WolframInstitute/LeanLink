@@ -109,4 +109,4 @@ Release the environment and its evaluator:
 LeanFreeEnvironment[env]
 ```
 
-The installation pins Lean 4.35.0 and Mathlib v4.35.0. [Mathlib's documentation](https://leanprover-community.github.io/mathlib4_docs/) follows Mathlib's development and can describe a newer release.
+The installation pins Lean 4.36.0 and Mathlib v4.36.0. [Mathlib's documentation](https://leanprover-community.github.io/mathlib4_docs/) follows Mathlib's development and can describe a newer release.

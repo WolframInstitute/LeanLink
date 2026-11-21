@@ -47,7 +47,7 @@ The pinned toolchain:
 MathlibInstallation[]["Toolchain"]
 ```
 
-<!-- => "leanprover/lean4:v4.35.0" -->
+<!-- => "leanprover/lean4:v4.36.0" -->
 
 The Mathlib commit:
 

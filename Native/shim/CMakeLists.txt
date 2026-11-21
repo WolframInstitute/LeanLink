@@ -10,7 +10,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # --- Lean SDK ---
-set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.35.0" CACHE PATH "Path to Lean installation")
+set(LEAN_HOME "$ENV{HOME}/.elan/toolchains/leanprover--lean4---v4.36.0" CACHE PATH "Path to Lean installation")
 
 # --- Wolfram LibraryLink ---
 set(WL_INCLUDE "/Applications/Wolfram 15.0.app/Contents/SystemFiles/IncludeFiles/C" CACHE PATH "Path to Wolfram LibraryLink headers")

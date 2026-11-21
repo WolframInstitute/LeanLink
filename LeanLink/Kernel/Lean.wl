@@ -159,8 +159,8 @@ loadShim[] := Block[
 
 $PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
 
-(* The toolchain the shims are built against, leanprover/lean4:v4.35.0, from the paclet's lean-toolchain, which names the
-   toolchain of Native/lean-toolchain; and its version, v4.35.0 *)
+(* The toolchain the shims are built against, leanprover/lean4:v4.36.0, from the paclet's lean-toolchain, which names the
+   toolchain of Native/lean-toolchain; and its version, v4.36.0 *)
 
 $LeanToolchain = StringTrim[ReadString[FileNameJoin[{$PacletRoot, "lean-toolchain"}]]]
 
@@ -181,7 +181,7 @@ leanProgram[dir_String, name_String] := FileNameJoin[{dir, name <> If[$Operating
 
 $searchPathSeparator = If[$OperatingSystem === "Windows", ";", ":"]
 
-(* The directory elan installs a toolchain in, leanprover--lean4---v4.35.0 for leanprover/lean4:v4.35.0, whether or not
+(* The directory elan installs a toolchain in, leanprover--lean4---v4.36.0 for leanprover/lean4:v4.36.0, whether or not
    it is installed; LeanLink's own toolchain's, and a program of it *)
 
 toolchainDirectory[pin_String] := FileNameJoin[{elanHome[], "toolchains", StringReplace[pin, {"/" -> "--", ":" -> "---"}]}]

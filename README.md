@@ -13,7 +13,7 @@ PacletInstall["Wolfram/LeanLink"]
 Needs["Wolfram`LeanLink`"]
 ```
 
-LeanLink loads the Lean runtime from the toolchain it is built against. `InstallLeanToolchain[]` installs it with [elan](https://github.com/leanprover/elan), as `elan toolchain install leanprover/lean4:v4.35.0` does in a shell:
+LeanLink loads the Lean runtime from the toolchain it is built against. `InstallLeanToolchain[]` installs it with [elan](https://github.com/leanprover/elan), as `elan toolchain install leanprover/lean4:v4.36.0` does in a shell:
 
 ```wolfram
 InstallLeanToolchain[]

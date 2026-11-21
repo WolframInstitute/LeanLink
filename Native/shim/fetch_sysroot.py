@@ -2,7 +2,7 @@
 runtime libraries, about 60 MB of a 900 MB zip, read by HTTP range requests through the zip's central
 directory, into the directory layout build.sh cross-compiles against.
 
-    python3 fetch_sysroot.py VERSION PLATFORM CACHE_DIR      e.g. 4.35.0 linux .cache/lean_cross
+    python3 fetch_sysroot.py VERSION PLATFORM CACHE_DIR      e.g. 4.36.0 linux .cache/lean_cross
 """
 import io, sys, zipfile, urllib.request, pathlib, re
 
