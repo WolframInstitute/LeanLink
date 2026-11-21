@@ -1005,6 +1005,19 @@ VerificationTest[
     TestID -> "LeanImport-names-a-module-it-cannot-find"
 ]
 
+(* a filter no name contains is not reported as a failed load, which once sent a search for a load bug *)
+VerificationTest[
+    With[{evaluation = EvaluationData[LeanImport["Init.Prelude", "Filter" -> "noConstantHasThisName"]]},
+        {evaluation["Result"], AnyTrue[evaluation["MessagesText"], StringContainsQ["noConstantHasThisName"]]}
+    ]
+    ,
+    {$Failed, True}
+    ,
+    {LeanImport::nomatch}
+    ,
+    TestID -> "LeanImport-filter-that-keeps-nothing-is-not-a-failed-load"
+]
+
 VerificationTest[
     Module[{env, back},
         env = LeanImportString[

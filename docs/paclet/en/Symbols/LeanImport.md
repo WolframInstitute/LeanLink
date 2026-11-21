@@ -148,3 +148,13 @@ LeanImport["Init.Prelud"]
 ```
 
 <!-- => LeanImport::err message: Failed to load environment: no directory of the search path has the module Init.Prelud; then $Failed -->
+
+---
+
+A `"Filter"` that no constant name contains also gives `$Failed`, with a message saying the modules loaded:
+
+```wl
+LeanImport["Init.Prelude", "Filter" -> "noConstantHasThisName"]
+```
+
+<!-- => LeanImport::nomatch message: The imports {Init.Prelude} loaded, but no constant of them has a name containing "noConstantHasThisName"; then $Failed -->

@@ -3126,6 +3126,8 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
 
 LeanImport::nofile = "There is no file `1`."
 
+LeanImport::nomatch = "The imports `2` loaded, but no constant of them has a name containing \"`1`\"."
+
 LeanImport[file_String, OptionsPattern[]] /; StringEndsQ[file, ".lean"] && ! StringStartsQ[file, "http://" | "https://"] && ! FileExistsQ[file] := (
     Message[LeanImport::nofile, file];
     $Failed
@@ -3176,8 +3178,12 @@ LeanImport[opts : OptionsPattern[]] := Block[{handle, kinds, imports, projDir},
             ,
             {batch, loadBatches}
         ];
+        (* modules that loaded but have no constant the filter keeps are not a failed load *)
         If[ Length[envAssoc] === 0,
-            Message[LeanImport::err, loadFailureText[imports, resolveSearchPath[projDir]]];
+            If[ handles === {} || OptionValue["Filter"] === "",
+                Message[LeanImport::err, loadFailureText[imports, resolveSearchPath[projDir]]],
+                Message[LeanImport::nomatch, OptionValue["Filter"], imports]
+            ];
             Return[$Failed]
         ];
         LeanEnvironment[Join[envAssoc, <|"_Handle" -> Last[handles], "_Handles" -> DeleteDuplicates[handles]|>]]
