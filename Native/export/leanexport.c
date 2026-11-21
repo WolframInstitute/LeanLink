@@ -29,6 +29,18 @@
  *   counts.txt      how many of each kind of line and node were read
  *
  * A line it cannot read, or an index out of order, stops it with the line number.
+ *
+ * From the tables, the dependency cone of some declarations, as Lean's kernel would need them, with no Lean either:
+ *
+ *     leanexport cone OUTDIR CONE.tsv root,root,... [target,target,...]
+ *
+ * A declaration depends on the constants of its type, of its value (a theorem's proof, a definition's body), and, for
+ * an inductive block, of its types, constructors and recursors with their rules; a constructor or recursor stands for
+ * its block, each quot constant for itself. CONE.tsv gets every constant of the cone, in the export's order: its name,
+ * as Lean's Name.toString writes it, its kind (theorem, definition, opaque, axiom, quot, inductive, constructor,
+ * recursor), and the root that first reached it. For each target it prints whether the cone holds it and, if so, one
+ * path from a root down to it, each step a constant the one before names. Roots given as ?text list instead the
+ * declared constants whose names contain text.
  */
 
 #include <stdint.h>
@@ -36,6 +48,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -490,8 +505,369 @@ static int convert(const char *dir) {
     return 0;
 }
 
+/* ---------- the tables, read back ---------- */
+
+typedef struct { const uint8_t *data; size_t size; } Mapped;
+
+static Mapped map_file(const char *dir, const char *name) {
+    char path[4096];
+    snprintf(path, sizeof path, "%s/%s", dir, name);
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) { fprintf(stderr, "leanexport: cannot read %s: %s\n", path, strerror(errno)); exit(1); }
+    struct stat st;
+    if (fstat(fd, &st) != 0) { fprintf(stderr, "leanexport: cannot stat %s\n", path); exit(1); }
+    Mapped m = {NULL, (size_t)st.st_size};
+    if (m.size > 0) {
+        void *p = mmap(NULL, m.size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (p == MAP_FAILED) { fprintf(stderr, "leanexport: cannot map %s\n", path); exit(1); }
+        m.data = p;
+    }
+    close(fd);
+    return m;
+}
+
+static Mapped t_names, t_exprs, t_strings, t_strings_idx;
+
+static uint8_t name_kind(uint32_t id) { return t_names.data[(size_t)id * 16]; }
+
+static uint32_t name_prefix(uint32_t id) { uint32_t v; memcpy(&v, t_names.data + (size_t)id * 16 + 4, 4); return v; }
+
+static uint64_t name_value(uint32_t id) { uint64_t v; memcpy(&v, t_names.data + (size_t)id * 16 + 8, 8); return v; }
+
+static const char *string_at(uint64_t id, uint32_t *length) {
+    uint64_t offset; uint32_t n;
+    memcpy(&offset, t_strings_idx.data + id * 12, 8);
+    memcpy(&n, t_strings_idx.data + id * 12 + 8, 4);
+    *length = n;
+    return (const char *)t_strings.data + offset;
+}
+
+static void expr_row(uint32_t id, uint32_t row[5]) { memcpy(row, t_exprs.data + (size_t)id * 20, 20); }
+
+/* ---------- names as Lean's Name.toString writes them ---------- */
+
+/* the code point at s, and how many bytes it takes */
+static uint32_t utf8_at(const unsigned char *s, size_t n, size_t *width) {
+    unsigned char c = s[0];
+    if (c < 0x80 || n < 2) { *width = 1; return c; }
+    if ((c & 0xE0) == 0xC0) { *width = 2; return ((uint32_t)(c & 0x1F) << 6) | (s[1] & 0x3F); }
+    if ((c & 0xF0) == 0xE0 && n >= 3) { *width = 3; return ((uint32_t)(c & 0x0F) << 12) | ((uint32_t)(s[1] & 0x3F) << 6) | (s[2] & 0x3F); }
+    if (n >= 4) { *width = 4; return ((uint32_t)(c & 0x07) << 18) | ((uint32_t)(s[1] & 0x3F) << 12) | ((uint32_t)(s[2] & 0x3F) << 6) | (s[3] & 0x3F); }
+    *width = 1;
+    return c;
+}
+
+/* Lean's isLetterLike, isSubScriptAlnum, isIdFirst and isIdRest (Init/Meta/Defs.lean); Char.isAlpha is ASCII only */
+static int letter_like(uint32_t c) {
+    return (0x3b1 <= c && c <= 0x3c9 && c != 0x3bb) || (0x391 <= c && c <= 0x3A9 && c != 0x3A0 && c != 0x3A3) ||
+        (0x3ca <= c && c <= 0x3fb) || (0x1f00 <= c && c <= 0x1ffe) || (0x2100 <= c && c <= 0x214f) ||
+        (0x1d49c <= c && c <= 0x1d59f) || (0x00c0 <= c && c <= 0x00ff && c != 0x00d7 && c != 0x00f7) || (0x0100 <= c && c <= 0x017f);
+}
+
+static int subscript_alnum(uint32_t c) {
+    return (0x2080 <= c && c <= 0x2089) || (0x2090 <= c && c <= 0x209c) || (0x1d62 <= c && c <= 0x1d6a) || c == 0x2c7c;
+}
+
+static int ascii_alpha(uint32_t c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+
+static int id_first(uint32_t c) { return ascii_alpha(c) || c == '_' || letter_like(c); }
+
+static int id_rest(uint32_t c) {
+    return ascii_alpha(c) || (c >= '0' && c <= '9') || c == '_' || c == '\'' || c == '!' || c == '?' || letter_like(c) || subscript_alnum(c);
+}
+
+static int needs_no_escape(const char *s, uint32_t n) {
+    size_t i = 0, width;
+    uint32_t c = utf8_at((const unsigned char *)s, n, &width);
+    if (!id_first(c)) return 0;
+    for (i = width; i < n; i += width) if (!id_rest(utf8_at((const unsigned char *)s + i, n - i, &width))) return 0;
+    return 1;
+}
+
+static int contains(const char *s, uint32_t n, const char *part) {
+    size_t k = strlen(part);
+    for (size_t i = 0; i + k <= n; i++) if (memcmp(s + i, part, k) == 0) return 1;
+    return 0;
+}
+
+/* the last string component, past numeric ones, as hasMacroScopes and isInaccessibleUserName look at it */
+static int last_string(uint32_t id, const char **s, uint32_t *n) {
+    while (id && name_kind(id) == 2) id = name_prefix(id);
+    if (!id || name_kind(id) != 1) return 0;
+    *s = string_at(name_value(id), n);
+    return 1;
+}
+
+static void append_component(Buffer *out, uint32_t id, int escape) {
+    uint8_t kind = name_kind(id);
+    uint32_t prefix = name_prefix(id);
+    if (prefix) { append_component(out, prefix, escape); buffer_append(out, ".", 1); }
+    if (kind == 2) {
+        char digits[32];
+        int n = snprintf(digits, sizeof digits, "%llu", (unsigned long long)name_value(id));
+        buffer_append(out, digits, (size_t)n);
+        return;
+    }
+    uint32_t n;
+    const char *s = string_at(name_value(id), &n);
+    /* escapePart: a valid identifier as it is; else «s», unless s holds », when it stays as it is */
+    if (escape && (n == 0 || (!needs_no_escape(s, n) && !contains(s, n, "\xC2\xBB")))) {
+        buffer_append(out, "\xC2\xAB", 2);
+        buffer_append(out, s, n);
+        buffer_append(out, "\xC2\xBB", 2);
+    } else buffer_append(out, s, n);
+}
+
+/* Name.toString with escape := true: escaping is off for a name with macro scopes, an inaccessible one, and
+   delaborator pseudo-syntax (`_`, or a root starting with # or ?) */
+static char *name_string(uint32_t id) {
+    Buffer out = {0};
+    if (id == 0) { buffer_append(&out, "[anonymous]", 12); return out.data; }
+    int escape = 1;
+    const char *s; uint32_t n;
+    if (last_string(id, &s, &n)) {
+        if (n == 4 && memcmp(s, "_hyg", 4) == 0) escape = 0;
+        if (contains(s, n, "\xE2\x9C\x9D") || (n == 13 && memcmp(s, "_inaccessible", 13) == 0)) escape = 0;
+    }
+    uint32_t root = id;
+    while (name_prefix(root)) root = name_prefix(root);
+    if (name_kind(root) == 1) {
+        const char *r = string_at(name_value(root), &n);
+        if (n > 0 && (r[0] == '#' || r[0] == '?')) escape = 0;
+        if (id == root && n == 1 && r[0] == '_') escape = 0;
+    }
+    append_component(&out, id, escape);
+    buffer_append(&out, "", 1);
+    return out.data;
+}
+
+/* ---------- declarations ---------- */
+
+enum { K_THEOREM, K_DEFINITION, K_OPAQUE, K_AXIOM, K_QUOT, K_INDUCTIVE, K_CONSTRUCTOR, K_RECURSOR };
+
+static const char *kind_names[] = {"theorem", "definition", "opaque", "axiom", "quot", "inductive", "constructor", "recursor"};
+
+typedef struct { uint32_t name; uint8_t kind; uint32_t decl; } Member;
+
+typedef struct {
+    uint32_t first_member, member_count;   /* its constants, in members */
+    uint32_t first_root, root_count;       /* the expressions it depends through, in expr_roots */
+} Decl;
+
+static Member *g_members; static size_t g_member_count, g_member_capacity;
+static uint32_t *g_expr_roots; static size_t g_expr_root_count, g_expr_root_capacity;
+static Decl *g_decl_list; static size_t g_decl_count, g_decl_capacity;
+
+static void push_member(uint32_t name, uint8_t kind) {
+    if (g_member_count == g_member_capacity) { g_member_capacity = g_member_capacity ? 2 * g_member_capacity : 1 << 16; g_members = realloc(g_members, g_member_capacity * sizeof(Member)); }
+    g_members[g_member_count++] = (Member){name, kind, (uint32_t)g_decl_count};
+}
+
+static void push_root(uint64_t expr) {
+    if (g_expr_root_count == g_expr_root_capacity) { g_expr_root_capacity = g_expr_root_capacity ? 2 * g_expr_root_capacity : 1 << 16; g_expr_roots = realloc(g_expr_roots, g_expr_root_capacity * sizeof(uint32_t)); }
+    g_expr_roots[g_expr_root_count++] = index32(expr);
+}
+
+static void add_constant(const Json *c, uint8_t kind) {
+    push_member(index32(require_index(c, "name")), kind);
+    push_root(require_index(c, "type"));
+    Json *value = member(c, "value");
+    if (value) push_root((uint64_t)value->number);
+}
+
+static void read_decl(const Json *line) {
+    if (g_decl_count == g_decl_capacity) { g_decl_capacity = g_decl_capacity ? 2 * g_decl_capacity : 1 << 16; g_decl_list = realloc(g_decl_list, g_decl_capacity * sizeof(Decl)); }
+    Decl d = {(uint32_t)g_member_count, 0, (uint32_t)g_expr_root_count, 0};
+    static const char *simple[] = {"thm", "def", "opaque", "axiom", "quot"};
+    static const uint8_t simple_kinds[] = {K_THEOREM, K_DEFINITION, K_OPAQUE, K_AXIOM, K_QUOT};
+    Json *m = NULL;
+    for (int i = 0; i < 5; i++) if ((m = member(line, simple[i]))) { add_constant(m, simple_kinds[i]); break; }
+    if (!m) {
+        Json *block = require(line, "inductive");
+        for (Json *t = require(block, "types")->child; t; t = t->next) add_constant(t, K_INDUCTIVE);
+        for (Json *c = require(block, "ctors")->child; c; c = c->next) add_constant(c, K_CONSTRUCTOR);
+        for (Json *r = require(block, "recs")->child; r; r = r->next) {
+            add_constant(r, K_RECURSOR);
+            for (Json *rule = require(r, "rules")->child; rule; rule = rule->next) push_root(require_index(rule, "rhs"));
+        }
+    }
+    d.member_count = (uint32_t)g_member_count - d.first_member;
+    d.root_count = (uint32_t)g_expr_root_count - d.first_root;
+    g_decl_list[g_decl_count++] = d;
+}
+
+/* ---------- a map from names to members ---------- */
+
+static int64_t *g_by_name;     /* name id -> member index, or -1 */
+static size_t g_name_total;
+
+static int64_t member_of_name(uint32_t name) { return name < g_name_total ? g_by_name[name] : -1; }
+
+/* a constant's name, as text, to its member: every member's name string, kept sorted */
+typedef struct { char *text; uint32_t member; } NamedMember;
+
+static NamedMember *g_named; static size_t g_named_count;
+
+static int compare_named(const void *a, const void *b) { return strcmp(((const NamedMember *)a)->text, ((const NamedMember *)b)->text); }
+
+static int64_t member_by_text(const char *text) {
+    size_t lo = 0, hi = g_named_count;
+    while (lo < hi) {
+        size_t mid = (lo + hi) / 2;
+        int c = strcmp(g_named[mid].text, text);
+        if (c == 0) return g_named[mid].member;
+        if (c < 0) lo = mid + 1; else hi = mid;
+    }
+    return -1;
+}
+
+/* ---------- the cone ---------- */
+
+static int cone(const char *dir, const char *out_path, const char *roots_text, const char *targets_text) {
+    t_names = map_file(dir, "names.bin");
+    t_exprs = map_file(dir, "exprs.bin");
+    t_strings = map_file(dir, "strings.bin");
+    t_strings_idx = map_file(dir, "strings.idx");
+    g_name_total = t_names.size / 16;
+    size_t expr_total = t_exprs.size / 20;
+
+    /* the declarations */
+    char path[4096];
+    snprintf(path, sizeof path, "%s/decls.ndjson", dir);
+    FILE *decls = fopen(path, "rb");
+    if (!decls) { fprintf(stderr, "leanexport: cannot read %s\n", path); return 1; }
+    char *line = NULL; size_t capacity = 0; ssize_t length;
+    g_line = 0;
+    while ((length = getline(&line, &capacity, decls)) > 0) {
+        g_line++;
+        while (length > 0 && (line[length - 1] == '\n' || line[length - 1] == '\r')) line[--length] = '\0';
+        read_decl(parse_line(line, (size_t)length));
+    }
+    fclose(decls);
+    free(line);
+    g_by_name = malloc(g_name_total * sizeof(int64_t));
+    for (size_t i = 0; i < g_name_total; i++) g_by_name[i] = -1;
+    g_named = malloc(g_member_count * sizeof(NamedMember));
+    for (size_t i = 0; i < g_member_count; i++) {
+        g_by_name[g_members[i].name] = (int64_t)i;
+        g_named[i] = (NamedMember){name_string(g_members[i].name), (uint32_t)i};
+    }
+    g_named_count = g_member_count;
+    qsort(g_named, g_named_count, sizeof(NamedMember), compare_named);
+
+    /* roots of the form ?text list the declared constants whose names contain text, to find a root's exact name */
+    if (roots_text[0] == '?') {
+        for (size_t i = 0; i < g_named_count; i++)
+            if (strstr(g_named[i].text, roots_text + 1)) printf("%s\t%s\n", g_named[i].text, kind_names[g_members[g_named[i].member].kind]);
+        return 0;
+    }
+
+    /* the roots */
+    uint32_t *queue = malloc(g_decl_count * sizeof(uint32_t));
+    int64_t *parent = malloc(g_decl_count * sizeof(int64_t));   /* the declaration that reached it, -1 for a root, -2 unreached */
+    uint32_t *via = malloc(g_decl_count * sizeof(uint32_t));    /* the member constant it was reached by */
+    uint32_t *origin = malloc(g_decl_count * sizeof(uint32_t)); /* the root member it was reached from */
+    for (size_t i = 0; i < g_decl_count; i++) parent[i] = -2;
+    size_t head = 0, tail = 0;
+    char *roots = strdup(roots_text);
+    for (char *r = strtok(roots, ","); r; r = strtok(NULL, ",")) {
+        int64_t m = member_by_text(r);
+        if (m < 0) { fprintf(stderr, "leanexport: no declaration %s\n", r); return 1; }
+        uint32_t d = g_members[m].decl;
+        if (parent[d] == -2) { parent[d] = -1; via[d] = (uint32_t)m; origin[d] = (uint32_t)m; queue[tail++] = d; }
+    }
+
+    /* breadth first, a declaration's expressions walked once each with a stamp, so shared subterms are not walked again */
+    uint32_t *stamp = calloc(expr_total, sizeof(uint32_t));
+    uint32_t *stack = NULL; size_t stack_capacity = 0;
+    uint32_t current = 0;
+    while (head < tail) {
+        uint32_t d = queue[head++];
+        current++;
+        Decl *decl = &g_decl_list[d];
+        size_t top = 0;
+        for (uint32_t k = 0; k < decl->root_count; k++) {
+            if (top == stack_capacity) { stack_capacity = stack_capacity ? 2 * stack_capacity : 1 << 16; stack = realloc(stack, stack_capacity * sizeof(uint32_t)); }
+            stack[top++] = g_expr_roots[decl->first_root + k];
+        }
+        while (top) {
+            uint32_t e = stack[--top];
+            if (e >= expr_total) { fprintf(stderr, "leanexport: expression %u out of range\n", e); return 1; }
+            if (stamp[e] == current) continue;
+            stamp[e] = current;
+            uint32_t row[5];
+            expr_row(e, row);
+            uint32_t children[3], count = 0;
+            switch (row[0]) {
+                case 2: {
+                    int64_t m = member_of_name(row[1]);
+                    if (m < 0) { char *n = name_string(row[1]); fprintf(stderr, "leanexport: %s is used but not declared\n", n); free(n); return 1; }
+                    uint32_t target = g_members[m].decl;
+                    if (parent[target] == -2) { parent[target] = d; via[target] = (uint32_t)m; origin[target] = origin[d]; queue[tail++] = target; }
+                    break;
+                }
+                case 3: children[count++] = row[1]; children[count++] = row[2]; break;
+                case 4: case 5: children[count++] = row[2]; children[count++] = row[3]; break;
+                case 6: children[count++] = row[2]; children[count++] = row[3]; children[count++] = row[4]; break;
+                case 9: children[count++] = row[3]; break;
+                default: break;
+            }
+            for (uint32_t c = 0; c < count; c++) {
+                if (top == stack_capacity) { stack_capacity *= 2; stack = realloc(stack, stack_capacity * sizeof(uint32_t)); }
+                stack[top++] = children[c];
+            }
+        }
+    }
+
+    /* the cone, in the export's order */
+    FILE *out = fopen(out_path, "w");
+    if (!out) { fprintf(stderr, "leanexport: cannot write %s\n", out_path); return 1; }
+    uint64_t by_kind[8] = {0}, members_in = 0;
+    fprintf(out, "name\tkind\troot\n");
+    for (size_t d = 0; d < g_decl_count; d++) {
+        if (parent[d] == -2) continue;
+        char *root = name_string(g_members[origin[d]].name);
+        for (uint32_t k = 0; k < g_decl_list[d].member_count; k++) {
+            Member *m = &g_members[g_decl_list[d].first_member + k];
+            char *n = name_string(m->name);
+            fprintf(out, "%s\t%s\t%s\n", n, kind_names[m->kind], root);
+            free(n);
+            by_kind[m->kind]++;
+            members_in++;
+        }
+        free(root);
+    }
+    fclose(out);
+    printf("cone: %llu declarations, %llu constants:", (unsigned long long)tail, (unsigned long long)members_in);
+    for (int k = 0; k < 8; k++) printf(" %s %llu", kind_names[k], (unsigned long long)by_kind[k]);
+    printf("\n");
+
+    /* the targets, each with one path from a root */
+    if (targets_text) {
+        char *targets = strdup(targets_text);
+        for (char *t = strtok(targets, ","); t; t = strtok(NULL, ",")) {
+            int64_t m = member_by_text(t);
+            if (m < 0) { printf("%s\tnot declared in the export\n", t); continue; }
+            uint32_t d = g_members[m].decl;
+            if (parent[d] == -2) { printf("%s\tnot in the cone\n", t); continue; }
+            /* the path, from the target up to its root, printed root first */
+            size_t steps = 0;
+            uint32_t *path_members = malloc(g_decl_count * sizeof(uint32_t));
+            path_members[steps++] = (uint32_t)m;
+            for (int64_t x = d; parent[x] >= 0; x = parent[x]) path_members[steps++] = via[parent[x]];
+            printf("%s\tin the cone, %zu steps:", t, steps - 1);
+            for (size_t s = steps; s-- > 0;) { char *n = name_string(g_members[path_members[s]].name); printf(" %s%s", n, s ? " ->" : ""); free(n); }
+            printf("\n");
+            free(path_members);
+        }
+        free(targets);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc == 3 && strcmp(argv[1], "convert") == 0) return convert(argv[2]);
-    fprintf(stderr, "usage: leanexport convert OUTDIR < export.ndjson\n");
+    if ((argc == 5 || argc == 6) && strcmp(argv[1], "cone") == 0) return cone(argv[2], argv[3], argv[4], argc == 6 ? argv[5] : NULL);
+    fprintf(stderr, "usage: leanexport convert OUTDIR < export.ndjson\n       leanexport cone OUTDIR CONE.tsv root,root,... [target,target,...]\n");
     return 2;
 }
