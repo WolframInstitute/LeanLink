@@ -43,8 +43,18 @@ wolframscript -file typetheory_coverage.wls --modules coverage/mathlib-higher.tx
 
 It prints a line every 200 constants and one after each module, and ends with `walked N, checked N, failed N,
 blocked N` and the constants that took longest. `--out` saves every constant's verdict every 100 constants, and the
-constant being checked in `higher-status.wl.current`, so a run that is stopped leaves what it found. It cannot resume:
-the environment it builds is in the kernel.
+constant being checked in `higher-status.wl.current`, so a run that is stopped leaves what it found. At the end it also
+writes every constant's seconds to `higher-status.wl.seconds.wl`.
+
+Two more options:
+
+- `--constants name,name,...` checks the cones of those constants alone, with the modules only as the imports that
+  declare them: a proof's headline theorems, not every constant of their modules.
+- `--budget seconds` and `--resume` split a run over several kernels, for a machine that allows only short runs. With
+  `--budget`, a run stops once its kernel has run that many seconds, writes the TypeTheory environment it built, the
+  verdicts and the walk next to `--out`, and exits with status 3. Run the same command with `--resume` until it exits
+  with 0. Each constant is still checked once, in an environment of constants that checked. A loop of such runs, each
+  under a memory cap of 2 GB and 120 s, checked the 7,192 constants of a proof's two theorems in ten runs.
 
 The higher list reaches most of Mathlib's base, about 70,000 constants. Checked a constant at a time at the bottom
 list's rate, 18 a second, that is one to two hours on one core. The run before imports were shared took 7 GB; allow
