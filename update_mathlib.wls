@@ -1,6 +1,6 @@
 #!/usr/bin/env wolframscript
 (* Pin LeanLink/Assets/Mathlib, the Lake project InstallMathlib installs, to the Mathlib release of the toolchain in
-   LeanLink/lean-toolchain: Mathlib tags each release with the version of the toolchain it is built with. The script
+   LeanLink/Assets/lean-toolchain: Mathlib tags each release with the version of the toolchain it is built with. The script
    writes the project's lakefile.toml, which requires Mathlib at that tag, runs lake update in a scratch copy of the
    project, and keeps the lake-manifest.json Lake writes, which pins Mathlib and each package it uses by commit.
    MATHLIB_NO_CACHE_ON_UPDATE keeps lake update from downloading Mathlib's build cache.

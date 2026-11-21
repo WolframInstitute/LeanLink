@@ -78,7 +78,8 @@ PacletObject[
           {"CodeLean", "code.lean"},
           {"Examples", "Examples.lean"},
           {"Elan", "Elan.json"},
-          {"Mathlib", "Mathlib"}
+          {"Mathlib", "Mathlib"},
+          {"LeanToolchain", "lean-toolchain"}
         }
       },
       {

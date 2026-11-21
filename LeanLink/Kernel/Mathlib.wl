@@ -28,7 +28,7 @@ Begin["`Private`"];
    manifest *)
 
 mathlibProjectFiles[] := <|
-    "lean-toolchain" -> FileNameJoin[{$PacletRoot, "lean-toolchain"}],
+    "lean-toolchain" -> $pacletToolchainFile,
     "lakefile.toml" -> FileNameJoin[{$PacletRoot, "Assets", "Mathlib", "lakefile.toml"}],
     "lake-manifest.json" -> FileNameJoin[{$PacletRoot, "Assets", "Mathlib", "lake-manifest.json"}]
 |>

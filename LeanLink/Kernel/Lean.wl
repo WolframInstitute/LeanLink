@@ -160,9 +160,12 @@ loadShim[] := Block[
 $PacletRoot = DirectoryName[DirectoryName[$InputFileName]]
 
 (* The toolchain the shims are built against, leanprover/lean4:v4.36.0, from the paclet's lean-toolchain, which names the
-   toolchain of Native/lean-toolchain; and its version, v4.36.0 *)
+   toolchain of Native/lean-toolchain; and its version, v4.36.0. The file is an asset: the published archive carries only
+   the files of the paclet's declared extensions, so one at the paclet's root would be left out *)
 
-$LeanToolchain = StringTrim[ReadString[FileNameJoin[{$PacletRoot, "lean-toolchain"}]]]
+$pacletToolchainFile = FileNameJoin[{$PacletRoot, "Assets", "lean-toolchain"}]
+
+$LeanToolchain = StringTrim[ReadString[$pacletToolchainFile]]
 
 $LeanToolchainVersion = Last[StringSplit[$LeanToolchain, ":"]]
 
@@ -3057,8 +3060,8 @@ LeanImport[file_String, opts : OptionsPattern[]] /; FileExistsQ[file] && StringE
             tcFile = None;
             If[StringQ[$DevProjectRoot], tcFile = FileNameJoin[{$DevProjectRoot, "Native", "lean-toolchain"}]];
             If[ ! FileExistsQ[tcFile],
-                (* Paclet-bundled lean-toolchain: in paclet root, cached at load time *)
-                tcFile = FileNameJoin[{$PacletRoot, "lean-toolchain"}]
+                (* the paclet's own lean-toolchain *)
+                tcFile = $pacletToolchainFile
             ];
             If[ FileExistsQ[tcFile],
                 tcDir = toolchainDirectory[StringTrim[Import[tcFile, "Text"]]];

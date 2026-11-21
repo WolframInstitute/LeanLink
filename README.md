@@ -116,7 +116,7 @@ To check the Windows shim without Windows, `Native/shim/wine/test_windows_shim.s
 
 ### Toolchain
 
-`LeanLink/lean-toolchain` names the toolchain LeanLink is built against, the one `Native/lean-toolchain` pins. After changing both, `wolframscript -file update_mathlib.wls` pins the Lake project `InstallMathlib` installs, `LeanLink/Assets/Mathlib`, to the matching Mathlib release.
+`LeanLink/Assets/lean-toolchain` names the toolchain LeanLink is built against, the one `Native/lean-toolchain` pins. After changing both, `wolframscript -file update_mathlib.wls` pins the Lake project `InstallMathlib` installs, `LeanLink/Assets/Mathlib`, to the matching Mathlib release.
 
 ### Documentation
 
