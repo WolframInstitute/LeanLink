@@ -26,3 +26,6 @@ LeanLink/LibraryResources/
 
 # Paclet build
 LeanLink/build/
+
+# run_tests_capped.sh results
+/test-results/
