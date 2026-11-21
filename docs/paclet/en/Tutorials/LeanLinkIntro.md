@@ -283,14 +283,14 @@ theorem FinalGoal : ∀ (a : U) (c : U), a = c := by
 
 ## Importing from Mathlib
 
-[LeanImport]() reads any built Lean project. Point `"ProjectDir"` at a mathlib4 checkout where `lake exe cache get && lake build Mathlib.Algebra.Group.Basic` has run (gated so this page builds without Mathlib):
+[LeanImport]() reads any built Lean project. Point `"ProjectDir"` at a built Lean project, such as the Mathlib that [InstallMathlib]() installs (gated so this page builds without Mathlib):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     LeanImport["Mathlib.Algebra.Group.Basic",
         "ProjectDir" -> mathlibDir, "Filter" -> "mul_comm"]["mul_comm"]["TypeForm"],
-    "Mathlib not built - see the Exploring Mathlib tutorial"
+    "Mathlib is not installed - see the Exploring Mathlib tutorial"
 ]
 ```
 

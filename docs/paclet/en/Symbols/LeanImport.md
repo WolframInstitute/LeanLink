@@ -72,15 +72,15 @@ env["id_proof"]["TypeForm"]
 
 ## Scope
 
-Import a module from a built mathlib4 checkout with `"ProjectDir"`, narrowing to one theorem with `"Filter"` (gated so the page builds without Mathlib):
+Import a module from the Mathlib that [InstallMathlib]() installed, with `"ProjectDir"` at its directory, narrowing to one theorem with `"Filter"` (gated so the page builds without Mathlib):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     algEnv = LeanImport["Mathlib.Algebra.Group.Basic",
         "ProjectDir" -> mathlibDir, "Filter" -> "mul_comm"];
     algEnv["mul_comm"]["TypeForm"],
-    "Mathlib not built - run: lake exe cache get && lake build Mathlib.Algebra.Group.Basic"
+    "Mathlib is not installed - run InstallMathlib[]"
 ]
 ```
 
@@ -131,15 +131,15 @@ LeanFreeEnvironment[env]
 `"Filter"` matches a substring of the *fully qualified* name, so `"comm"` keeps `mul_comm`, `add_comm`, `And.comm`, and so on. Use a more specific fragment to narrow further:
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     Length @ LeanImport["Mathlib.Basic.Logic.Basic",
         "ProjectDir" -> mathlibDir, "Filter" -> "comm"],
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 
-<!-- => 463 (or "Mathlib not built") -->
+<!-- => 463 (or "Mathlib is not installed") -->
 
 ---
 

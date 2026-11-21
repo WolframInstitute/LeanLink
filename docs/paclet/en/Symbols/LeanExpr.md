@@ -24,11 +24,11 @@ RelatedGuides: [LeanLink]
 The type of a Mathlib theorem as an expression tree (gated on a built checkout):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     LeanExpr["And.comm",
         "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir],
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 

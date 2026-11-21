@@ -130,15 +130,15 @@ env["or_comm_proof"]["CallGraph"]
 
 ## Scope
 
-Import from Mathlib by pointing `"ProjectDir"` at a built mathlib4 checkout (gated so the page still builds without one):
+Import from Mathlib by pointing `"ProjectDir"` at the Mathlib that [InstallMathlib]() installed (gated so the page still builds without one):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     mulComm = LeanImport["Mathlib.Algebra.Group.Basic",
         "ProjectDir" -> mathlibDir, "Filter" -> "mul_comm"];
     mulComm["mul_comm"]["TypeForm"],
-    "Mathlib not built - run: lake exe cache get && lake build Mathlib.Algebra.Group.Basic"
+    "Mathlib is not installed - run InstallMathlib[]"
 ]
 ```
 
@@ -302,11 +302,11 @@ LeanExportString[imported]
 The type of a Mathlib theorem, drawn as its expression tree (gated on a built checkout):
 
 ```wl
-If[ DirectoryQ[FileNameJoin[{$HomeDirectory, "src", "mathlib4", ".lake", "build"}]],
+If[ MathlibInstallation[]["Status"] === "Ready",
     LeanImport["Mathlib.Basic.Logic.Basic",
-        "ProjectDir" -> FileNameJoin[{$HomeDirectory, "src", "mathlib4"}],
+        "ProjectDir" -> MathlibInstallation[]["Directory"],
         "Filter" -> "And.comm"]["And.comm"]["ExprGraph"],
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 

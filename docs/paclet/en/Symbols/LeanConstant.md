@@ -23,11 +23,11 @@ RelatedGuides: [LeanLink]
 The raw record of a Mathlib theorem (gated on a built checkout):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     LeanConstantInfo["And.comm",
         "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir],
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 
@@ -36,12 +36,12 @@ If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
 The name and kind are the first two parts:
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     info = LeanConstantInfo["And.comm",
         "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir];
     {info[[1]], info[[2]]},
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 

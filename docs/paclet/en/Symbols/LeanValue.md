@@ -23,11 +23,11 @@ RelatedGuides: [LeanLink]
 The proof term of a Mathlib theorem (gated on a built checkout):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     Head @ LeanValue["And.comm",
         "Imports" -> {"Mathlib.Basic.Logic.Basic"}, "ProjectDir" -> mathlibDir],
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 

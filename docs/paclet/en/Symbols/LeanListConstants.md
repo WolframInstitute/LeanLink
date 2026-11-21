@@ -23,11 +23,11 @@ RelatedGuides: [LeanLink]
 List a filtered slice of a Mathlib module (gated on a built checkout):
 
 ```wl
-mathlibDir = FileNameJoin[{$HomeDirectory, "src", "mathlib4"}];
-If[ DirectoryQ[FileNameJoin[{mathlibDir, ".lake", "build"}]],
+mathlibDir = MathlibInstallation[]["Directory"];
+If[ MathlibInstallation[]["Status"] === "Ready",
     Keys @ LeanListConstants["Imports" -> {"Mathlib.Basic.Logic.Basic"},
         "ProjectDir" -> mathlibDir, "Filter" -> "And.comm"],
-    "Mathlib not built"
+    "Mathlib is not installed"
 ]
 ```
 
