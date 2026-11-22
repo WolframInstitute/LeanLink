@@ -514,26 +514,21 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
             inductiveDeclarations[name, universes]
         ,
         "def",
-            With[{value = fieldTerm[name, "Term"], type = fieldTerm[name, "Type"], levels = universes},
-                Prepend[natOperationRegistration[name], TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels]]
+            Prepend[
+                natOperationRegistration[name],
+                Construct[TypeTheoryDefinition, name, Typed[fieldTerm[name, "Term"], fieldTerm[name, "Type"]], "UniverseParameters" -> universes]
             ]
         ,
         "theorem",
-            With[{statement = fieldTerm[name, "Type"], proof = fieldTerm[name, "Term"], levels = universes},
-                {TypeTheoryTheorem[name, statement, proof, "UniverseParameters" -> levels]}
-            ]
+            {Construct[TypeTheoryTheorem, name, fieldTerm[name, "Type"], fieldTerm[name, "Term"], "UniverseParameters" -> universes]}
         ,
         (* an opaque constant's value is checked, as Lean's kernel checks it, and never unfolds *)
         "opaque" /; opaqueDefinitionsQ[],
-            With[{value = fieldTerm[name, "Term"], type = fieldTerm[name, "Type"], levels = universes},
-                {TypeTheoryDefinition[name, Typed[value, type], "UniverseParameters" -> levels, "Opaque" -> True]}
-            ]
+            {Construct[TypeTheoryDefinition, name, Typed[fieldTerm[name, "Term"], fieldTerm[name, "Type"]], "UniverseParameters" -> universes, "Opaque" -> True]}
         ,
         (* with a TypeTheory before 0.14 an opaque constant is an axiom; the quotient types are axioms only under rules without them *)
         "axiom" | "opaque" | "quot",
-            With[{type = fieldTerm[name, "Type"], levels = universes},
-                {TypeTheoryAxiom[name, type, "UniverseParameters" -> levels]}
-            ]
+            {Construct[TypeTheoryAxiom, name, fieldTerm[name, "Type"], "UniverseParameters" -> universes]}
         ,
         _,
             bridgeFailure["UnsupportedConstant", "`1` is a `2`, which the bridge cannot translate.", {name, constantKind[name]}]
@@ -543,23 +538,19 @@ leanDeclarations[name_String] := Block[{$currentConstant = name, universes = uni
 (* the natural numbers of Lean become TypeTheory's natural numbers, so literals mean the same; a type nested in a container is
    declared alone, and TypeTheory finds the nesting as Lean's kernel does *)
 
-inductiveDeclarations[name_String, universes_List] := Block[{information = inductiveInformation[name]},
-    With[{
-        types = Function[type, type -> fieldTerm[type, "Type"]] /@ information["Block"],
-        constructors = Function[constructor, constructor -> fieldTerm[constructor, "Type"]] /@ information["BlockConstructors"],
-        parameters = information["Parameters"]
-    },
-        Join[
-            If[ Length[types] == 1,
-                With[{type = Last[First[types]]},
-                    {TypeTheoryInductiveType[name, type, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
-                ]
-                ,
-                {TypeTheoryInductiveType[types, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
-            ]
+inductiveDeclarations[name_String, universes_List] := Block[
+    {information = inductiveInformation[name], types, constructors, parameters},
+    types = Function[type, type -> fieldTerm[type, "Type"]] /@ information["Block"];
+    constructors = Function[constructor, constructor -> fieldTerm[constructor, "Type"]] /@ information["BlockConstructors"];
+    parameters = information["Parameters"];
+    Join[
+        If[ Length[types] == 1,
+            {Construct[TypeTheoryInductiveType, name, Last[First[types]], constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
             ,
-            If[name === "Nat" && information["BlockConstructors"] === {"Nat.zero", "Nat.succ"}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ"]}, {}]
+            {Construct[TypeTheoryInductiveType, types, constructors, "Parameters" -> parameters, "UniverseParameters" -> universes]}
         ]
+        ,
+        If[name === "Nat" && information["BlockConstructors"] === {"Nat.zero", "Nat.succ"}, {TypeTheoryNaturalNumbers["Nat", "Nat.zero", "Nat.succ"]}, {}]
     ]
 ]
 
@@ -622,20 +613,22 @@ checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, 
    definitional equality ignores, and the names of its universe parameters: then the types are definitionally equal
    with nothing to infer, and the type Lean's table holds is compared with the record's, the record's universe
    parameters renamed to Lean's in order and every binder None, named and of kind None *)
-recursorTypeSameQ[environment_, recursor_String] := With[
+recursorTypeSameQ[environment_, recursor_String] := Block[
     {
         leanType = Lookup[Lookup[$fieldTerms, recursor, <||>], "Type", None],
         catch = coreHead["catchKernelFailure"],
         constantRecord = coreHead["constantRecord"],
         name = HoldComplete @@ {constantName[recursor]},
-        parameter = coreHead["levelParameter"]
+        parameter = coreHead["levelParameter"],
+        record
     },
-    With[{record = catch[constantRecord[environment, name]]}, And[
+    record = catch[constantRecord[environment, name]];
+    And[
         leanType =!= None,
         AssociationQ[record],
         Length[record["UniverseParameters"]] == Length[universeParameters[recursor]],
         comparableEqualQ[environment, record["Type"], leanType, Thread[(parameter /@ record["UniverseParameters"]) -> (parameter /@ HoldComplete /@ universeParameters[recursor])]]
-    ]]
+    ]
 ]
 
 (* Lean's recursor takes a parameter at its type without outParam, semiOutParam, optParam or autoParam, which give their
