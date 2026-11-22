@@ -41,6 +41,21 @@
  * recursor), and the root that first reached it. For each target it prints whether the cone holds it and, if so, one
  * path from a root down to it, each step a constant the one before names. Roots given as ?text list instead the
  * declared constants whose names contain text.
+ *
+ * Per-declaration direct references, using a lazy summary cache on cross-declaration shared expressions (one u32 per
+ * expression), verifying export order and optionally writing a CSR binary file (u64 decl_count, u64 offsets[N+1],
+ * u32 targets[E]):
+ *
+ *     leanexport deps OUTDIR [DEPS.bin]
+ *
+ * A self-contained WXF slice for LeanLink's TypeTheory bridge (Order, Constants, Inductives, and the shim's fields
+ * Table), with no Lean in the path:
+ *
+ *     leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS
+ *
+ * LIST and ROOTS are comma-separated constant names or @path (one name per line). With --axiomatize-theorems, every
+ * theorem is walked by type alone and emitted as an axiom; with --proofs-for, only those theorems carry proofs and all
+ * other reached theorems are axiomatized; --exclude stops the walk at declarations already in a base environment.
  */
 
 #include <stdint.h>
@@ -69,7 +84,7 @@ typedef struct { char *data; size_t size, capacity; } Buffer;
 
 static void buffer_reserve(Buffer *b, size_t more) {
     if (b->size + more <= b->capacity) return;
-    size_t capacity = b->capacity ? b->capacity : 1 << 16;
+    size_t capacity = b->capacity ? b->capacity : 64;
     while (capacity < b->size + more) capacity *= 2;
     b->data = realloc(b->data, capacity);
     if (!b->data) fail("out of memory");
@@ -526,13 +541,23 @@ static Mapped map_file(const char *dir, const char *name) {
     return m;
 }
 
-static Mapped t_names, t_exprs, t_strings, t_strings_idx;
+static Mapped t_names, t_levels, t_exprs, t_depths, t_lists, t_lists_idx, t_strings, t_strings_idx;
 
 static uint8_t name_kind(uint32_t id) { return t_names.data[(size_t)id * 16]; }
 
 static uint32_t name_prefix(uint32_t id) { uint32_t v; memcpy(&v, t_names.data + (size_t)id * 16 + 4, 4); return v; }
 
 static uint64_t name_value(uint32_t id) { uint64_t v; memcpy(&v, t_names.data + (size_t)id * 16 + 8, 8); return v; }
+
+static void level_row(uint32_t id, uint32_t row[3]) { memcpy(row, t_levels.data + (size_t)id * 12, 12); }
+
+static const uint32_t *level_list_at(uint32_t id, uint32_t *count) {
+    uint64_t offset; uint32_t n;
+    memcpy(&offset, t_lists_idx.data + (size_t)id * 12, 8);
+    memcpy(&n, t_lists_idx.data + (size_t)id * 12 + 8, 4);
+    *count = n;
+    return (const uint32_t *)(t_lists.data + offset * 4);
+}
 
 static const char *string_at(uint64_t id, uint32_t *length) {
     uint64_t offset; uint32_t n;
@@ -543,6 +568,8 @@ static const char *string_at(uint64_t id, uint32_t *length) {
 }
 
 static void expr_row(uint32_t id, uint32_t row[5]) { memcpy(row, t_exprs.data + (size_t)id * 20, 20); }
+
+static uint32_t expr_depth(uint32_t id) { uint32_t v; memcpy(&v, t_depths.data + (size_t)id * 4, 4); return v; }
 
 /* ---------- names as Lean's Name.toString writes them ---------- */
 
@@ -646,53 +673,112 @@ static char *name_string(uint32_t id) {
 enum { K_THEOREM, K_DEFINITION, K_OPAQUE, K_AXIOM, K_QUOT, K_INDUCTIVE, K_CONSTRUCTOR, K_RECURSOR };
 
 static const char *kind_names[] = {"theorem", "definition", "opaque", "axiom", "quot", "inductive", "constructor", "recursor"};
-
-typedef struct { uint32_t name; uint8_t kind; uint32_t decl; } Member;
+static const char *bridge_kind_names[] = {"theorem", "def", "opaque", "axiom", "quot", "inductive", "constructor", "recursor"};
 
 typedef struct {
+    uint32_t name;
+    uint8_t kind;
+    uint32_t decl;
+    uint32_t type_expr;
+    int64_t val_expr;              /* -1 when the constant has no value */
+    uint32_t first_lparam, lparam_count;
+} Member;
+
+typedef struct {
+    uint32_t member;
+    uint32_t num_params, num_nested;
+    uint32_t first_all, all_count;
+    uint32_t first_ctor, ctor_count;
+} IndType;
+
+typedef struct {
+    uint8_t kind;
     uint32_t first_member, member_count;   /* its constants, in members */
-    uint32_t first_root, root_count;       /* the expressions it depends through, in expr_roots */
+    uint32_t first_root, root_count;       /* all expressions for cone, in expr_roots */
+    uint32_t first_type_root, type_root_count; /* types (and ctors for inductive) */
+    uint32_t first_val_root, val_root_count;   /* value (or rec types + rules for inductive) */
+    int32_t first_ind;                     /* first entry in g_ind_types, or -1 */
+    uint32_t ind_count;
 } Decl;
 
 static Member *g_members; static size_t g_member_count, g_member_capacity;
+static uint32_t *g_lparams; static size_t g_lparam_count, g_lparam_capacity;
+static uint32_t *g_ind_names; static size_t g_ind_name_count, g_ind_name_capacity;
+static IndType *g_ind_types; static size_t g_ind_type_count, g_ind_type_capacity;
 static uint32_t *g_expr_roots; static size_t g_expr_root_count, g_expr_root_capacity;
+static uint32_t *g_type_roots; static size_t g_type_root_count, g_type_root_capacity;
+static uint32_t *g_val_roots; static size_t g_val_root_count, g_val_root_capacity;
 static Decl *g_decl_list; static size_t g_decl_count, g_decl_capacity;
 
-static void push_member(uint32_t name, uint8_t kind) {
-    if (g_member_count == g_member_capacity) { g_member_capacity = g_member_capacity ? 2 * g_member_capacity : 1 << 16; g_members = realloc(g_members, g_member_capacity * sizeof(Member)); }
-    g_members[g_member_count++] = (Member){name, kind, (uint32_t)g_decl_count};
+static void push_u32(uint32_t **arr, size_t *count, size_t *cap, uint32_t v) {
+    if (*count == *cap) { *cap = *cap ? 2 * (*cap) : 1 << 16; *arr = realloc(*arr, (*cap) * sizeof(uint32_t)); if (!*arr) fail("out of memory"); }
+    (*arr)[(*count)++] = v;
 }
 
-static void push_root(uint64_t expr) {
-    if (g_expr_root_count == g_expr_root_capacity) { g_expr_root_capacity = g_expr_root_capacity ? 2 * g_expr_root_capacity : 1 << 16; g_expr_roots = realloc(g_expr_roots, g_expr_root_capacity * sizeof(uint32_t)); }
-    g_expr_roots[g_expr_root_count++] = index32(expr);
+static uint32_t push_member(uint32_t name, uint8_t kind, uint32_t type_expr, int64_t val_expr, const Json *lparams) {
+    if (g_member_count == g_member_capacity) { g_member_capacity = g_member_capacity ? 2 * g_member_capacity : 1 << 16; g_members = realloc(g_members, g_member_capacity * sizeof(Member)); if (!g_members) fail("out of memory"); }
+    uint32_t first_lp = (uint32_t)g_lparam_count;
+    if (lparams && lparams->type == J_ARRAY)
+        for (Json *p = lparams->child; p; p = p->next) push_u32(&g_lparams, &g_lparam_count, &g_lparam_capacity, index32((uint64_t)p->number));
+    uint32_t idx = (uint32_t)g_member_count++;
+    g_members[idx] = (Member){name, kind, (uint32_t)g_decl_count, type_expr, val_expr, first_lp, (uint32_t)g_lparam_count - first_lp};
+    return idx;
 }
 
-static void add_constant(const Json *c, uint8_t kind) {
-    push_member(index32(require_index(c, "name")), kind);
-    push_root(require_index(c, "type"));
+static void push_root(uint64_t expr) { push_u32(&g_expr_roots, &g_expr_root_count, &g_expr_root_capacity, index32(expr)); }
+
+static uint32_t add_constant(const Json *c, uint8_t kind, int type_as_val) {
+    uint32_t ty = index32(require_index(c, "type"));
     Json *value = member(c, "value");
-    if (value) push_root((uint64_t)value->number);
+    int64_t val = value ? value->number : -1;
+    uint32_t midx = push_member(index32(require_index(c, "name")), kind, ty, val, member(c, "levelParams"));
+    push_root(ty);
+    if (type_as_val) push_u32(&g_val_roots, &g_val_root_count, &g_val_root_capacity, ty);
+    else push_u32(&g_type_roots, &g_type_root_count, &g_type_root_capacity, ty);
+    if (value) {
+        push_root((uint64_t)val);
+        push_u32(&g_val_roots, &g_val_root_count, &g_val_root_capacity, index32((uint64_t)val));
+    }
+    return midx;
 }
 
 static void read_decl(const Json *line) {
-    if (g_decl_count == g_decl_capacity) { g_decl_capacity = g_decl_capacity ? 2 * g_decl_capacity : 1 << 16; g_decl_list = realloc(g_decl_list, g_decl_capacity * sizeof(Decl)); }
-    Decl d = {(uint32_t)g_member_count, 0, (uint32_t)g_expr_root_count, 0};
+    if (g_decl_count == g_decl_capacity) { g_decl_capacity = g_decl_capacity ? 2 * g_decl_capacity : 1 << 16; g_decl_list = realloc(g_decl_list, g_decl_capacity * sizeof(Decl)); if (!g_decl_list) fail("out of memory"); }
+    Decl d = {0, (uint32_t)g_member_count, 0, (uint32_t)g_expr_root_count, 0, (uint32_t)g_type_root_count, 0, (uint32_t)g_val_root_count, 0, -1, 0};
     static const char *simple[] = {"thm", "def", "opaque", "axiom", "quot"};
     static const uint8_t simple_kinds[] = {K_THEOREM, K_DEFINITION, K_OPAQUE, K_AXIOM, K_QUOT};
     Json *m = NULL;
-    for (int i = 0; i < 5; i++) if ((m = member(line, simple[i]))) { add_constant(m, simple_kinds[i]); break; }
+    for (int i = 0; i < 5; i++) if ((m = member(line, simple[i]))) { d.kind = simple_kinds[i]; add_constant(m, simple_kinds[i], 0); break; }
     if (!m) {
+        d.kind = K_INDUCTIVE;
+        d.first_ind = (int32_t)g_ind_type_count;
         Json *block = require(line, "inductive");
-        for (Json *t = require(block, "types")->child; t; t = t->next) add_constant(t, K_INDUCTIVE);
-        for (Json *c = require(block, "ctors")->child; c; c = c->next) add_constant(c, K_CONSTRUCTOR);
+        for (Json *t = require(block, "types")->child; t; t = t->next) {
+            uint32_t midx = add_constant(t, K_INDUCTIVE, 0);
+            if (g_ind_type_count == g_ind_type_capacity) { g_ind_type_capacity = g_ind_type_capacity ? 2 * g_ind_type_capacity : 4096; g_ind_types = realloc(g_ind_types, g_ind_type_capacity * sizeof(IndType)); if (!g_ind_types) fail("out of memory"); }
+            IndType it = {midx, index32(require_index(t, "numParams")), index32(require_index(t, "numNested")), (uint32_t)g_ind_name_count, 0, 0, 0};
+            for (Json *a = require(t, "all")->child; a; a = a->next) push_u32(&g_ind_names, &g_ind_name_count, &g_ind_name_capacity, index32((uint64_t)a->number));
+            it.all_count = (uint32_t)g_ind_name_count - it.first_all;
+            it.first_ctor = (uint32_t)g_ind_name_count;
+            for (Json *c = require(t, "ctors")->child; c; c = c->next) push_u32(&g_ind_names, &g_ind_name_count, &g_ind_name_capacity, index32((uint64_t)c->number));
+            it.ctor_count = (uint32_t)g_ind_name_count - it.first_ctor;
+            g_ind_types[g_ind_type_count++] = it;
+        }
+        d.ind_count = (uint32_t)g_ind_type_count - (uint32_t)d.first_ind;
+        for (Json *c = require(block, "ctors")->child; c; c = c->next) add_constant(c, K_CONSTRUCTOR, 0);
         for (Json *r = require(block, "recs")->child; r; r = r->next) {
-            add_constant(r, K_RECURSOR);
-            for (Json *rule = require(r, "rules")->child; rule; rule = rule->next) push_root(require_index(rule, "rhs"));
+            add_constant(r, K_RECURSOR, 1);
+            for (Json *rule = require(r, "rules")->child; rule; rule = rule->next) {
+                uint64_t rhs = require_index(rule, "rhs");
+                push_root(rhs);
+                push_u32(&g_val_roots, &g_val_root_count, &g_val_root_capacity, index32(rhs));
+            }
         }
     }
     d.member_count = (uint32_t)g_member_count - d.first_member;
     d.root_count = (uint32_t)g_expr_root_count - d.first_root;
+    d.type_root_count = (uint32_t)g_type_root_count - d.first_type_root;
+    d.val_root_count = (uint32_t)g_val_root_count - d.first_val_root;
     g_decl_list[g_decl_count++] = d;
 }
 
@@ -721,17 +807,19 @@ static int64_t member_by_text(const char *text) {
     return -1;
 }
 
-/* ---------- the cone ---------- */
-
-static int cone(const char *dir, const char *out_path, const char *roots_text, const char *targets_text) {
+static int load_decls_and_names(const char *dir, int map_all_tables) {
     t_names = map_file(dir, "names.bin");
     t_exprs = map_file(dir, "exprs.bin");
     t_strings = map_file(dir, "strings.bin");
     t_strings_idx = map_file(dir, "strings.idx");
+    if (map_all_tables) {
+        t_levels = map_file(dir, "levels.bin");
+        t_depths = map_file(dir, "depths.bin");
+        t_lists = map_file(dir, "levellists.bin");
+        t_lists_idx = map_file(dir, "levellists.idx");
+    }
     g_name_total = t_names.size / 16;
-    size_t expr_total = t_exprs.size / 20;
 
-    /* the declarations */
     char path[4096];
     snprintf(path, sizeof path, "%s/decls.ndjson", dir);
     FILE *decls = fopen(path, "rb");
@@ -746,14 +834,24 @@ static int cone(const char *dir, const char *out_path, const char *roots_text, c
     fclose(decls);
     free(line);
     g_by_name = malloc(g_name_total * sizeof(int64_t));
+    if (!g_by_name) fail("out of memory");
     for (size_t i = 0; i < g_name_total; i++) g_by_name[i] = -1;
     g_named = malloc(g_member_count * sizeof(NamedMember));
+    if (!g_named) fail("out of memory");
     for (size_t i = 0; i < g_member_count; i++) {
         g_by_name[g_members[i].name] = (int64_t)i;
         g_named[i] = (NamedMember){name_string(g_members[i].name), (uint32_t)i};
     }
     g_named_count = g_member_count;
     qsort(g_named, g_named_count, sizeof(NamedMember), compare_named);
+    return 0;
+}
+
+/* ---------- the cone ---------- */
+
+static int cone(const char *dir, const char *out_path, const char *roots_text, const char *targets_text) {
+    if (load_decls_and_names(dir, 0) != 0) return 1;
+    size_t expr_total = t_exprs.size / 20;
 
     /* roots of the form ?text list the declared constants whose names contain text, to find a root's exact name */
     if (roots_text[0] == '?') {
@@ -866,9 +964,1005 @@ static int cone(const char *dir, const char *out_path, const char *roots_text, c
     return 0;
 }
 
+/* ---------- per-declaration direct dependencies ---------- */
+
+typedef struct { uint32_t *keys; uint32_t mask, count; } U32Set;
+
+static void u32set_init(U32Set *s, uint32_t cap) {
+    s->keys = malloc(cap * sizeof(uint32_t));
+    if (!s->keys) fail("out of memory");
+    memset(s->keys, 0xFF, cap * sizeof(uint32_t));
+    s->mask = cap - 1;
+    s->count = 0;
+}
+
+static void u32set_clear(U32Set *s, uint32_t *touched, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) s->keys[touched[i]] = UINT32_MAX;
+    s->count = 0;
+}
+
+static void u32set_grow(U32Set *s, uint32_t **touched, size_t *tcap, uint32_t *tlen) {
+    uint32_t old_cap = s->mask + 1, new_cap = old_cap * 2;
+    uint32_t *nk = malloc(new_cap * sizeof(uint32_t));
+    if (!nk) fail("out of memory");
+    memset(nk, 0xFF, new_cap * sizeof(uint32_t));
+    uint32_t nmask = new_cap - 1;
+    for (uint32_t i = 0; i < old_cap; i++) {
+        uint32_t k = s->keys[i];
+        if (k != UINT32_MAX) {
+            uint32_t h = (k * 2654435761u) & nmask;
+            while (nk[h] != UINT32_MAX) h = (h + 1) & nmask;
+            nk[h] = k;
+        }
+    }
+    free(s->keys);
+    s->keys = nk;
+    s->mask = nmask;
+    if (new_cap > *tcap) {
+        *tcap = new_cap;
+        *touched = realloc(*touched, *tcap * sizeof(uint32_t));
+        if (!*touched) fail("out of memory");
+    }
+    *tlen = 0;
+    for (uint32_t i = 0; i <= nmask; i++) if (nk[i] != UINT32_MAX) (*touched)[(*tlen)++] = i;
+}
+
+static int u32set_insert(U32Set *s, uint32_t k, uint32_t **touched, size_t *tcap, uint32_t *tlen) {
+    if ((s->count + 1) * 2 > s->mask + 1) u32set_grow(s, touched, tcap, tlen);
+    uint32_t h = (k * 2654435761u) & s->mask;
+    while (s->keys[h] != UINT32_MAX) {
+        if (s->keys[h] == k) return 0;
+        h = (h + 1) & s->mask;
+    }
+    s->keys[h] = k;
+    s->count++;
+    (*touched)[(*tlen)++] = h;
+    return 1;
+}
+
+typedef struct { uint64_t off; uint32_t len; } Span;
+
+static int compare_u32(const void *a, const void *b) {
+    uint32_t x = *(const uint32_t *)a, y = *(const uint32_t *)b;
+    return (x > y) - (x < y);
+}
+
+static int deps_cmd(const char *dir, const char *out_path) {
+    if (load_decls_and_names(dir, 0) != 0) return 1;
+    size_t expr_total = t_exprs.size / 20;
+    if (g_decl_count >= 0x7FFFFFFFu) { fprintf(stderr, "leanexport: too many declarations\n"); return 1; }
+
+    /* string-literal constants, if present in the export */
+    static const char *str_const_names[5] = {"String.ofList", "List.cons", "List.nil", "Char.ofNat", "Char"};
+    uint32_t str_decls[5]; int str_decl_count = 0;
+    for (int i = 0; i < 5; i++) {
+        int64_t m = member_by_text(str_const_names[i]);
+        if (m >= 0) str_decls[str_decl_count++] = g_members[m].decl;
+    }
+
+    /* state[e]: 0 unvisited, 1..D visited only by decl d = state[e]-1,
+       0x80000000 empty summary, 0x80000001..0xBFFFFFFF 1-decl summary (val - 0x80000001),
+       0xC0000000|idx multi-decl summary in spans[idx] */
+    uint32_t *state = calloc(expr_total, sizeof(uint32_t));
+    uint32_t *dep_stamp = calloc(g_decl_count, sizeof(uint32_t));
+    uint32_t *sub_dep_stamp = calloc(g_decl_count, sizeof(uint32_t));
+    if (!state || !dep_stamp || !sub_dep_stamp) fail("out of memory");
+
+    Span *spans = NULL; size_t span_count = 0, span_cap = 0;
+    uint32_t *sdata = NULL; size_t sdata_count = 0, sdata_cap = 0;
+    uint32_t *stack = malloc((1 << 16) * sizeof(uint32_t)); size_t stack_cap = 1 << 16;
+    uint32_t *sub_stack = malloc((1 << 16) * sizeof(uint32_t)); size_t sub_cap = 1 << 16;
+    U32Set sub_seen; u32set_init(&sub_seen, 1024);
+    size_t stouched_cap = 1024; uint32_t *stouched = malloc(stouched_cap * sizeof(uint32_t));
+    uint32_t *sub_deps = NULL; size_t sub_deps_cap = 0;
+    uint32_t *cur_deps = NULL; size_t cur_deps_cap = 0;
+    uint64_t *offsets = out_path ? malloc((g_decl_count + 1) * sizeof(uint64_t)) : NULL;
+    uint32_t *all_edges = NULL; size_t all_edges_count = 0, all_edges_cap = 0;
+    uint32_t sub_gen = 0;
+    uint64_t total_edges = 0, backward_edges = 0, str_literal_decls = 0, summaries = 0;
+
+    for (uint32_t d = 0; d < g_decl_count; d++) {
+        uint32_t st = d + 1;
+        Decl *decl = &g_decl_list[d];
+        size_t top = 0, cur_len = 0;
+        int has_str = 0;
+        for (uint32_t k = 0; k < decl->root_count; k++) {
+            if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); if (!stack) fail("out of memory"); }
+            stack[top++] = g_expr_roots[decl->first_root + k];
+        }
+        while (top) {
+            uint32_t e = stack[--top];
+            if (e >= expr_total) { fprintf(stderr, "leanexport: expression %u out of range\n", e); return 1; }
+            uint32_t sv = state[e];
+            if (sv == st) continue;
+            if (sv & 0x80000000u) {
+                if (sv == 0x80000000u) continue;
+                if ((sv & 0xC0000000u) == 0x80000000u) {
+                    uint32_t target = (sv & 0x3FFFFFFFu) - 1;
+                    if (target != d && dep_stamp[target] != st) {
+                        dep_stamp[target] = st;
+                        if (cur_len == cur_deps_cap) { cur_deps_cap = cur_deps_cap ? 2 * cur_deps_cap : 256; cur_deps = realloc(cur_deps, cur_deps_cap * sizeof(uint32_t)); }
+                        cur_deps[cur_len++] = target;
+                    }
+                } else {
+                    Span sp = spans[sv & 0x3FFFFFFFu];
+                    const uint32_t *arr = sdata + sp.off;
+                    for (uint32_t i = 0; i < sp.len; i++) {
+                        uint32_t target = arr[i];
+                        if (target != d && dep_stamp[target] != st) {
+                            dep_stamp[target] = st;
+                            if (cur_len == cur_deps_cap) { cur_deps_cap = cur_deps_cap ? 2 * cur_deps_cap : 256; cur_deps = realloc(cur_deps, cur_deps_cap * sizeof(uint32_t)); }
+                            cur_deps[cur_len++] = target;
+                        }
+                    }
+                }
+                continue;
+            }
+            if (sv != 0) {
+                summaries++;
+                sub_gen++;
+                uint32_t tlen = 0, sd_len = 0;
+                size_t stop = 0;
+                sub_stack[stop++] = e;
+                u32set_insert(&sub_seen, e, &stouched, &stouched_cap, &tlen);
+                while (stop) {
+                    uint32_t x = sub_stack[--stop];
+                    uint32_t xsv = state[x];
+                    if (x != e && (xsv & 0x80000000u)) {
+                        if (xsv == 0x80000000u) continue;
+                        if ((xsv & 0xC0000000u) == 0x80000000u) {
+                            uint32_t target = (xsv & 0x3FFFFFFFu) - 1;
+                            if (sub_dep_stamp[target] != sub_gen) {
+                                sub_dep_stamp[target] = sub_gen;
+                                if (sd_len == sub_deps_cap) { sub_deps_cap = sub_deps_cap ? 2 * sub_deps_cap : 256; sub_deps = realloc(sub_deps, sub_deps_cap * sizeof(uint32_t)); }
+                                sub_deps[sd_len++] = target;
+                            }
+                        } else {
+                            Span sp = spans[xsv & 0x3FFFFFFFu];
+                            const uint32_t *arr = sdata + sp.off;
+                            for (uint32_t i = 0; i < sp.len; i++) {
+                                uint32_t target = arr[i];
+                                if (sub_dep_stamp[target] != sub_gen) {
+                                    sub_dep_stamp[target] = sub_gen;
+                                    if (sd_len == sub_deps_cap) { sub_deps_cap = sub_deps_cap ? 2 * sub_deps_cap : 256; sub_deps = realloc(sub_deps, sub_deps_cap * sizeof(uint32_t)); }
+                                    sub_deps[sd_len++] = target;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    uint32_t row[5], ch[3], nc = 0;
+                    expr_row(x, row);
+                    switch (row[0]) {
+                        case 2: {
+                            int64_t m = member_of_name(row[1]);
+                            if (m < 0) { char *n = name_string(row[1]); fprintf(stderr, "leanexport: %s is used but not declared\n", n); free(n); return 1; }
+                            uint32_t target = g_members[m].decl;
+                            if (sub_dep_stamp[target] != sub_gen) {
+                                sub_dep_stamp[target] = sub_gen;
+                                if (sd_len == sub_deps_cap) { sub_deps_cap = sub_deps_cap ? 2 * sub_deps_cap : 256; sub_deps = realloc(sub_deps, sub_deps_cap * sizeof(uint32_t)); }
+                                sub_deps[sd_len++] = target;
+                            }
+                            break;
+                        }
+                        case 8:
+                            for (int i = 0; i < str_decl_count; i++) {
+                                uint32_t target = str_decls[i];
+                                if (sub_dep_stamp[target] != sub_gen) {
+                                    sub_dep_stamp[target] = sub_gen;
+                                    if (sd_len == sub_deps_cap) { sub_deps_cap = sub_deps_cap ? 2 * sub_deps_cap : 256; sub_deps = realloc(sub_deps, sub_deps_cap * sizeof(uint32_t)); }
+                                    sub_deps[sd_len++] = target;
+                                }
+                            }
+                            break;
+                        case 3: ch[nc++] = row[1]; ch[nc++] = row[2]; break;
+                        case 4: case 5: ch[nc++] = row[2]; ch[nc++] = row[3]; break;
+                        case 6: ch[nc++] = row[2]; ch[nc++] = row[3]; ch[nc++] = row[4]; break;
+                        case 9: ch[nc++] = row[3]; break;
+                        default: break;
+                    }
+                    for (uint32_t i = 0; i < nc; i++) {
+                        if (u32set_insert(&sub_seen, ch[i], &stouched, &stouched_cap, &tlen)) {
+                            if (stop == sub_cap) { sub_cap *= 2; sub_stack = realloc(sub_stack, sub_cap * sizeof(uint32_t)); if (!sub_stack) fail("out of memory"); }
+                            sub_stack[stop++] = ch[i];
+                        }
+                    }
+                }
+                u32set_clear(&sub_seen, stouched, tlen);
+                if (sd_len == 0) state[e] = 0x80000000u;
+                else if (sd_len == 1) state[e] = 0x80000000u | (sub_deps[0] + 1);
+                else {
+                    if (span_count >= 0x3FFFFFFFu) fail("too many shared summaries");
+                    if (span_count == span_cap) { span_cap = span_cap ? 2 * span_cap : 1 << 14; spans = realloc(spans, span_cap * sizeof(Span)); if (!spans) fail("out of memory"); }
+                    if (sdata_count + sd_len > sdata_cap) {
+                        sdata_cap = sdata_cap ? sdata_cap * 2 : 1 << 16;
+                        while (sdata_cap < sdata_count + sd_len) sdata_cap *= 2;
+                        sdata = realloc(sdata, sdata_cap * sizeof(uint32_t));
+                        if (!sdata) fail("out of memory");
+                    }
+                    memcpy(sdata + sdata_count, sub_deps, sd_len * sizeof(uint32_t));
+                    spans[span_count] = (Span){sdata_count, sd_len};
+                    sdata_count += sd_len;
+                    state[e] = 0xC0000000u | (uint32_t)span_count++;
+                }
+                for (uint32_t i = 0; i < sd_len; i++) {
+                    uint32_t target = sub_deps[i];
+                    if (target != d && dep_stamp[target] != st) {
+                        dep_stamp[target] = st;
+                        if (cur_len == cur_deps_cap) { cur_deps_cap = cur_deps_cap ? 2 * cur_deps_cap : 256; cur_deps = realloc(cur_deps, cur_deps_cap * sizeof(uint32_t)); }
+                        cur_deps[cur_len++] = target;
+                    }
+                }
+                continue;
+            }
+            state[e] = st;
+            uint32_t row[5], ch[3], nc = 0;
+            expr_row(e, row);
+            switch (row[0]) {
+                case 2: {
+                    int64_t m = member_of_name(row[1]);
+                    if (m < 0) { char *n = name_string(row[1]); fprintf(stderr, "leanexport: %s is used but not declared\n", n); free(n); return 1; }
+                    uint32_t target = g_members[m].decl;
+                    if (target != d && dep_stamp[target] != st) {
+                        dep_stamp[target] = st;
+                        if (cur_len == cur_deps_cap) { cur_deps_cap = cur_deps_cap ? 2 * cur_deps_cap : 256; cur_deps = realloc(cur_deps, cur_deps_cap * sizeof(uint32_t)); }
+                        cur_deps[cur_len++] = target;
+                    }
+                    break;
+                }
+                case 8:
+                    has_str = 1;
+                    for (int i = 0; i < str_decl_count; i++) {
+                        uint32_t target = str_decls[i];
+                        if (target != d && dep_stamp[target] != st) {
+                            dep_stamp[target] = st;
+                            if (cur_len == cur_deps_cap) { cur_deps_cap = cur_deps_cap ? 2 * cur_deps_cap : 256; cur_deps = realloc(cur_deps, cur_deps_cap * sizeof(uint32_t)); }
+                            cur_deps[cur_len++] = target;
+                        }
+                    }
+                    break;
+                case 3: ch[nc++] = row[1]; ch[nc++] = row[2]; break;
+                case 4: case 5: ch[nc++] = row[2]; ch[nc++] = row[3]; break;
+                case 6: ch[nc++] = row[2]; ch[nc++] = row[3]; ch[nc++] = row[4]; break;
+                case 9: ch[nc++] = row[3]; break;
+                default: break;
+            }
+            for (uint32_t i = 0; i < nc; i++) {
+                if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); if (!stack) fail("out of memory"); }
+                stack[top++] = ch[i];
+            }
+        }
+        if (has_str) str_literal_decls++;
+        for (size_t i = 0; i < cur_len; i++) if (cur_deps[i] > d) backward_edges++;
+        total_edges += cur_len;
+        if (out_path) {
+            qsort(cur_deps, cur_len, sizeof(uint32_t), compare_u32);
+            offsets[d] = all_edges_count;
+            if (all_edges_count + cur_len > all_edges_cap) {
+                all_edges_cap = all_edges_cap ? all_edges_cap * 2 : 1 << 16;
+                while (all_edges_cap < all_edges_count + cur_len) all_edges_cap *= 2;
+                all_edges = realloc(all_edges, all_edges_cap * sizeof(uint32_t));
+                if (!all_edges) fail("out of memory");
+            }
+            if (cur_len) memcpy(all_edges + all_edges_count, cur_deps, cur_len * sizeof(uint32_t));
+            all_edges_count += cur_len;
+        }
+    }
+    if (out_path) {
+        offsets[g_decl_count] = all_edges_count;
+        FILE *f = fopen(out_path, "wb");
+        if (!f) { fprintf(stderr, "leanexport: cannot write %s: %s\n", out_path, strerror(errno)); return 1; }
+        setvbuf(f, NULL, _IOFBF, 1 << 22);
+        uint64_t n = g_decl_count;
+        fwrite(&n, 8, 1, f);
+        fwrite(offsets, 8, g_decl_count + 1, f);
+        if (all_edges_count) fwrite(all_edges, 4, all_edges_count, f);
+        if (fclose(f) != 0) fail("a write failed");
+    }
+    printf("deps: %zu declarations, %llu edges, %llu backward, %llu with string literals; %llu shared summaries (%.2f MB)\n",
+        g_decl_count, (unsigned long long)total_edges, (unsigned long long)backward_edges,
+        (unsigned long long)str_literal_decls, (unsigned long long)summaries,
+        (double)(sdata_count * 4 + span_count * sizeof(Span)) / (1024.0 * 1024.0));
+    return 0;
+}
+
+/* ---------- WXF writer for slice ---------- */
+
+static void wxf_varint(FILE *f, uint64_t n) {
+    while (n >= 128) { fputc((int)((n & 0x7Fu) | 0x80u), f); n >>= 7; }
+    fputc((int)n, f);
+}
+
+static void wxf_symbol(FILE *f, const char *s) {
+    size_t n = strlen(s);
+    fputc('s', f); wxf_varint(f, n); fwrite(s, 1, n, f);
+}
+
+static void wxf_string_n(FILE *f, const char *s, size_t n) {
+    fputc('S', f); wxf_varint(f, n); fwrite(s, 1, n, f);
+}
+
+static void wxf_string(FILE *f, const char *s) { wxf_string_n(f, s, strlen(s)); }
+
+static void wxf_list_head(FILE *f, size_t count) {
+    fputc('f', f); wxf_varint(f, count); wxf_symbol(f, "List");
+}
+
+static void wxf_assoc_head(FILE *f, size_t count) {
+    fputc('A', f); wxf_varint(f, count);
+}
+
+static void wxf_int(FILE *f, int64_t n) {
+    if (n >= -128 && n <= 127) {
+        int8_t v = (int8_t)n; fputc('C', f); fwrite(&v, 1, 1, f);
+    } else if (n >= -32768 && n <= 32767) {
+        int16_t v = (int16_t)n; fputc('j', f); fwrite(&v, 2, 1, f);
+    } else if (n >= -2147483648LL && n <= 2147483647LL) {
+        int32_t v = (int32_t)n; fputc('i', f); fwrite(&v, 4, 1, f);
+    } else {
+        fputc('L', f); fwrite(&n, 8, 1, f);
+    }
+}
+
+static void wxf_nat_digits(FILE *f, const char *digits, size_t len) {
+    if (len <= 18) {
+        int64_t v = 0;
+        for (size_t i = 0; i < len; i++) v = v * 10 + (digits[i] - '0');
+        wxf_int(f, v);
+    } else {
+        fputc('I', f); wxf_varint(f, len); fwrite(digits, 1, len, f);
+    }
+}
+
+static void wxf_packed_i32_1d(FILE *f, const uint32_t *data, size_t d0) {
+    if (d0 == 0) { wxf_list_head(f, 0); return; }
+    fputc(193, f); fputc(2, f);
+    wxf_varint(f, 1); wxf_varint(f, d0);
+    fwrite(data, 4, d0, f);
+}
+
+static void wxf_packed_i32_2d(FILE *f, const uint32_t *data, size_t d0, size_t d1) {
+    if (d0 == 0 || d1 == 0) { wxf_list_head(f, 0); return; }
+    fputc(193, f); fputc(2, f);
+    wxf_varint(f, 2); wxf_varint(f, d0); wxf_varint(f, d1);
+    fwrite(data, 4, d0 * d1, f);
+}
+
+/* ---------- open-addressing u32 -> u32 map (value 0 = absent, key UINT32_MAX = empty slot) ---------- */
+
+typedef struct { uint32_t *keys, *vals; uint32_t mask, count; } U32Map;
+
+static void u32map_init(U32Map *m, uint32_t cap) {
+    m->keys = malloc(cap * sizeof(uint32_t));
+    m->vals = calloc(cap, sizeof(uint32_t));
+    if (!m->keys || !m->vals) fail("out of memory");
+    memset(m->keys, 0xFF, cap * sizeof(uint32_t));
+    m->mask = cap - 1;
+    m->count = 0;
+}
+
+static void u32map_grow(U32Map *m) {
+    uint32_t old_cap = m->mask + 1, new_cap = old_cap * 2;
+    uint32_t *nk = malloc(new_cap * sizeof(uint32_t));
+    uint32_t *nv = calloc(new_cap, sizeof(uint32_t));
+    if (!nk || !nv) fail("out of memory");
+    memset(nk, 0xFF, new_cap * sizeof(uint32_t));
+    uint32_t nmask = new_cap - 1;
+    for (uint32_t i = 0; i < old_cap; i++) {
+        uint32_t k = m->keys[i];
+        if (k != UINT32_MAX) {
+            uint32_t h = (k * 2654435761u) & nmask;
+            while (nk[h] != UINT32_MAX) h = (h + 1) & nmask;
+            nk[h] = k; nv[h] = m->vals[i];
+        }
+    }
+    free(m->keys); free(m->vals);
+    m->keys = nk; m->vals = nv; m->mask = nmask;
+}
+
+static uint32_t u32map_get(const U32Map *m, uint32_t k) {
+    uint32_t h = (k * 2654435761u) & m->mask;
+    while (m->keys[h] != UINT32_MAX) {
+        if (m->keys[h] == k) return m->vals[h];
+        h = (h + 1) & m->mask;
+    }
+    return 0;
+}
+
+static void u32map_put(U32Map *m, uint32_t k, uint32_t v) {
+    if ((m->count + 1) * 2 > m->mask + 1) u32map_grow(m);
+    uint32_t h = (k * 2654435761u) & m->mask;
+    while (m->keys[h] != UINT32_MAX) {
+        if (m->keys[h] == k) { m->vals[h] = v; return; }
+        h = (h + 1) & m->mask;
+    }
+    m->keys[h] = k; m->vals[h] = v; m->count++;
+}
+
+/* ---------- slice remapping state ---------- */
+
+typedef struct {
+    U32Map expr_map, name_map, level_map, llist_map, nat_map, str_map;
+    uint32_t *nodes; size_t node_count, node_cap;        /* 5 u32 per node */
+    uint32_t *depths; size_t depth_cap;                  /* 1 u32 per node */
+    uint32_t *names; size_t name_count, name_cap;        /* orig name_id */
+    uint32_t *levels; size_t level_count, level_cap;     /* 3 u32 per level */
+    uint32_t *ll_items; size_t ll_item_count, ll_item_cap;
+    Span *ll_spans; size_t ll_count, ll_cap;
+    uint32_t *nats; size_t nat_count, nat_cap;           /* orig string_id */
+    uint32_t *strs; size_t str_count, str_cap;           /* orig string_id */
+} SliceTable;
+
+static void slice_table_init(SliceTable *t) {
+    memset(t, 0, sizeof *t);
+    u32map_init(&t->expr_map, 1 << 16);
+    u32map_init(&t->name_map, 1 << 14);
+    u32map_init(&t->level_map, 1 << 10);
+    u32map_init(&t->llist_map, 1 << 12);
+    u32map_init(&t->nat_map, 1 << 8);
+    u32map_init(&t->str_map, 1 << 8);
+}
+
+static uint32_t slice_name(SliceTable *t, uint32_t orig_name) {
+    uint32_t v = u32map_get(&t->name_map, orig_name);
+    if (v) return v;
+    push_u32(&t->names, &t->name_count, &t->name_cap, orig_name);
+    v = (uint32_t)t->name_count;
+    u32map_put(&t->name_map, orig_name, v);
+    return v;
+}
+
+static uint32_t slice_nat(SliceTable *t, uint32_t orig_str) {
+    uint32_t v = u32map_get(&t->nat_map, orig_str);
+    if (v) return v;
+    push_u32(&t->nats, &t->nat_count, &t->nat_cap, orig_str);
+    v = (uint32_t)t->nat_count;
+    u32map_put(&t->nat_map, orig_str, v);
+    return v;
+}
+
+static uint32_t slice_str(SliceTable *t, uint32_t orig_str) {
+    uint32_t v = u32map_get(&t->str_map, orig_str);
+    if (v) return v;
+    push_u32(&t->strs, &t->str_count, &t->str_cap, orig_str);
+    v = (uint32_t)t->str_count;
+    u32map_put(&t->str_map, orig_str, v);
+    return v;
+}
+
+static uint32_t slice_level(SliceTable *t, uint32_t orig_lvl) {
+    uint32_t v = u32map_get(&t->level_map, orig_lvl);
+    if (v) return v;
+    uint32_t row[3], out[3];
+    level_row(orig_lvl, row);
+    out[0] = row[0]; out[1] = 0; out[2] = 0;
+    if (row[0] == 1) out[1] = slice_level(t, row[1]);
+    else if (row[0] == 2 || row[0] == 3) { out[1] = slice_level(t, row[1]); out[2] = slice_level(t, row[2]); }
+    else if (row[0] == 4) out[1] = slice_name(t, row[1]);
+    if (t->level_count == t->level_cap) {
+        t->level_cap = t->level_cap ? 2 * t->level_cap : 1024;
+        t->levels = realloc(t->levels, t->level_cap * 3 * sizeof(uint32_t));
+        if (!t->levels) fail("out of memory");
+    }
+    memcpy(t->levels + t->level_count * 3, out, 12);
+    v = (uint32_t)++t->level_count;
+    u32map_put(&t->level_map, orig_lvl, v);
+    return v;
+}
+
+static uint32_t slice_level_list(SliceTable *t, uint32_t orig_ll) {
+    uint32_t v = u32map_get(&t->llist_map, orig_ll);
+    if (v) return v;
+    uint32_t count = 0;
+    const uint32_t *lvls = level_list_at(orig_ll, &count);
+    uint64_t off = t->ll_item_count;
+    for (uint32_t i = 0; i < count; i++) push_u32(&t->ll_items, &t->ll_item_count, &t->ll_item_cap, slice_level(t, lvls[i]));
+    if (t->ll_count == t->ll_cap) {
+        t->ll_cap = t->ll_cap ? 2 * t->ll_cap : 4096;
+        t->ll_spans = realloc(t->ll_spans, t->ll_cap * sizeof(Span));
+        if (!t->ll_spans) fail("out of memory");
+    }
+    t->ll_spans[t->ll_count] = (Span){off, count};
+    v = (uint32_t)++t->ll_count;
+    u32map_put(&t->llist_map, orig_ll, v);
+    return v;
+}
+
+typedef struct { uint32_t expr; uint8_t post; } PostFrame;
+
+static uint32_t slice_expr(SliceTable *t, uint32_t root_expr, PostFrame **stack, size_t *stack_cap) {
+    uint32_t existing = u32map_get(&t->expr_map, root_expr);
+    if (existing) return existing;
+    size_t top = 0;
+    if (*stack_cap == 0) { *stack_cap = 1 << 16; *stack = malloc(*stack_cap * sizeof(PostFrame)); if (!*stack) fail("out of memory"); }
+    (*stack)[top++] = (PostFrame){root_expr, 0};
+    while (top) {
+        PostFrame f = (*stack)[--top];
+        uint32_t e = f.expr;
+        if (u32map_get(&t->expr_map, e)) continue;
+        uint32_t row[5];
+        expr_row(e, row);
+        if (!f.post) {
+            uint32_t ch[3], nc = 0;
+            switch (row[0]) {
+                case 3: ch[nc++] = row[1]; ch[nc++] = row[2]; break;
+                case 4: case 5: ch[nc++] = row[2]; ch[nc++] = row[3]; break;
+                case 6: ch[nc++] = row[2]; ch[nc++] = row[3]; ch[nc++] = row[4]; break;
+                case 9: ch[nc++] = row[3]; break;
+                default: break;
+            }
+            if (nc > 0) {
+                if (top + nc + 1 > *stack_cap) { *stack_cap *= 2; *stack = realloc(*stack, *stack_cap * sizeof(PostFrame)); if (!*stack) fail("out of memory"); }
+                (*stack)[top++] = (PostFrame){e, 1};
+                for (uint32_t i = nc; i-- > 0;)
+                    if (!u32map_get(&t->expr_map, ch[i])) (*stack)[top++] = (PostFrame){ch[i], 0};
+                continue;
+            }
+        }
+        uint32_t out[5] = {row[0], 0, 0, 0, 0};
+        switch (row[0]) {
+            case 0: out[1] = row[1]; break;
+            case 1: out[1] = slice_level(t, row[1]); break;
+            case 2: out[1] = slice_name(t, row[1]); out[2] = slice_level_list(t, row[2]); break;
+            case 3: out[1] = u32map_get(&t->expr_map, row[1]); out[2] = u32map_get(&t->expr_map, row[2]); break;
+            case 4: case 5:
+                out[1] = slice_name(t, row[1]);
+                out[2] = u32map_get(&t->expr_map, row[2]);
+                out[3] = u32map_get(&t->expr_map, row[3]);
+                out[4] = row[4];
+                break;
+            case 6:
+                out[1] = slice_name(t, row[1]);
+                out[2] = u32map_get(&t->expr_map, row[2]);
+                out[3] = u32map_get(&t->expr_map, row[3]);
+                out[4] = u32map_get(&t->expr_map, row[4]);
+                break;
+            case 7: out[1] = slice_nat(t, row[1]); break;
+            case 8: out[1] = slice_str(t, row[1]); break;
+            case 9: out[1] = slice_name(t, row[1]); out[2] = row[2]; out[3] = u32map_get(&t->expr_map, row[3]); break;
+            default: fail("unknown expression kind in slice");
+        }
+        if (t->node_count == t->node_cap) {
+            t->node_cap = t->node_cap ? 2 * t->node_cap : 1 << 16;
+            t->nodes = realloc(t->nodes, t->node_cap * 5 * sizeof(uint32_t));
+            t->depths = realloc(t->depths, t->node_cap * sizeof(uint32_t));
+            if (!t->nodes || !t->depths) fail("out of memory");
+        }
+        memcpy(t->nodes + t->node_count * 5, out, 20);
+        t->depths[t->node_count] = expr_depth(e);
+        uint32_t id = (uint32_t)++t->node_count;
+        u32map_put(&t->expr_map, e, id);
+    }
+    return u32map_get(&t->expr_map, root_expr);
+}
+
+/* read a comma-separated list or @filepath (one constant name per line) into an array of member indices */
+static uint32_t *parse_member_list(const char *spec, size_t *out_count) {
+    uint32_t *res = NULL; size_t count = 0, cap = 0;
+    if (spec[0] == '@') {
+        FILE *f = fopen(spec + 1, "rb");
+        if (!f) { fprintf(stderr, "leanexport: cannot read %s: %s\n", spec + 1, strerror(errno)); exit(1); }
+        char *line = NULL; size_t lcap = 0; ssize_t len;
+        while ((len = getline(&line, &lcap, f)) > 0) {
+            while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r' || line[len - 1] == ' ' || line[len - 1] == '\t')) line[--len] = '\0';
+            if (len == 0 || line[0] == '#') continue;
+            int64_t m = member_by_text(line);
+            if (m < 0) { fprintf(stderr, "leanexport: no declaration %s\n", line); exit(1); }
+            push_u32(&res, &count, &cap, (uint32_t)m);
+        }
+        free(line);
+        fclose(f);
+    } else {
+        char *copy = strdup(spec);
+        for (char *tok = strtok(copy, ","); tok; tok = strtok(NULL, ",")) {
+            if (!*tok) continue;
+            int64_t m = member_by_text(tok);
+            if (m < 0) { fprintf(stderr, "leanexport: no declaration %s\n", tok); exit(1); }
+            push_u32(&res, &count, &cap, (uint32_t)m);
+        }
+        free(copy);
+    }
+    *out_count = count;
+    return res;
+}
+
+typedef struct { uint32_t member; uint8_t with_value; } RootField;
+
+static int slice_cmd(int argc, char **argv) {
+    if (argc < 5) {
+        fprintf(stderr, "usage: leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS\n");
+        return 2;
+    }
+    const char *dir = argv[2];
+    const char *out_path = argv[3];
+    int axiomatize_all = 0;
+    const char *proofs_for_spec = NULL;
+    const char *exclude_spec = NULL;
+    const char *roots_spec = NULL;
+    for (int i = 4; i < argc; i++) {
+        if (strcmp(argv[i], "--axiomatize-theorems") == 0) axiomatize_all = 1;
+        else if (strcmp(argv[i], "--proofs-for") == 0 && i + 1 < argc) proofs_for_spec = argv[++i];
+        else if (strcmp(argv[i], "--exclude") == 0 && i + 1 < argc) exclude_spec = argv[++i];
+        else if (!roots_spec) roots_spec = argv[i];
+        else { fprintf(stderr, "leanexport: unexpected argument %s\n", argv[i]); return 2; }
+    }
+    if (!roots_spec) { fprintf(stderr, "leanexport: missing ROOTS\n"); return 2; }
+
+    if (load_decls_and_names(dir, 1) != 0) return 1;
+    size_t expr_total = t_exprs.size / 20;
+
+    static const char *quot_names[4] = {"Quot", "Quot.mk", "Quot.lift", "Quot.ind"};
+    int64_t quot_members[4]; uint32_t quot_decls[4]; int has_all_quots = 1;
+    for (int i = 0; i < 4; i++) {
+        quot_members[i] = member_by_text(quot_names[i]);
+        if (quot_members[i] < 0) has_all_quots = 0;
+        else quot_decls[i] = g_members[quot_members[i]].decl;
+    }
+    static const char *str_const_names[5] = {"String.ofList", "List.cons", "List.nil", "Char.ofNat", "Char"};
+    uint32_t str_decls[5]; int str_decl_count = 0;
+    for (int i = 0; i < 5; i++) {
+        int64_t m = member_by_text(str_const_names[i]);
+        if (m >= 0) str_decls[str_decl_count++] = g_members[m].decl;
+    }
+
+    uint8_t *excluded = calloc(g_decl_count, 1);
+    uint8_t *keep_proof = calloc(g_decl_count, 1);
+    uint8_t *reached = calloc(g_decl_count, 1);
+    uint8_t *as_axiom = calloc(g_decl_count, 1);
+    if (!excluded || !keep_proof || !reached || !as_axiom) fail("out of memory");
+
+    if (exclude_spec) {
+        size_t n = 0; uint32_t *ms = parse_member_list(exclude_spec, &n);
+        for (size_t i = 0; i < n; i++) {
+            uint32_t d = g_members[ms[i]].decl;
+            if (g_decl_list[d].kind == K_QUOT && has_all_quots) { for (int q = 0; q < 4; q++) excluded[quot_decls[q]] = 1; }
+            else excluded[d] = 1;
+        }
+        free(ms);
+    }
+    if (proofs_for_spec) {
+        size_t n = 0; uint32_t *ms = parse_member_list(proofs_for_spec, &n);
+        for (size_t i = 0; i < n; i++) keep_proof[g_members[ms[i]].decl] = 1;
+        free(ms);
+    }
+
+    uint32_t *queue = malloc(g_decl_count * sizeof(uint32_t));
+    if (!queue) fail("out of memory");
+    size_t head = 0, tail = 0;
+    size_t root_n = 0; uint32_t *root_ms = parse_member_list(roots_spec, &root_n);
+    for (size_t i = 0; i < root_n; i++) {
+        uint32_t d = g_members[root_ms[i]].decl;
+        if (g_decl_list[d].kind == K_QUOT && has_all_quots) {
+            for (int q = 0; q < 4; q++) if (!excluded[quot_decls[q]] && !reached[quot_decls[q]]) { reached[quot_decls[q]] = 1; queue[tail++] = quot_decls[q]; }
+        } else if (!excluded[d] && !reached[d]) {
+            reached[d] = 1; queue[tail++] = d;
+        }
+    }
+    free(root_ms);
+
+    /* one-pass BFS over reachable expressions */
+    uint8_t *seen = calloc(expr_total / 8 + 1, 1);
+    if (!seen) fail("out of memory");
+    uint32_t *stack = malloc((1 << 16) * sizeof(uint32_t)); size_t stack_cap = 1 << 16;
+    uint64_t backward_edges = 0;
+    while (head < tail) {
+        uint32_t d = queue[head++];
+        Decl *decl = &g_decl_list[d];
+        int walk_val = 0;
+        if (decl->kind == K_THEOREM) {
+            if (axiomatize_all || (proofs_for_spec && !keep_proof[d])) as_axiom[d] = 1;
+            else walk_val = 1;
+        } else if (decl->kind == K_DEFINITION || decl->kind == K_OPAQUE) {
+            walk_val = 1;
+        }
+        size_t top = 0;
+        for (uint32_t k = 0; k < decl->type_root_count; k++) {
+            if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); }
+            stack[top++] = g_type_roots[decl->first_type_root + k];
+        }
+        if (walk_val) {
+            for (uint32_t k = 0; k < decl->val_root_count; k++) {
+                if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); }
+                stack[top++] = g_val_roots[decl->first_val_root + k];
+            }
+        }
+        while (top) {
+            uint32_t e = stack[--top];
+            if (e >= expr_total) { fprintf(stderr, "leanexport: expression %u out of range\n", e); return 1; }
+            if (seen[e >> 3] & (1u << (e & 7))) continue;
+            seen[e >> 3] |= (uint8_t)(1u << (e & 7));
+            uint32_t row[5], ch[3], nc = 0;
+            expr_row(e, row);
+            switch (row[0]) {
+                case 2: {
+                    int64_t m = member_of_name(row[1]);
+                    if (m < 0) { char *n = name_string(row[1]); fprintf(stderr, "leanexport: %s is used but not declared\n", n); free(n); return 1; }
+                    uint32_t target = g_members[m].decl;
+                    if (target > d && !(decl->kind == K_QUOT && g_decl_list[target].kind == K_QUOT)) backward_edges++;
+                    if (g_decl_list[target].kind == K_QUOT && has_all_quots) {
+                        for (int q = 0; q < 4; q++) if (!excluded[quot_decls[q]] && !reached[quot_decls[q]]) { reached[quot_decls[q]] = 1; queue[tail++] = quot_decls[q]; }
+                    } else if (!excluded[target] && !reached[target]) {
+                        reached[target] = 1; queue[tail++] = target;
+                    }
+                    break;
+                }
+                case 8:
+                    for (int i = 0; i < str_decl_count; i++) {
+                        uint32_t target = str_decls[i];
+                        if (target > d) backward_edges++;
+                        if (!excluded[target] && !reached[target]) { reached[target] = 1; queue[tail++] = target; }
+                    }
+                    break;
+                case 3: ch[nc++] = row[1]; ch[nc++] = row[2]; break;
+                case 4: case 5: ch[nc++] = row[2]; ch[nc++] = row[3]; break;
+                case 6: ch[nc++] = row[2]; ch[nc++] = row[3]; ch[nc++] = row[4]; break;
+                case 9: ch[nc++] = row[3]; break;
+                default: break;
+            }
+            for (uint32_t i = 0; i < nc; i++) {
+                if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); }
+                stack[top++] = ch[i];
+            }
+        }
+    }
+    free(seen); free(stack); free(queue);
+    if (backward_edges > 0) {
+        fprintf(stderr, "leanexport: warning: %llu backward edges in export order\n", (unsigned long long)backward_edges);
+    }
+
+    /* Quot emits once at the last reached Quot* declaration */
+    int64_t quot_emit_decl = -1;
+    if (has_all_quots && reached[quot_decls[0]]) {
+        uint32_t maxq = quot_decls[0];
+        for (int q = 1; q < 4; q++) if (quot_decls[q] > maxq) maxq = quot_decls[q];
+        quot_emit_decl = (int64_t)maxq;
+    }
+
+    /* collect Order, Constants members, Inductives, and exact RootFields matching Catenate[fieldNames /@ order] */
+    uint32_t *order_names = NULL; size_t order_count = 0, order_cap = 0;
+    uint32_t *const_members = NULL; size_t const_count = 0, const_cap = 0;
+    uint32_t *ind_indices = NULL; size_t ind_out_count = 0, ind_out_cap = 0;
+    RootField *root_fields = NULL; size_t rf_count = 0, rf_cap = 0;
+    uint64_t axiomatized_count = 0, proved_count = 0;
+
+    for (size_t d = 0; d < g_decl_count; d++) {
+        if (!reached[d]) continue;
+        Decl *decl = &g_decl_list[d];
+        if (decl->kind == K_QUOT) {
+            if ((int64_t)d != quot_emit_decl) continue;
+            push_u32(&order_names, &order_count, &order_cap, g_members[quot_members[0]].name);
+            for (int q = 0; q < 4; q++) {
+                uint32_t qm = (uint32_t)quot_members[q];
+                push_u32(&const_members, &const_count, &const_cap, qm);
+                if (rf_count == rf_cap) { rf_cap = rf_cap ? 2 * rf_cap : 1 << 14; root_fields = realloc(root_fields, rf_cap * sizeof(RootField)); }
+                root_fields[rf_count++] = (RootField){qm, 0};
+            }
+            continue;
+        }
+        if (decl->kind == K_INDUCTIVE) {
+            IndType *it0 = &g_ind_types[decl->first_ind];
+            uint32_t primary_name = g_ind_names[it0->first_all];
+            push_u32(&order_names, &order_count, &order_cap, primary_name);
+            for (uint32_t k = 0; k < decl->member_count; k++)
+                push_u32(&const_members, &const_count, &const_cap, decl->first_member + k);
+            for (uint32_t k = 0; k < decl->ind_count; k++)
+                push_u32(&ind_indices, &ind_out_count, &ind_out_cap, (uint32_t)decl->first_ind + k);
+            /* fieldNames order: block types (in all order), then blockConstructors, then blockRecursors */
+            for (uint32_t k = 0; k < it0->all_count; k++) {
+                int64_t m = member_of_name(g_ind_names[it0->first_all + k]);
+                if (m < 0) fail("inductive block type missing");
+                if (rf_count == rf_cap) { rf_cap = rf_cap ? 2 * rf_cap : 1 << 14; root_fields = realloc(root_fields, rf_cap * sizeof(RootField)); }
+                root_fields[rf_count++] = (RootField){(uint32_t)m, 0};
+            }
+            for (uint32_t k = 0; k < it0->all_count; k++) {
+                uint32_t tname = g_ind_names[it0->first_all + k];
+                IndType *tv = NULL;
+                for (uint32_t j = 0; j < decl->ind_count; j++)
+                    if (g_members[g_ind_types[decl->first_ind + j].member].name == tname) { tv = &g_ind_types[decl->first_ind + j]; break; }
+                if (!tv) fail("inductive type metadata missing");
+                for (uint32_t c = 0; c < tv->ctor_count; c++) {
+                    int64_t cm = member_of_name(g_ind_names[tv->first_ctor + c]);
+                    if (cm < 0) fail("inductive constructor missing");
+                    if (rf_count == rf_cap) { rf_cap = rf_cap ? 2 * rf_cap : 1 << 14; root_fields = realloc(root_fields, rf_cap * sizeof(RootField)); }
+                    root_fields[rf_count++] = (RootField){(uint32_t)cm, 0};
+                }
+            }
+            for (uint32_t k = 0; k < it0->all_count; k++) {
+                char *tn = name_string(g_ind_names[it0->first_all + k]);
+                size_t tlen = strlen(tn);
+                char *rn = malloc(tlen + 16);
+                snprintf(rn, tlen + 16, "%s.rec", tn);
+                int64_t rm = member_by_text(rn);
+                free(tn); free(rn);
+                if (rm < 0) fail("inductive recursor missing");
+                if (rf_count == rf_cap) { rf_cap = rf_cap ? 2 * rf_cap : 1 << 14; root_fields = realloc(root_fields, rf_cap * sizeof(RootField)); }
+                root_fields[rf_count++] = (RootField){(uint32_t)rm, 0};
+            }
+            if (it0->num_nested > 0) {
+                char *p0 = name_string(primary_name);
+                size_t plen = strlen(p0);
+                char *rn = malloc(plen + 32);
+                for (uint32_t k = 1; k <= it0->num_nested; k++) {
+                    snprintf(rn, plen + 32, "%s.rec_%u", p0, k);
+                    int64_t rm = member_by_text(rn);
+                    if (rm < 0) fail("nested inductive recursor missing");
+                    if (rf_count == rf_cap) { rf_cap = rf_cap ? 2 * rf_cap : 1 << 14; root_fields = realloc(root_fields, rf_cap * sizeof(RootField)); }
+                    root_fields[rf_count++] = (RootField){(uint32_t)rm, 0};
+                }
+                free(p0); free(rn);
+            }
+            continue;
+        }
+        uint32_t m = decl->first_member;
+        push_u32(&order_names, &order_count, &order_cap, g_members[m].name);
+        push_u32(&const_members, &const_count, &const_cap, m);
+        uint8_t with_val = 0;
+        if (decl->kind == K_THEOREM) {
+            if (as_axiom[d]) axiomatized_count++;
+            else { with_val = 1; proved_count++; }
+        } else if (decl->kind == K_DEFINITION || decl->kind == K_OPAQUE) {
+            with_val = 1;
+        }
+        if (rf_count == rf_cap) { rf_cap = rf_cap ? 2 * rf_cap : 1 << 14; root_fields = realloc(root_fields, rf_cap * sizeof(RootField)); }
+        root_fields[rf_count++] = (RootField){m, with_val};
+    }
+
+    /* remap all expressions reachable from root_fields */
+    SliceTable tbl;
+    slice_table_init(&tbl);
+    PostFrame *pstack = NULL; size_t pstack_cap = 0;
+    uint32_t *roots_packed = malloc((rf_count ? rf_count * 2 : 1) * sizeof(uint32_t));
+    if (!roots_packed) fail("out of memory");
+    for (size_t i = 0; i < rf_count; i++) {
+        Member *m = &g_members[root_fields[i].member];
+        uint32_t tn = slice_expr(&tbl, m->type_expr, &pstack, &pstack_cap);
+        uint32_t vn = 0;
+        if (root_fields[i].with_value && m->val_expr >= 0)
+            vn = slice_expr(&tbl, (uint32_t)m->val_expr, &pstack, &pstack_cap);
+        roots_packed[2 * i] = tn;
+        roots_packed[2 * i + 1] = vn;
+    }
+    free(pstack);
+
+    /* Also include any excluded declared member referenced in Table["Names"] inside "Constants"
+       so the bridge's constantName/constantKind lookup (e.g. recursors) never needs a Lean handle. */
+    uint8_t *const_emitted = calloc(g_member_count, 1);
+    if (!const_emitted) fail("out of memory");
+    for (size_t i = 0; i < const_count; i++) const_emitted[const_members[i]] = 1;
+    for (size_t i = 0; i < tbl.name_count; i++) {
+        int64_t m = member_of_name(tbl.names[i]);
+        if (m >= 0 && excluded[g_members[m].decl] && !const_emitted[m]) {
+            const_emitted[m] = 1;
+            push_u32(&const_members, &const_count, &const_cap, (uint32_t)m);
+        }
+    }
+    free(const_emitted);
+
+    /* write WXF bundle */
+    FILE *out = fopen(out_path, "wb");
+    if (!out) { fprintf(stderr, "leanexport: cannot write %s: %s\n", out_path, strerror(errno)); return 1; }
+    setvbuf(out, NULL, _IOFBF, 1 << 22);
+    fwrite("8:", 1, 2, out);
+    wxf_assoc_head(out, 4);
+
+    /* "Order" */
+    fputc('-', out); wxf_string(out, "Order");
+    wxf_list_head(out, order_count);
+    for (size_t i = 0; i < order_count; i++) {
+        char *s = name_string(order_names[i]);
+        wxf_string(out, s);
+        free(s);
+    }
+
+    /* "Constants" */
+    fputc('-', out); wxf_string(out, "Constants");
+    wxf_assoc_head(out, const_count);
+    for (size_t i = 0; i < const_count; i++) {
+        Member *m = &g_members[const_members[i]];
+        char *s = name_string(m->name);
+        const char *kstr = (m->kind == K_THEOREM && as_axiom[m->decl]) ? "axiom" : bridge_kind_names[m->kind];
+        fputc('-', out); wxf_string(out, s); free(s);
+        wxf_list_head(out, 2);
+        wxf_string(out, kstr);
+        wxf_list_head(out, m->lparam_count);
+        for (uint32_t j = 0; j < m->lparam_count; j++) {
+            char *lp = name_string(g_lparams[m->first_lparam + j]);
+            wxf_string(out, lp); free(lp);
+        }
+    }
+
+    /* "Inductives" */
+    fputc('-', out); wxf_string(out, "Inductives");
+    wxf_assoc_head(out, ind_out_count);
+    for (size_t i = 0; i < ind_out_count; i++) {
+        IndType *it = &g_ind_types[ind_indices[i]];
+        Decl *decl = &g_decl_list[g_members[it->member].decl];
+        char *tn = name_string(g_members[it->member].name);
+        fputc('-', out); wxf_string(out, tn); free(tn);
+        wxf_list_head(out, 5);
+        wxf_int(out, it->num_params);
+        /* block */
+        wxf_list_head(out, it->all_count);
+        for (uint32_t k = 0; k < it->all_count; k++) {
+            char *bn = name_string(g_ind_names[it->first_all + k]);
+            wxf_string(out, bn); free(bn);
+        }
+        wxf_int(out, it->num_nested);
+        /* blockConstructors: concat of tv->ctors for tv in it->all order */
+        size_t total_bctors = 0;
+        for (uint32_t k = 0; k < it->all_count; k++) {
+            uint32_t bname = g_ind_names[it->first_all + k];
+            for (uint32_t j = 0; j < decl->ind_count; j++)
+                if (g_members[g_ind_types[decl->first_ind + j].member].name == bname) { total_bctors += g_ind_types[decl->first_ind + j].ctor_count; break; }
+        }
+        wxf_list_head(out, total_bctors);
+        for (uint32_t k = 0; k < it->all_count; k++) {
+            uint32_t bname = g_ind_names[it->first_all + k];
+            for (uint32_t j = 0; j < decl->ind_count; j++) {
+                IndType *tv = &g_ind_types[decl->first_ind + j];
+                if (g_members[tv->member].name == bname) {
+                    for (uint32_t c = 0; c < tv->ctor_count; c++) {
+                        char *cn = name_string(g_ind_names[tv->first_ctor + c]);
+                        wxf_string(out, cn); free(cn);
+                    }
+                    break;
+                }
+            }
+        }
+        /* own constructors */
+        wxf_list_head(out, it->ctor_count);
+        for (uint32_t c = 0; c < it->ctor_count; c++) {
+            char *cn = name_string(g_ind_names[it->first_ctor + c]);
+            wxf_string(out, cn); free(cn);
+        }
+    }
+
+    /* "Table" */
+    fputc('-', out); wxf_string(out, "Table");
+    wxf_assoc_head(out, 8);
+    fputc('-', out); wxf_string(out, "Nodes"); wxf_packed_i32_2d(out, tbl.nodes, tbl.node_count, 5);
+    fputc('-', out); wxf_string(out, "Depths"); wxf_packed_i32_1d(out, tbl.depths, tbl.node_count);
+    fputc('-', out); wxf_string(out, "Names");
+    wxf_list_head(out, tbl.name_count);
+    for (size_t i = 0; i < tbl.name_count; i++) { char *s = name_string(tbl.names[i]); wxf_string(out, s); free(s); }
+    fputc('-', out); wxf_string(out, "Levels"); wxf_packed_i32_2d(out, tbl.levels, tbl.level_count, 3);
+    fputc('-', out); wxf_string(out, "LevelLists");
+    wxf_list_head(out, tbl.ll_count);
+    for (size_t i = 0; i < tbl.ll_count; i++) {
+        Span sp = tbl.ll_spans[i];
+        wxf_list_head(out, sp.len);
+        for (uint32_t j = 0; j < sp.len; j++) wxf_int(out, tbl.ll_items[sp.off + j]);
+    }
+    fputc('-', out); wxf_string(out, "Naturals");
+    wxf_list_head(out, tbl.nat_count);
+    for (size_t i = 0; i < tbl.nat_count; i++) {
+        uint32_t n; const char *s = string_at(tbl.nats[i], &n);
+        wxf_nat_digits(out, s, n);
+    }
+    fputc('-', out); wxf_string(out, "Strings");
+    wxf_list_head(out, tbl.str_count);
+    for (size_t i = 0; i < tbl.str_count; i++) {
+        uint32_t n; const char *s = string_at(tbl.strs[i], &n);
+        wxf_string_n(out, s, n);
+    }
+    fputc('-', out); wxf_string(out, "Roots"); wxf_packed_i32_2d(out, roots_packed, rf_count, 2);
+
+    if (fclose(out) != 0) fail("a write failed");
+    printf("slice: %zu primaries, %zu constants (%llu proved, %llu axiomatized), %zu fields, %zu nodes, %zu names, %zu levels\n",
+        order_count, const_count, (unsigned long long)proved_count, (unsigned long long)axiomatized_count,
+        rf_count, tbl.node_count, tbl.name_count, tbl.level_count);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc == 3 && strcmp(argv[1], "convert") == 0) return convert(argv[2]);
     if ((argc == 5 || argc == 6) && strcmp(argv[1], "cone") == 0) return cone(argv[2], argv[3], argv[4], argc == 6 ? argv[5] : NULL);
-    fprintf(stderr, "usage: leanexport convert OUTDIR < export.ndjson\n       leanexport cone OUTDIR CONE.tsv root,root,... [target,target,...]\n");
+    if ((argc == 3 || argc == 4) && strcmp(argv[1], "deps") == 0) return deps_cmd(argv[2], argc == 4 ? argv[3] : NULL);
+    if (argc >= 5 && strcmp(argv[1], "slice") == 0) return slice_cmd(argc, argv);
+    fprintf(stderr,
+        "usage: leanexport convert OUTDIR < export.ndjson\n"
+        "       leanexport cone OUTDIR CONE.tsv root,root,... [target,target,...]\n"
+        "       leanexport deps OUTDIR [DEPS.bin]\n"
+        "       leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS\n");
     return 2;
 }
