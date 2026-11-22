@@ -634,17 +634,25 @@ recursorTypeSameQ[environment_, recursor_String] := With[
         leanType =!= None,
         AssociationQ[record],
         Length[record["UniverseParameters"]] == Length[universeParameters[recursor]],
-        comparable[environment, record["Type"] /. Thread[(parameter /@ record["UniverseParameters"]) -> (parameter /@ HoldComplete /@ universeParameters[recursor])]] ===
-            comparable[environment, leanType]
+        comparableEqualQ[environment, record["Type"], leanType, Thread[(parameter /@ record["UniverseParameters"]) -> (parameter /@ HoldComplete /@ universeParameters[recursor])]]
     ]]
 ]
 
 (* Lean's recursor takes a parameter at its type without outParam, semiOutParam, optParam or autoParam, which give their
    first argument and which TypeTheory's recursor keeps as the inductive type declares them: they are taken off where the
-   environment defines each as that, a function of its arguments that is its first. The term is walked once, each
-   distinct subterm once: a ReplaceRepeated walked the tree once for each binder nested in it. *)
-comparable[environment_, term_] := Block[{$comparableMemo = <||>, $annotationArities = annotationArities[environment]},
-    comparableTerm[term]
+   environment defines each as that, a function of its arguments that is its first. Both shared DAGs are hash-consed into
+   one table of canonical node ids, with universe-parameter renaming folded into level leaves and a separate memo per DAG:
+   neither ReplaceAll nor SameQ ever walks an expanded tree. *)
+comparableEqualQ[environment_, recordType_, leanType_, levelRules_List] := Block[
+    {
+        $RecursionLimit = Infinity, $comparableIntern = <||>, $comparableNext = 0, $annotationArities = annotationArities[environment],
+        $comparableLevelRules = levelRules, $comparableLevelMemo = <||>, $comparableMemo = <||>, recordId, leanId
+    },
+    recordId = comparableTermId[recordType];
+    $comparableLevelRules = {};
+    $comparableMemo = <||>;
+    leanId = comparableTermId[leanType];
+    recordId === leanId
 ]
 
 (* the annotations' arities, worked out once for an import's environment, which every recursor of the import is compared in *)
@@ -655,7 +663,14 @@ annotationArities[environment_] := If[ AssociationQ[$annotationAritiesCache],
 
 $annotationAritiesCache = None
 
-comparableTerm[term_] := Lookup[$comparableMemo, Key[term], $comparableMemo[term] = comparableNode[term]]
+comparableIntern[key_] := Lookup[$comparableIntern, Key[key], $comparableIntern[key] = ++$comparableNext]
+
+comparableLevel[level_] := If[ $comparableLevelRules === {},
+    level,
+    Lookup[$comparableLevelMemo, Key[level], $comparableLevelMemo[level] = (level /. $comparableLevelRules)]
+]
+
+comparableTermId[term_] := Lookup[$comparableMemo, Key[term], $comparableMemo[term] = comparableNodeId[term]]
 
 annotationArity[name_String] := Lookup[$annotationArities, name, 0]
 annotationArity[_] := 0
@@ -676,18 +691,21 @@ With[
     {
         lambda = Symbol["WolframInstitute`TypeTheory`PackageScope`lambdaAbstraction"], forall = Symbol["WolframInstitute`TypeTheory`PackageScope`dependentFunctionType"],
         let = Symbol["WolframInstitute`TypeTheory`PackageScope`localDefinition"], app = Symbol["WolframInstitute`TypeTheory`PackageScope`application"],
-        reference = Symbol["WolframInstitute`TypeTheory`PackageScope`constantReference"], projection = Symbol["WolframInstitute`TypeTheory`PackageScope`projection"]
+        reference = Symbol["WolframInstitute`TypeTheory`PackageScope`constantReference"], projection = Symbol["WolframInstitute`TypeTheory`PackageScope`projection"],
+        sort = Symbol["WolframInstitute`TypeTheory`PackageScope`universeSort"]
     },
-    comparableNode[(head : lambda | forall)[_, domain_, body_, binder_String]] := Construct[head, None, comparableTerm[domain], comparableTerm[body], None];
-    comparableNode[(head : lambda | forall)[name_, domain_, body_, binder_]] := Construct[head, name, comparableTerm[domain], comparableTerm[body], binder];
-    comparableNode[let[_, type_, value_, body_]] := Construct[let, None, comparableTerm[type], comparableTerm[value], comparableTerm[body]];
-    comparableNode[app[reference[HoldComplete[name_], _], argument_]] /; annotationArity[name] == 1 := comparableTerm[argument];
-    comparableNode[app[app[reference[HoldComplete[name_], _], argument_], _]] /; annotationArity[name] == 2 := comparableTerm[argument];
-    comparableNode[app[function_, argument_]] := Construct[app, comparableTerm[function], comparableTerm[argument]];
-    comparableNode[projection[structure_, index_, structureTerm_]] := Construct[projection, structure, index, comparableTerm[structureTerm]]
+    comparableNodeId[(head : lambda | forall)[_, domain_, body_, binder_String]] := comparableIntern[{head, None, comparableTermId[domain], comparableTermId[body], None}];
+    comparableNodeId[(head : lambda | forall)[name_, domain_, body_, binder_]] := comparableIntern[{head, name, comparableTermId[domain], comparableTermId[body], binder}];
+    comparableNodeId[let[_, type_, value_, body_]] := comparableIntern[{let, None, comparableTermId[type], comparableTermId[value], comparableTermId[body]}];
+    comparableNodeId[app[reference[HoldComplete[name_], _], argument_]] /; annotationArity[name] == 1 := comparableTermId[argument];
+    comparableNodeId[app[app[reference[HoldComplete[name_], _], argument_], _]] /; annotationArity[name] == 2 := comparableTermId[argument];
+    comparableNodeId[app[function_, argument_]] := comparableIntern[{app, comparableTermId[function], comparableTermId[argument]}];
+    comparableNodeId[projection[structure_, index_, structureTerm_]] := comparableIntern[{projection, structure, index, comparableTermId[structureTerm]}];
+    comparableNodeId[sort[level_]] := comparableIntern[{sort, comparableLevel[level]}];
+    comparableNodeId[reference[name_, levels_List]] := comparableIntern[{reference, name, comparableLevel /@ levels}]
 ]
 
-comparableNode[leaf_] := leaf
+comparableNodeId[leaf_] := comparableIntern[comparableLevel[leaf]]
 
 (* TypeTheory's kernel functions hold their arguments, so they go in as symbols put in place by With *)
 recursorTypeQ[environment_, constant_, type_] := With[
