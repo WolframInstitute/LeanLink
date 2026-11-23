@@ -70,7 +70,7 @@ $lastImportTimings = <||>
    them, and so does typetheory_coverage.wls, so that a table added here reaches the script too *)
 SetAttributes[withImportState, HoldRest]
 
-withImportState[handle_Integer, body_] := Block[
+withImportState[handle : _Integer | None, body_] := Block[
     {
         $kinds = <||>, $universes = <||>, $inductives = <||>, $primaries = <||>, $owners = <||>, $used = <||>, $coreTerms = <||>, $fieldTerms = <||>,
         $fieldSeed = None, $handle = handle, $annotationAritiesCache = <||>
@@ -91,6 +91,52 @@ importConstants[handle_Integer, roots_List, base_] := catchBridgeFailure @ withI
         If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
         checking += First[AbsoluteTiming[Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]]]];
         $lastImportTimings = <|"Translating" -> SessionTime[] - start - checking, "Checking" -> checking|>;
+        environment
+    ]
+]
+
+(* Import a WXF slice written by Native/export/leanexport (slice / slice-batch), with no Lean shim loaded.
+   Accepts a WXF file path or an already-deserialized slice Association. *)
+importExportSlice[path_String, base_: Automatic] := Block[{tRead, slice},
+    If[! FileExistsQ[path], Return[Failure["FileNotFound", <|"MessageTemplate" -> "Slice file `1` does not exist.", "MessageParameters" -> {path}|>]]];
+    {tRead, slice} = AbsoluteTiming[Quiet[BinaryDeserialize[ReadByteArray[path]]]];
+    If[ ! AssociationQ[slice] || ! AllTrue[{"Order", "Constants", "Inductives", "Table"}, KeyExistsQ[slice, #] &],
+        Return[Failure["InvalidSlice", <|"MessageTemplate" -> "`1` is not a valid leanexport WXF slice.", "MessageParameters" -> {path}|>]]
+    ];
+    Block[{$sliceReadTime = tRead}, importExportSlice[slice, base]]
+]
+
+$sliceReadTime = 0.
+
+importExportSlice[slice_Association, base_: Automatic] := catchBridgeFailure @ withImportState[
+    None,
+    Block[
+        {start = SessionTime[], cone, order, baseEnvironment, allFieldNames, declarations, environment, tTable = 0., tDecl = 0., tCheck = 0., tRec = 0.},
+        $kinds = First /@ slice["Constants"];
+        $universes = Last /@ slice["Constants"];
+        $inductives = Replace[Lookup[slice, "Inductives", <||>], Except[_Association] -> <||>] /.
+            {parameters_Integer, block_List, nested_Integer, blockConstructors_List, constructors_List} :>
+                <|"Parameters" -> parameters, "Block" -> block, "Nested" -> nested, "BlockConstructors" -> blockConstructors, "Constructors" -> constructors|>;
+        cone = slice["Order"];
+        baseEnvironment = Replace[base, Automatic :> If[AnyTrue[cone, quotientConstantQ] && ! nativeQuotientsQ[], TypeTheoryEnvironment[quotientRules[]], TypeTheoryEnvironment[]]];
+        order = Select[cone, Function[name, ! KeyExistsQ[baseEnvironment, constantName[name]]]];
+        If[ order === {},
+            $lastImportTimings = <|"Reading" -> $sliceReadTime, "Table" -> 0., "Declarations" -> 0., "Checking" -> 0., "Recursors" -> 0., "Translating" -> $sliceReadTime|>;
+            Return[baseEnvironment, Block]
+        ];
+        allFieldNames = Catenate[fieldNames /@ cone];
+        If[ Length[allFieldNames] =!= Length[slice["Table"]["Roots"]],
+            bridgeFailure["InvalidSlice", "Slice root count (`1`) does not match field count (`2`).", {Length[slice["Table"]["Roots"]], Length[allFieldNames]}]
+        ];
+        {tTable, $fieldTerms} = AbsoluteTiming[tableFields[allFieldNames, slice["Table"]]];
+        {tDecl, declarations} = AbsoluteTiming[Catenate[Function[name, importedDeclarations[baseEnvironment, name]] /@ order]];
+        {tCheck, environment} = AbsoluteTiming[withKernelSeed[$fieldSeed, TypeTheoryEnvironment[baseEnvironment, declarations, Sequence @@ batchOptions[]]]];
+        If[FailureQ[environment], locateFailure[baseEnvironment, order, environment]];
+        tRec = First[AbsoluteTiming[Scan[Function[name, checkRecursor[environment, name]], Select[order, Function[name, constantKind[name] === "inductive"]]]]];
+        $lastImportTimings = <|
+            "Reading" -> $sliceReadTime, "Table" -> tTable, "Declarations" -> tDecl,
+            "Checking" -> tCheck, "Recursors" -> tRec, "Translating" -> $sliceReadTime + (SessionTime[] - start - tCheck - tRec)
+        |>;
         environment
     ]
 ]
@@ -598,13 +644,20 @@ checkRecursor[environment_, name_String] := Scan[Function[recursor, checkRecurso
 
 checkRecursorType[environment_, name_String, recursor_String] /; recursorTypeSameQ[environment, recursor] := Null
 
-checkRecursorType[environment_, name_String, recursor_String] := Block[{levels, leanType},
-    levels = placeholderLevels[Length[universeParameters[recursor]]];
-    leanType = Replace[
-        typeCheck[LeanConst[recursor, levels], $handle],
-        {result_Association :> result["Type"], _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]}
+checkRecursorType[environment_, name_String, recursor_String] := Block[{parameters, levels, storedType, expectedCore, parameter},
+    parameters = universeParameters[recursor];
+    levels = placeholderLevels[Length[parameters]];
+    storedType = Lookup[Lookup[$fieldTerms, recursor, <||>], "Type", None];
+    expectedCore = If[ storedType =!= None,
+        parameter = coreHead["levelParameter"];
+        renameCoreLevels[storedType, Thread[(parameter /@ HoldComplete /@ parameters) -> (parameter /@ HoldComplete /@ placeholderNames[Length[parameters]])]]
+        ,
+        leanCore @ Replace[
+            typeCheck[LeanConst[recursor, levels], $handle],
+            {result_Association :> result["Type"], _ :> bridgeFailure["Recursor", "Lean's type check of `1` failed: `2`", {recursor, typeCheckError[LeanConst[recursor, levels]]}]}
+        ]
     ];
-    If[ ! recursorTypeQ[environment, leanCore[LeanConst[recursor, levels]], leanCore[leanType]],
+    If[ ! recursorTypeQ[environment, leanCore[LeanConst[recursor, levels]], expectedCore],
         bridgeFailure["RecursorMismatch", "The recursor TypeTheory generates for `1` does not have the type of Lean's `2`.", {name, recursor}]
     ]
 ]
@@ -699,6 +752,33 @@ With[
 ]
 
 comparableNodeId[leaf_] := comparableIntern[comparableLevel[leaf]]
+
+(* DAG-memoized universe-parameter substitution on a core term, so recursor definitional-equality fallback never expands a shared DAG *)
+renameCoreLevels[term_, {}] := term
+
+renameCoreLevels[term_, levelRules_List] := Block[
+    {$RecursionLimit = Infinity, $comparableLevelRules = levelRules, $comparableLevelMemo = <||>, $renameCoreMemo = <||>},
+    renameCoreTerm[term]
+]
+
+renameCoreTerm[term_] := Lookup[$renameCoreMemo, Key[term], $renameCoreMemo[term] = renameCoreNode[term]]
+
+With[
+    {
+        lambda = Symbol["WolframInstitute`TypeTheory`PackageScope`lambdaAbstraction"], forall = Symbol["WolframInstitute`TypeTheory`PackageScope`dependentFunctionType"],
+        let = Symbol["WolframInstitute`TypeTheory`PackageScope`localDefinition"], app = Symbol["WolframInstitute`TypeTheory`PackageScope`application"],
+        reference = Symbol["WolframInstitute`TypeTheory`PackageScope`constantReference"], projection = Symbol["WolframInstitute`TypeTheory`PackageScope`projection"],
+        sort = Symbol["WolframInstitute`TypeTheory`PackageScope`universeSort"]
+    },
+    renameCoreNode[(head : lambda | forall)[name_, domain_, body_, binder_]] := Construct[head, name, renameCoreTerm[domain], renameCoreTerm[body], binder];
+    renameCoreNode[let[name_, type_, value_, body_]] := Construct[let, name, renameCoreTerm[type], renameCoreTerm[value], renameCoreTerm[body]];
+    renameCoreNode[app[function_, argument_]] := Construct[app, renameCoreTerm[function], renameCoreTerm[argument]];
+    renameCoreNode[projection[structure_, index_, structureTerm_]] := Construct[projection, structure, index, renameCoreTerm[structureTerm]];
+    renameCoreNode[sort[level_]] := Construct[sort, comparableLevel[level]];
+    renameCoreNode[reference[name_, levels_List]] := Construct[reference, name, comparableLevel /@ levels]
+]
+
+renameCoreNode[leaf_] := comparableLevel[leaf]
 
 (* TypeTheory's kernel functions hold their arguments, so they go in as symbols put in place by With *)
 recursorTypeQ[environment_, constant_, type_] := With[
