@@ -52,10 +52,13 @@
  * Table), with no Lean in the path:
  *
  *     leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS
+ *     leanexport slice-batch OUTDIR MANIFEST
  *
  * LIST and ROOTS are comma-separated constant names or @path (one name per line). With --axiomatize-theorems, every
  * theorem is walked by type alone and emitted as an axiom; with --proofs-for, only those theorems carry proofs and all
  * other reached theorems are axiomatized; --exclude stops the walk at declarations already in a base environment.
+ * slice-batch loads the export once and processes one shard per line of MANIFEST (or "-" for stdin), each line taking
+ * the same arguments as slice after OUTDIR.
  */
 
 #include <stdint.h>
@@ -1403,6 +1406,15 @@ static void slice_table_init(SliceTable *t) {
     u32map_init(&t->str_map, 1 << 8);
 }
 
+static void u32map_free(U32Map *m) { free(m->keys); free(m->vals); m->keys = NULL; m->vals = NULL; }
+
+static void slice_table_free(SliceTable *t) {
+    u32map_free(&t->expr_map); u32map_free(&t->name_map); u32map_free(&t->level_map);
+    u32map_free(&t->llist_map); u32map_free(&t->nat_map); u32map_free(&t->str_map);
+    free(t->nodes); free(t->depths); free(t->names); free(t->levels);
+    free(t->ll_items); free(t->ll_spans); free(t->nats); free(t->strs);
+}
+
 static uint32_t slice_name(SliceTable *t, uint32_t orig_name) {
     uint32_t v = u32map_get(&t->name_map, orig_name);
     if (v) return v;
@@ -1568,48 +1580,73 @@ static uint32_t *parse_member_list(const char *spec, size_t *out_count) {
 
 typedef struct { uint32_t member; uint8_t with_value; } RootField;
 
-static int slice_cmd(int argc, char **argv) {
-    if (argc < 5) {
-        fprintf(stderr, "usage: leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS\n");
-        return 2;
-    }
-    const char *dir = argv[2];
-    const char *out_path = argv[3];
-    int axiomatize_all = 0;
-    const char *proofs_for_spec = NULL;
-    const char *exclude_spec = NULL;
-    const char *roots_spec = NULL;
-    for (int i = 4; i < argc; i++) {
-        if (strcmp(argv[i], "--axiomatize-theorems") == 0) axiomatize_all = 1;
-        else if (strcmp(argv[i], "--proofs-for") == 0 && i + 1 < argc) proofs_for_spec = argv[++i];
-        else if (strcmp(argv[i], "--exclude") == 0 && i + 1 < argc) exclude_spec = argv[++i];
-        else if (!roots_spec) roots_spec = argv[i];
-        else { fprintf(stderr, "leanexport: unexpected argument %s\n", argv[i]); return 2; }
-    }
-    if (!roots_spec) { fprintf(stderr, "leanexport: missing ROOTS\n"); return 2; }
+typedef struct {
+    size_t expr_total;
+    int64_t quot_members[4];
+    uint32_t quot_decls[4];
+    int has_all_quots;
+    uint32_t str_decls[5];
+    int str_decl_count;
+    uint8_t *excluded, *keep_proof, *reached, *as_axiom, *seen, *const_emitted;
+    uint32_t *queue, *stack;
+    size_t stack_cap;
+    PostFrame *pstack;
+    size_t pstack_cap;
+} SliceCtx;
 
-    if (load_decls_and_names(dir, 1) != 0) return 1;
-    size_t expr_total = t_exprs.size / 20;
-
+static void slice_ctx_init(SliceCtx *ctx) {
+    memset(ctx, 0, sizeof *ctx);
+    ctx->expr_total = t_exprs.size / 20;
     static const char *quot_names[4] = {"Quot", "Quot.mk", "Quot.lift", "Quot.ind"};
-    int64_t quot_members[4]; uint32_t quot_decls[4]; int has_all_quots = 1;
+    ctx->has_all_quots = 1;
     for (int i = 0; i < 4; i++) {
-        quot_members[i] = member_by_text(quot_names[i]);
-        if (quot_members[i] < 0) has_all_quots = 0;
-        else quot_decls[i] = g_members[quot_members[i]].decl;
+        ctx->quot_members[i] = member_by_text(quot_names[i]);
+        if (ctx->quot_members[i] < 0) ctx->has_all_quots = 0;
+        else ctx->quot_decls[i] = g_members[ctx->quot_members[i]].decl;
     }
     static const char *str_const_names[5] = {"String.ofList", "List.cons", "List.nil", "Char.ofNat", "Char"};
-    uint32_t str_decls[5]; int str_decl_count = 0;
     for (int i = 0; i < 5; i++) {
         int64_t m = member_by_text(str_const_names[i]);
-        if (m >= 0) str_decls[str_decl_count++] = g_members[m].decl;
+        if (m >= 0) ctx->str_decls[ctx->str_decl_count++] = g_members[m].decl;
     }
+    ctx->excluded = malloc(g_decl_count ? g_decl_count : 1);
+    ctx->keep_proof = malloc(g_decl_count ? g_decl_count : 1);
+    ctx->reached = malloc(g_decl_count ? g_decl_count : 1);
+    ctx->as_axiom = malloc(g_decl_count ? g_decl_count : 1);
+    ctx->seen = malloc(ctx->expr_total / 8 + 1);
+    ctx->const_emitted = malloc(g_member_count ? g_member_count : 1);
+    ctx->queue = malloc((g_decl_count ? g_decl_count : 1) * sizeof(uint32_t));
+    ctx->stack_cap = 1 << 16;
+    ctx->stack = malloc(ctx->stack_cap * sizeof(uint32_t));
+    if (!ctx->excluded || !ctx->keep_proof || !ctx->reached || !ctx->as_axiom || !ctx->seen || !ctx->const_emitted || !ctx->queue || !ctx->stack)
+        fail("out of memory");
+}
 
-    uint8_t *excluded = calloc(g_decl_count, 1);
-    uint8_t *keep_proof = calloc(g_decl_count, 1);
-    uint8_t *reached = calloc(g_decl_count, 1);
-    uint8_t *as_axiom = calloc(g_decl_count, 1);
-    if (!excluded || !keep_proof || !reached || !as_axiom) fail("out of memory");
+static void slice_ctx_free(SliceCtx *ctx) {
+    free(ctx->excluded); free(ctx->keep_proof); free(ctx->reached); free(ctx->as_axiom);
+    free(ctx->seen); free(ctx->const_emitted); free(ctx->queue); free(ctx->stack); free(ctx->pstack);
+}
+
+static int slice_one(SliceCtx *ctx, const char *out_path, int axiomatize_all,
+                     const char *proofs_for_spec, const char *exclude_spec, const char *roots_spec) {
+    size_t expr_total = ctx->expr_total;
+    int64_t *quot_members = ctx->quot_members;
+    uint32_t *quot_decls = ctx->quot_decls;
+    int has_all_quots = ctx->has_all_quots;
+    uint32_t *str_decls = ctx->str_decls;
+    int str_decl_count = ctx->str_decl_count;
+
+    uint8_t *excluded = ctx->excluded;
+    uint8_t *keep_proof = ctx->keep_proof;
+    uint8_t *reached = ctx->reached;
+    uint8_t *as_axiom = ctx->as_axiom;
+    uint8_t *seen = ctx->seen;
+    uint32_t *queue = ctx->queue;
+    memset(excluded, 0, g_decl_count);
+    memset(keep_proof, 0, g_decl_count);
+    memset(reached, 0, g_decl_count);
+    memset(as_axiom, 0, g_decl_count);
+    memset(seen, 0, expr_total / 8 + 1);
 
     if (exclude_spec) {
         size_t n = 0; uint32_t *ms = parse_member_list(exclude_spec, &n);
@@ -1626,8 +1663,6 @@ static int slice_cmd(int argc, char **argv) {
         free(ms);
     }
 
-    uint32_t *queue = malloc(g_decl_count * sizeof(uint32_t));
-    if (!queue) fail("out of memory");
     size_t head = 0, tail = 0;
     size_t root_n = 0; uint32_t *root_ms = parse_member_list(roots_spec, &root_n);
     for (size_t i = 0; i < root_n; i++) {
@@ -1641,9 +1676,6 @@ static int slice_cmd(int argc, char **argv) {
     free(root_ms);
 
     /* one-pass BFS over reachable expressions */
-    uint8_t *seen = calloc(expr_total / 8 + 1, 1);
-    if (!seen) fail("out of memory");
-    uint32_t *stack = malloc((1 << 16) * sizeof(uint32_t)); size_t stack_cap = 1 << 16;
     uint64_t backward_edges = 0;
     while (head < tail) {
         uint32_t d = queue[head++];
@@ -1657,17 +1689,17 @@ static int slice_cmd(int argc, char **argv) {
         }
         size_t top = 0;
         for (uint32_t k = 0; k < decl->type_root_count; k++) {
-            if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); }
-            stack[top++] = g_type_roots[decl->first_type_root + k];
+            if (top == ctx->stack_cap) { ctx->stack_cap *= 2; ctx->stack = realloc(ctx->stack, ctx->stack_cap * sizeof(uint32_t)); }
+            ctx->stack[top++] = g_type_roots[decl->first_type_root + k];
         }
         if (walk_val) {
             for (uint32_t k = 0; k < decl->val_root_count; k++) {
-                if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); }
-                stack[top++] = g_val_roots[decl->first_val_root + k];
+                if (top == ctx->stack_cap) { ctx->stack_cap *= 2; ctx->stack = realloc(ctx->stack, ctx->stack_cap * sizeof(uint32_t)); }
+                ctx->stack[top++] = g_val_roots[decl->first_val_root + k];
             }
         }
         while (top) {
-            uint32_t e = stack[--top];
+            uint32_t e = ctx->stack[--top];
             if (e >= expr_total) { fprintf(stderr, "leanexport: expression %u out of range\n", e); return 1; }
             if (seen[e >> 3] & (1u << (e & 7))) continue;
             seen[e >> 3] |= (uint8_t)(1u << (e & 7));
@@ -1700,12 +1732,11 @@ static int slice_cmd(int argc, char **argv) {
                 default: break;
             }
             for (uint32_t i = 0; i < nc; i++) {
-                if (top == stack_cap) { stack_cap *= 2; stack = realloc(stack, stack_cap * sizeof(uint32_t)); }
-                stack[top++] = ch[i];
+                if (top == ctx->stack_cap) { ctx->stack_cap *= 2; ctx->stack = realloc(ctx->stack, ctx->stack_cap * sizeof(uint32_t)); }
+                ctx->stack[top++] = ch[i];
             }
         }
     }
-    free(seen); free(stack); free(queue);
     if (backward_edges > 0) {
         fprintf(stderr, "leanexport: warning: %llu backward edges in export order\n", (unsigned long long)backward_edges);
     }
@@ -1810,24 +1841,22 @@ static int slice_cmd(int argc, char **argv) {
     /* remap all expressions reachable from root_fields */
     SliceTable tbl;
     slice_table_init(&tbl);
-    PostFrame *pstack = NULL; size_t pstack_cap = 0;
     uint32_t *roots_packed = malloc((rf_count ? rf_count * 2 : 1) * sizeof(uint32_t));
     if (!roots_packed) fail("out of memory");
     for (size_t i = 0; i < rf_count; i++) {
         Member *m = &g_members[root_fields[i].member];
-        uint32_t tn = slice_expr(&tbl, m->type_expr, &pstack, &pstack_cap);
+        uint32_t tn = slice_expr(&tbl, m->type_expr, &ctx->pstack, &ctx->pstack_cap);
         uint32_t vn = 0;
         if (root_fields[i].with_value && m->val_expr >= 0)
-            vn = slice_expr(&tbl, (uint32_t)m->val_expr, &pstack, &pstack_cap);
+            vn = slice_expr(&tbl, (uint32_t)m->val_expr, &ctx->pstack, &ctx->pstack_cap);
         roots_packed[2 * i] = tn;
         roots_packed[2 * i + 1] = vn;
     }
-    free(pstack);
 
     /* Also include any excluded declared member referenced in Table["Names"] inside "Constants"
        so the bridge's constantName/constantKind lookup (e.g. recursors) never needs a Lean handle. */
-    uint8_t *const_emitted = calloc(g_member_count, 1);
-    if (!const_emitted) fail("out of memory");
+    uint8_t *const_emitted = ctx->const_emitted;
+    memset(const_emitted, 0, g_member_count);
     for (size_t i = 0; i < const_count; i++) const_emitted[const_members[i]] = 1;
     for (size_t i = 0; i < tbl.name_count; i++) {
         int64_t m = member_of_name(tbl.names[i]);
@@ -1836,7 +1865,6 @@ static int slice_cmd(int argc, char **argv) {
             push_u32(&const_members, &const_count, &const_cap, (uint32_t)m);
         }
     }
-    free(const_emitted);
 
     /* write WXF bundle */
     FILE *out = fopen(out_path, "wb");
@@ -1948,10 +1976,85 @@ static int slice_cmd(int argc, char **argv) {
     fputc('-', out); wxf_string(out, "Roots"); wxf_packed_i32_2d(out, roots_packed, rf_count, 2);
 
     if (fclose(out) != 0) fail("a write failed");
-    printf("slice: %zu primaries, %zu constants (%llu proved, %llu axiomatized), %zu fields, %zu nodes, %zu names, %zu levels\n",
-        order_count, const_count, (unsigned long long)proved_count, (unsigned long long)axiomatized_count,
+    printf("slice: %s: %zu primaries, %zu constants (%llu proved, %llu axiomatized), %zu fields, %zu nodes, %zu names, %zu levels\n",
+        out_path, order_count, const_count, (unsigned long long)proved_count, (unsigned long long)axiomatized_count,
         rf_count, tbl.node_count, tbl.name_count, tbl.level_count);
+    fflush(stdout);
+
+    slice_table_free(&tbl);
+    free(order_names); free(const_members); free(ind_indices); free(root_fields); free(roots_packed);
     return 0;
+}
+
+static int parse_slice_args(int argc, char **argv, const char **out_path, int *axiomatize_all,
+                            const char **proofs_for_spec, const char **exclude_spec, const char **roots_spec) {
+    if (argc < 2) return 2;
+    *out_path = argv[0];
+    *axiomatize_all = 0;
+    *proofs_for_spec = NULL;
+    *exclude_spec = NULL;
+    *roots_spec = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--axiomatize-theorems") == 0) *axiomatize_all = 1;
+        else if (strcmp(argv[i], "--proofs-for") == 0 && i + 1 < argc) *proofs_for_spec = argv[++i];
+        else if (strcmp(argv[i], "--exclude") == 0 && i + 1 < argc) *exclude_spec = argv[++i];
+        else if (!*roots_spec) *roots_spec = argv[i];
+        else { fprintf(stderr, "leanexport: unexpected argument %s\n", argv[i]); return 2; }
+    }
+    if (!*roots_spec) { fprintf(stderr, "leanexport: missing ROOTS\n"); return 2; }
+    return 0;
+}
+
+static int slice_cmd(int argc, char **argv) {
+    if (argc < 5) {
+        fprintf(stderr, "usage: leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS\n");
+        return 2;
+    }
+    const char *dir = argv[2];
+    const char *out_path, *proofs_for_spec, *exclude_spec, *roots_spec;
+    int axiomatize_all;
+    if (parse_slice_args(argc - 3, argv + 3, &out_path, &axiomatize_all, &proofs_for_spec, &exclude_spec, &roots_spec) != 0) return 2;
+    if (load_decls_and_names(dir, 1) != 0) return 1;
+    SliceCtx ctx;
+    slice_ctx_init(&ctx);
+    int rc = slice_one(&ctx, out_path, axiomatize_all, proofs_for_spec, exclude_spec, roots_spec);
+    slice_ctx_free(&ctx);
+    return rc;
+}
+
+static int slice_batch_cmd(const char *dir, const char *manifest_path) {
+    if (load_decls_and_names(dir, 1) != 0) return 1;
+    FILE *mf = strcmp(manifest_path, "-") == 0 ? stdin : fopen(manifest_path, "rb");
+    if (!mf) { fprintf(stderr, "leanexport: cannot read %s: %s\n", manifest_path, strerror(errno)); return 1; }
+    SliceCtx ctx;
+    slice_ctx_init(&ctx);
+
+    char *line = NULL; size_t lcap = 0; ssize_t len;
+    size_t shards = 0;
+    int rc = 0;
+    while ((len = getline(&line, &lcap, mf)) > 0) {
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) line[--len] = '\0';
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '\0' || *p == '#') continue;
+        char *toks[32]; int ntok = 0;
+        while (*p && ntok < 32) {
+            toks[ntok++] = p;
+            while (*p && *p != ' ' && *p != '\t') p++;
+            if (*p) { *p++ = '\0'; while (*p == ' ' || *p == '\t') p++; }
+        }
+        const char *out_path, *proofs_for_spec, *exclude_spec, *roots_spec;
+        int axiomatize_all;
+        if (parse_slice_args(ntok, toks, &out_path, &axiomatize_all, &proofs_for_spec, &exclude_spec, &roots_spec) != 0) { rc = 2; break; }
+        rc = slice_one(&ctx, out_path, axiomatize_all, proofs_for_spec, exclude_spec, roots_spec);
+        if (rc != 0) break;
+        shards++;
+    }
+    free(line);
+    if (mf != stdin) fclose(mf);
+    slice_ctx_free(&ctx);
+    if (rc == 0) printf("slice-batch: %zu shards written\n", shards);
+    return rc;
 }
 
 int main(int argc, char **argv) {
@@ -1959,10 +2062,12 @@ int main(int argc, char **argv) {
     if ((argc == 5 || argc == 6) && strcmp(argv[1], "cone") == 0) return cone(argv[2], argv[3], argv[4], argc == 6 ? argv[5] : NULL);
     if ((argc == 3 || argc == 4) && strcmp(argv[1], "deps") == 0) return deps_cmd(argv[2], argc == 4 ? argv[3] : NULL);
     if (argc >= 5 && strcmp(argv[1], "slice") == 0) return slice_cmd(argc, argv);
+    if (argc == 4 && strcmp(argv[1], "slice-batch") == 0) return slice_batch_cmd(argv[2], argv[3]);
     fprintf(stderr,
         "usage: leanexport convert OUTDIR < export.ndjson\n"
         "       leanexport cone OUTDIR CONE.tsv root,root,... [target,target,...]\n"
         "       leanexport deps OUTDIR [DEPS.bin]\n"
-        "       leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS\n");
+        "       leanexport slice OUTDIR SLICE.wxf [--axiomatize-theorems] [--proofs-for LIST] [--exclude LIST] ROOTS\n"
+        "       leanexport slice-batch OUTDIR MANIFEST\n");
     return 2;
 }
