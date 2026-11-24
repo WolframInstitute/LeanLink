@@ -1826,30 +1826,33 @@ heldLevelText[HoldComplete[level_]] := levelText[level]
    constant with a rule, applied to a function, gives the rule the function, so Exists has one too. *)
 
 (* A natural number literal: an integer, or, where TypeTheory shows types on mouseover, as in a notebook since TypeTheory
-   0.48, the integer with its type's tooltip, a head of TypeTheory's applied to it and the tooltip's RawBoxes *)
+   0.48, the integer with its type's tooltip, a head of TypeTheory's applied to it and the tooltip's RawBoxes. Since
+   TypeTheory 0.61, delaboration also keeps Lean typeclass instances as trailing named rules ("self" -> ...). *)
 $leanLiteral = _Integer | _Symbol[_Integer, _RawBoxes]
 
+$leanNamedArg = (Verbatim[Rule] | RightArrow)[_String | _Symbol, _] | _Symbol[(Verbatim[Rule] | RightArrow)[_String | _Symbol, _], _RawBoxes]
+
 $leanNotationRules = {
-    "Eq"[a_, b_] :> Equal[a, b],
-    "Ne"[a_, b_] :> Unequal[a, b],
-    "LT.lt"[a_, b_] :> Less[a, b],
-    "LE.le"[a_, b_] :> LessEqual[a, b],
-    "GT.gt"[a_, b_] :> Greater[a, b],
-    "GE.ge"[a_, b_] :> GreaterEqual[a, b],
-    ("HAdd.hAdd" | "Nat.add")[a_, b_] :> Plus[a, b],
-    ("HSub.hSub" | "Nat.sub")[a_, b_] :> Plus[a, Times[-1, b]],
-    ("HMul.hMul" | "Nat.mul")[a_, b_] :> Times[a, b],
-    ("HDiv.hDiv" | "Nat.div")[a_, b_] :> Times[a, Power[b, -1]],
-    ("HMod.hMod" | "Nat.mod")[a_, b_] :> leanModulo[a, b],
-    ("HPow.hPow" | "Nat.pow")[a_, b_] :> Power[a, b],
-    "Neg.neg"[a_] :> Times[-1, a],
-    "OfNat.ofNat"[n : $leanLiteral] :> n,
-    "Nat.succ"[n_] :> Plus[n, 1],
-    "And"[a_, b_] :> And[a, b],
-    "Or"[a_, b_] :> Or[a, b],
-    "Not"[a_] :> Not[a],
-    "Iff"[a_, b_] :> Equivalent[a, b],
-    "Exists"[Verbatim[Function][{Verbatim[Typed][variable_, type_]}, body_]] :> leanExists[variable, type, body]
+    "Eq"[a_, b_, $leanNamedArg ...] :> Equal[a, b],
+    "Ne"[a_, b_, $leanNamedArg ...] :> Unequal[a, b],
+    "LT.lt"[a_, b_, $leanNamedArg ...] :> Less[a, b],
+    "LE.le"[a_, b_, $leanNamedArg ...] :> LessEqual[a, b],
+    "GT.gt"[a_, b_, $leanNamedArg ...] :> Greater[a, b],
+    "GE.ge"[a_, b_, $leanNamedArg ...] :> GreaterEqual[a, b],
+    ("HAdd.hAdd" | "Nat.add")[a_, b_, $leanNamedArg ...] :> Plus[a, b],
+    ("HSub.hSub" | "Nat.sub")[a_, b_, $leanNamedArg ...] :> Plus[a, Times[-1, b]],
+    ("HMul.hMul" | "Nat.mul")[a_, b_, $leanNamedArg ...] :> Times[a, b],
+    ("HDiv.hDiv" | "Nat.div")[a_, b_, $leanNamedArg ...] :> Times[a, Power[b, -1]],
+    ("HMod.hMod" | "Nat.mod")[a_, b_, $leanNamedArg ...] :> leanModulo[a, b],
+    ("HPow.hPow" | "Nat.pow")[a_, b_, $leanNamedArg ...] :> Power[a, b],
+    "Neg.neg"[a_, $leanNamedArg ...] :> Times[-1, a],
+    "OfNat.ofNat"[n : $leanLiteral, $leanNamedArg ...] :> n,
+    "Nat.succ"[n_, $leanNamedArg ...] :> Plus[n, 1],
+    "And"[a_, b_, $leanNamedArg ...] :> And[a, b],
+    "Or"[a_, b_, $leanNamedArg ...] :> Or[a, b],
+    "Not"[a_, $leanNamedArg ...] :> Not[a],
+    "Iff"[a_, b_, $leanNamedArg ...] :> Equivalent[a, b],
+    "Exists"[Verbatim[Function][{Verbatim[Typed][variable_, type_]}, body_], $leanNamedArg ...] :> leanExists[variable, type, body]
 }
 
 $leanNotationHeads = {
